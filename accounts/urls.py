@@ -8,6 +8,7 @@ from .views import (
     RateLimitedLoginView,
     RateLimitedPasswordResetView,
     RegisterView,
+    RegistrationPendingView,
 )
 
 urlpatterns = [
@@ -15,6 +16,11 @@ urlpatterns = [
         "register/",
         RegisterView.as_view(),
         name="register",
+    ),
+    path(
+        "register/pending/",
+        RegistrationPendingView.as_view(),
+        name="registration_pending",
     ),
     path(
         "login/",

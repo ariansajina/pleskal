@@ -26,20 +26,20 @@ class RegisterView(RateLimitMixin, CreateView):
 
     form_class = CustomUserCreationForm
     template_name = "accounts/register.html"
-    success_url = reverse_lazy("login")
+    success_url = reverse_lazy("registration_pending")
 
     def form_valid(self, form):
-        response = super().form_valid(form)
-        messages.success(
-            self.request,
-            "Account created. Please log in.",
-        )
-        return response
+        return super().form_valid(form)
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             return redirect("/")
         return super().dispatch(request, *args, **kwargs)
+
+
+class RegistrationPendingView(View):
+    def get(self, request):
+        return render(request, "accounts/registration_pending.html")
 
 
 class AccountDeleteView(LoginRequiredMixin, View):
