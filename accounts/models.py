@@ -13,6 +13,7 @@ class User(AbstractUser):
     is_moderator = models.BooleanField(default=False)
     bio = models.TextField(blank=True, max_length=500)
     website = models.URLField(blank=True)
+    intro_message = models.TextField(blank=True, max_length=500)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
