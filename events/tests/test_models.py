@@ -11,15 +11,15 @@ from .factories import EventFactory
 @pytest.mark.django_db
 class TestEventModel:
     def test_uuid_primary_key(self):
-        event = EventFactory()
+        event = EventFactory.create()
         assert isinstance(event.pk, uuid.UUID)
 
     def test_str_returns_title(self):
-        event = EventFactory(title="Summer Jam")
+        event = EventFactory.create(title="Summer Jam")
         assert str(event) == "Summer Jam"
 
     def test_default_status_pending(self):
-        event = EventFactory()
+        event = EventFactory.create()
         assert event.status == EventStatus.PENDING
 
     def test_categories(self):
@@ -36,25 +36,25 @@ class TestEventModel:
 @pytest.mark.django_db
 class TestSlugGeneration:
     def test_slug_auto_generated(self):
-        event = EventFactory(title="My Cool Event")
+        event = EventFactory.create(title="My Cool Event")
         assert event.slug == "my-cool-event"
 
     def test_slug_collision_appends_suffix(self):
-        e1 = EventFactory(title="Same Title")
-        e2 = EventFactory(title="Same Title")
+        e1 = EventFactory.create(title="Same Title")
+        e2 = EventFactory.create(title="Same Title")
         assert e1.slug == "same-title"
         assert e2.slug != e1.slug
-        assert e2.slug.startswith("same-title-")
+        assert str(e2.slug).startswith("same-title-")
 
     def test_slug_immutable_on_save(self):
-        event = EventFactory(title="Original Title")
+        event = EventFactory.create(title="Original Title")
         original_slug = event.slug
         event.title = "Changed Title"
         event.save()
         assert event.slug == original_slug
 
     def test_empty_title_fallback_slug(self):
-        event = EventFactory(title="---")  # slugify produces empty string
+        event = EventFactory.create(title="---")  # slugify produces empty string
         assert event.slug == "event"
 
 
@@ -69,7 +69,9 @@ class TestEventValidation:
         assert "start_datetime" in exc_info.value.message_dict
 
     def test_past_start_datetime_allowed_on_edit(self):
-        event = EventFactory(start_datetime=timezone.now() + timezone.timedelta(days=1))
+        event = EventFactory.create(
+            start_datetime=timezone.now() + timezone.timedelta(days=1)
+        )
         # Simulate the event's start_datetime being in the past now
         event.start_datetime = timezone.now() - timezone.timedelta(hours=1)
         # Should not raise - past date check only on creation
@@ -108,8 +110,8 @@ class TestEventValidation:
         assert "title" in exc_info.value.message_dict
 
     def test_submitted_by_set_null_on_delete(self):
-        event = EventFactory()
+        event = EventFactory.create()
         user = event.submitted_by
-        user.delete()
+        user.delete()  # type: ignore[union-attr]
         event.refresh_from_db()
         assert event.submitted_by is None

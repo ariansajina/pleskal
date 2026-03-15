@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-class UserFactory(factory.django.DjangoModelFactory):
+class UserFactory(factory.django.DjangoModelFactory[User]):
     class Meta:
         model = User
         skip_postgeneration_save = True
@@ -15,7 +15,9 @@ class UserFactory(factory.django.DjangoModelFactory):
     is_moderator = False
 
     @factory.post_generation
-    def password(self, create, extracted, **kwargs):
+    def password(
+        self: User, create: bool, extracted: str | None, **kwargs: object
+    ) -> None:
         password = extracted or "testpass123"
         self.set_password(password)
         if create:

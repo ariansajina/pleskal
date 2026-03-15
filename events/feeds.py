@@ -54,19 +54,19 @@ class EventRSSFeed(Feed):
             category = self._request.GET.get("category")
         return _approved_upcoming_qs(category)[:50]
 
-    def item_title(self, event):
-        return event.title
+    def item_title(self, item):
+        return str(item.title)
 
-    def item_description(self, event):
-        return _plain_text(event.description)
+    def item_description(self, item):
+        return _plain_text(str(item.description))
 
-    def item_link(self, event):
+    def item_link(self, item):
         from django.urls import reverse
 
-        return reverse("event_detail", kwargs={"slug": event.slug})
+        return reverse("event_detail", kwargs={"slug": str(item.slug)})
 
-    def item_pubdate(self, event):
-        return event.created_at
+    def item_pubdate(self, item):
+        return item.created_at
 
     # Deliberately no item_author_* — privacy: do not expose submitter identity
 

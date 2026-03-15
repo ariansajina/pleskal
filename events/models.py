@@ -1,5 +1,6 @@
 import secrets
 import uuid
+from typing import TYPE_CHECKING, cast
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -8,6 +9,9 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from .validators import validate_image_file, validate_url_scheme
+
+if TYPE_CHECKING:
+    from accounts.models import User
 
 
 class EventCategory(models.TextChoices):
@@ -26,6 +30,8 @@ class EventStatus(models.TextChoices):
 
 
 class Event(models.Model):
+    objects = models.Manager()
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     slug = models.SlugField(max_length=250, unique=True, editable=False)
     title = models.CharField(max_length=200)
@@ -63,6 +69,9 @@ class Event(models.Model):
         blank=True,
         related_name="events",
     )
+    submitted_by_id: (
+        uuid.UUID | None
+    )  # Django adds this attribute for ForeignKey fields
     status = models.CharField(
         max_length=20,
         choices=EventStatus.choices,
@@ -93,7 +102,7 @@ class Event(models.Model):
         errors = {}
 
         # Title length
-        if self.title and len(self.title) < 3:
+        if self.title and len(str(self.title)) < 3:
             errors["title"] = "Title must be at least 3 characters."
 
         # Start datetime must be in the future (only on creation)
@@ -125,9 +134,10 @@ class Event(models.Model):
         self.status = EventStatus.APPROVED
         self.rejection_note = ""
         self.save(update_fields=["status", "rejection_note", "updated_at"])
-        if self.submitted_by and not self.submitted_by.is_approved:
-            self.submitted_by.is_approved = True
-            self.submitted_by.save(update_fields=["is_approved"])
+        user = cast("User | None", self.submitted_by)
+        if user and not user.is_approved:
+            user.is_approved = True
+            user.save(update_fields=["is_approved"])
 
     def reject(self, note):
         """Reject the event with a required note."""
@@ -152,7 +162,7 @@ class Event(models.Model):
         if self._state.adding and self.submitted_by_id:
             # Need to check is_approved; use cached submitted_by if loaded
             try:
-                user = self.submitted_by
+                user = cast("User | None", self.submitted_by)
             except Exception:
                 user = None
             if user and user.is_approved:

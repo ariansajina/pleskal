@@ -662,10 +662,10 @@ class Command(BaseCommand):
                 continue
 
             start_naive = datetime.datetime.strptime(
-                data["start_datetime"], "%Y-%m-%d %H:%M"
+                str(data["start_datetime"]), "%Y-%m-%d %H:%M"
             )
             end_naive = (
-                datetime.datetime.strptime(data["end_datetime"], "%Y-%m-%d %H:%M")
+                datetime.datetime.strptime(str(data["end_datetime"]), "%Y-%m-%d %H:%M")
                 if data.get("end_datetime")
                 else None
             )

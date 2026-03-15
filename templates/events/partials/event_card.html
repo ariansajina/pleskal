@@ -1,45 +1,27 @@
-<article class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex gap-4 p-4 hover:shadow-md transition-shadow">
+<div class="py-1.5 flex items-baseline gap-3 text-sm leading-snug">
+    {# Time #}
+    <span class="shrink-0 text-xs text-gray-400 w-11 text-right tabular-nums">
+        {{ event.start_datetime|date:"H:i" }}
+    </span>
 
-    {# Thumbnail #}
-    {% if event.image_thumbnail %}
-        <a href="{% url 'event_detail' event.slug %}" class="shrink-0">
-            <img src="{{ event.image_thumbnail.url }}"
-                 alt="{{ event.title }}"
-                 class="w-24 h-24 object-cover rounded">
-        </a>
+    {# Title #}
+    <a href="{% url 'event_detail' event.slug %}"
+       class="flex-1 min-w-0 font-medium text-gray-900 hover:text-black truncate">
+        {{ event.title }}
+    </a>
+
+    {# Category chip #}
+    <span class="shrink-0 text-xs border border-gray-300 text-gray-500 px-1.5 py-0 leading-4 hidden sm:inline">
+        {{ event.get_category_display }}
+    </span>
+
+    {# Free badge #}
+    {% if event.is_free %}
+        <span class="shrink-0 text-xs border border-gray-300 text-gray-500 px-1.5 py-0 leading-4 hidden sm:inline">free</span>
     {% endif %}
 
-    <div class="flex-1 min-w-0">
-        {# Category + free badge #}
-        <div class="flex items-center gap-2 mb-1">
-            <span class="inline-block text-xs font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
-                {{ event.get_category_display }}
-            </span>
-            {% if event.is_free %}
-                <span class="inline-block text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                    Free
-                </span>
-            {% endif %}
-        </div>
-
-        {# Title #}
-        <h2 class="text-base font-semibold text-gray-900 truncate">
-            <a href="{% url 'event_detail' event.slug %}" class="hover:text-indigo-600">
-                {{ event.title }}
-            </a>
-        </h2>
-
-        {# Date / time #}
-        <p class="text-sm text-gray-500 mt-0.5">
-            {{ event.start_datetime|date:"D, d M Y · H:i" }}
-            {% if event.end_datetime %}
-                &ndash; {{ event.end_datetime|date:"H:i" }}
-            {% endif %}
-        </p>
-
-        {# Venue #}
-        <p class="text-sm text-gray-600 mt-0.5 truncate">
-            📍 {{ event.venue_name }}{% if event.venue_address %}, {{ event.venue_address }}{% endif %}
-        </p>
-    </div>
-</article>
+    {# Venue #}
+    <span class="shrink-0 text-xs text-gray-400 truncate hidden md:inline max-w-36">
+        {{ event.venue_name }}
+    </span>
+</div>

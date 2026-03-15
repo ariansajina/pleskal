@@ -1,5 +1,5 @@
 [project]
-name = "cph-dance-calendar"
+name = "pleskal"
 version = "0.1.0"
 description = "A local-first, crowd-sourced web application for discovering and sharing dance events in Copenhagen."
 readme = "README.md"

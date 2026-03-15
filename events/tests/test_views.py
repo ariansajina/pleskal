@@ -41,14 +41,14 @@ class TestEventCreateView:
         assert "/accounts/login/" in resp["Location"]
 
     def test_authenticated_can_see_form(self, client):
-        user = UserFactory()
+        user = UserFactory.create()
         client.force_login(user)
         resp = client.get(reverse("event_create"))
         assert resp.status_code == 200
         assert b"Submit" in resp.content
 
     def test_unapproved_user_event_is_pending(self, client):
-        user = UserFactory(is_approved=False)
+        user = UserFactory.create(is_approved=False)
         client.force_login(user)
         resp = client.post(
             reverse("event_create"),
@@ -66,7 +66,7 @@ class TestEventCreateView:
         assert event.submitted_by == user
 
     def test_approved_user_event_is_auto_approved(self, client):
-        user = UserFactory(is_approved=True)
+        user = UserFactory.create(is_approved=True)
         client.force_login(user)
         client.post(
             reverse("event_create"),
@@ -82,7 +82,7 @@ class TestEventCreateView:
         assert event.status == EventStatus.APPROVED
 
     def test_past_start_datetime_rejected(self, client):
-        user = UserFactory()
+        user = UserFactory.create()
         client.force_login(user)
         past = timezone.now() - timezone.timedelta(days=1)
         resp = client.post(
@@ -98,7 +98,7 @@ class TestEventCreateView:
         assert not Event.objects.filter(title="Past Event").exists()
 
     def test_valid_image_accepted(self, client):
-        user = UserFactory()
+        user = UserFactory.create()
         client.force_login(user)
         img = _make_image_upload()
         resp = client.post(
@@ -118,7 +118,7 @@ class TestEventCreateView:
         assert event.image_thumbnail  # thumbnail generated
 
     def test_end_before_start_rejected(self, client):
-        user = UserFactory()
+        user = UserFactory.create()
         client.force_login(user)
         start = _future_dt(7)
         end = _future_dt(3)  # before start
@@ -144,34 +144,34 @@ class TestEventCreateView:
 @pytest.mark.django_db
 class TestEventListView:
     def test_only_approved_events_shown(self, client):
-        approved = EventFactory(status=EventStatus.APPROVED)
-        pending = EventFactory(status=EventStatus.PENDING)
+        approved = EventFactory.create(status=EventStatus.APPROVED)
+        pending = EventFactory.create(status=EventStatus.PENDING)
         resp = client.get(reverse("event_list"))
         assert resp.status_code == 200
-        assert approved.title.encode() in resp.content
-        assert pending.title.encode() not in resp.content
+        assert str(approved.title).encode() in resp.content
+        assert str(pending.title).encode() not in resp.content
 
     def test_category_filter(self, client):
-        e1 = EventFactory(status=EventStatus.APPROVED, category="workshop")
-        e2 = EventFactory(status=EventStatus.APPROVED, category="social")
+        e1 = EventFactory.create(status=EventStatus.APPROVED, category="workshop")
+        e2 = EventFactory.create(status=EventStatus.APPROVED, category="social")
         resp = client.get(reverse("event_list") + "?category=workshop")
-        assert e1.title.encode() in resp.content
-        assert e2.title.encode() not in resp.content
+        assert str(e1.title).encode() in resp.content
+        assert str(e2.title).encode() not in resp.content
 
     def test_free_events_filter(self, client):
-        free = EventFactory(status=EventStatus.APPROVED, is_free=True)
-        paid = EventFactory(status=EventStatus.APPROVED, is_free=False)
+        free = EventFactory.create(status=EventStatus.APPROVED, is_free=True)
+        paid = EventFactory.create(status=EventStatus.APPROVED, is_free=False)
         resp = client.get(reverse("event_list") + "?is_free=1")
-        assert free.title.encode() in resp.content
-        assert paid.title.encode() not in resp.content
+        assert str(free.title).encode() in resp.content
+        assert str(paid.title).encode() not in resp.content
 
     def test_upcoming_default(self, client):
-        upcoming = EventFactory(
+        upcoming = EventFactory.create(
             status=EventStatus.APPROVED,
             start_datetime=timezone.now() + timezone.timedelta(days=3),
         )
         resp = client.get(reverse("event_list"))
-        assert upcoming.title.encode() in resp.content
+        assert str(upcoming.title).encode() in resp.content
 
     def test_past_toggle(self, client):
         """past=1 shows events with start_datetime in the past."""
@@ -190,45 +190,45 @@ class TestEventListView:
         assert b"Old Dance Night" in resp.content
 
     def test_htmx_request_returns_partial(self, client):
-        EventFactory(status=EventStatus.APPROVED)
+        EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_list"), HTTP_HX_REQUEST="true")
         assert resp.status_code == 200
         # Partial should not contain the full <html> tag
         assert b"<!DOCTYPE html>" not in resp.content
 
     def test_non_htmx_returns_full_page(self, client):
-        EventFactory(status=EventStatus.APPROVED)
+        EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_list"))
         assert resp.status_code == 200
         assert b"<!DOCTYPE html>" in resp.content
 
     def test_date_from_filter(self, client):
-        near = EventFactory(
+        near = EventFactory.create(
             status=EventStatus.APPROVED,
             start_datetime=timezone.now() + timezone.timedelta(days=2),
         )
-        far = EventFactory(
+        far = EventFactory.create(
             status=EventStatus.APPROVED,
             start_datetime=timezone.now() + timezone.timedelta(days=30),
         )
         date_from = (timezone.now() + timezone.timedelta(days=20)).strftime("%Y-%m-%d")
         resp = client.get(reverse("event_list") + f"?date_from={date_from}")
-        assert far.title.encode() in resp.content
-        assert near.title.encode() not in resp.content
+        assert str(far.title).encode() in resp.content
+        assert str(near.title).encode() not in resp.content
 
     def test_date_to_filter(self, client):
-        near = EventFactory(
+        near = EventFactory.create(
             status=EventStatus.APPROVED,
             start_datetime=timezone.now() + timezone.timedelta(days=2),
         )
-        far = EventFactory(
+        far = EventFactory.create(
             status=EventStatus.APPROVED,
             start_datetime=timezone.now() + timezone.timedelta(days=30),
         )
         date_to = (timezone.now() + timezone.timedelta(days=10)).strftime("%Y-%m-%d")
         resp = client.get(reverse("event_list") + f"?date_to={date_to}")
-        assert near.title.encode() in resp.content
-        assert far.title.encode() not in resp.content
+        assert str(near.title).encode() in resp.content
+        assert str(far.title).encode() not in resp.content
 
 
 # ---------------------------------------------------------------------------
@@ -239,34 +239,34 @@ class TestEventListView:
 @pytest.mark.django_db
 class TestEventDetailView:
     def test_approved_event_accessible_by_anyone(self, client):
-        event = EventFactory(status=EventStatus.APPROVED)
+        event = EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         assert resp.status_code == 200
-        assert event.title.encode() in resp.content
+        assert str(event.title).encode() in resp.content
 
     def test_pending_event_visible_to_owner(self, client):
-        user = UserFactory()
-        event = EventFactory(status=EventStatus.PENDING, submitted_by=user)
+        user = UserFactory.create()
+        event = EventFactory.create(status=EventStatus.PENDING, submitted_by=user)
         client.force_login(user)
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         assert resp.status_code == 200
 
     def test_pending_event_not_visible_to_others(self, client):
-        owner = UserFactory()
-        other = UserFactory()
-        event = EventFactory(status=EventStatus.PENDING, submitted_by=owner)
+        owner = UserFactory.create()
+        other = UserFactory.create()
+        event = EventFactory.create(status=EventStatus.PENDING, submitted_by=owner)
         client.force_login(other)
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         assert resp.status_code == 404
 
     def test_pending_event_not_visible_to_anonymous(self, client):
-        event = EventFactory(status=EventStatus.PENDING)
+        event = EventFactory.create(status=EventStatus.PENDING)
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         assert resp.status_code == 404
 
     def test_rejected_event_visible_to_owner_with_note(self, client):
-        user = UserFactory()
-        event = EventFactory(
+        user = UserFactory.create()
+        event = EventFactory.create(
             status=EventStatus.REJECTED,
             submitted_by=user,
             rejection_note="Too vague",
@@ -281,8 +281,8 @@ class TestEventDetailView:
         assert resp.status_code == 404
 
     def test_moderator_can_see_pending(self, client):
-        mod = UserFactory(is_moderator=True)
-        event = EventFactory(status=EventStatus.PENDING)
+        mod = UserFactory.create(is_moderator=True)
+        event = EventFactory.create(status=EventStatus.PENDING)
         client.force_login(mod)
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         assert resp.status_code == 200
@@ -300,48 +300,48 @@ class TestMyEventsView:
         assert resp.status_code == 302
 
     def test_owner_sees_their_events(self, client):
-        user = UserFactory()
-        event = EventFactory(submitted_by=user)
-        other = EventFactory()
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        other = EventFactory.create()
         client.force_login(user)
         resp = client.get(reverse("my_events"))
         assert resp.status_code == 200
-        assert event.title.encode() in resp.content
-        assert other.title.encode() not in resp.content
+        assert str(event.title).encode() in resp.content
+        assert str(other.title).encode() not in resp.content
 
 
 @pytest.mark.django_db
 class TestEventUpdateView:
     def test_unauthenticated_redirects(self, client):
-        event = EventFactory(status=EventStatus.APPROVED)
+        event = EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_edit", kwargs={"slug": event.slug}))
         assert resp.status_code == 302
 
     def test_owner_can_edit(self, client):
-        user = UserFactory()
-        event = EventFactory(submitted_by=user, status=EventStatus.APPROVED)
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, status=EventStatus.APPROVED)
         client.force_login(user)
         resp = client.get(reverse("event_edit", kwargs={"slug": event.slug}))
         assert resp.status_code == 200
 
     def test_non_owner_gets_403(self, client):
-        owner = UserFactory()
-        other = UserFactory()
-        event = EventFactory(submitted_by=owner, status=EventStatus.APPROVED)
+        owner = UserFactory.create()
+        other = UserFactory.create()
+        event = EventFactory.create(submitted_by=owner, status=EventStatus.APPROVED)
         client.force_login(other)
         resp = client.get(reverse("event_edit", kwargs={"slug": event.slug}))
         assert resp.status_code == 403
 
     def test_moderator_can_edit_any_event(self, client):
-        mod = UserFactory(is_moderator=True)
-        event = EventFactory(status=EventStatus.APPROVED)
+        mod = UserFactory.create(is_moderator=True)
+        event = EventFactory.create(status=EventStatus.APPROVED)
         client.force_login(mod)
         resp = client.get(reverse("event_edit", kwargs={"slug": event.slug}))
         assert resp.status_code == 200
 
     def test_editing_rejected_event_resets_to_pending(self, client):
-        user = UserFactory()
-        event = EventFactory(
+        user = UserFactory.create()
+        event = EventFactory.create(
             submitted_by=user,
             status=EventStatus.REJECTED,
             rejection_note="Not detailed enough",
@@ -351,7 +351,7 @@ class TestEventUpdateView:
             reverse("event_edit", kwargs={"slug": event.slug}),
             {
                 "title": event.title,
-                "start_datetime": event.start_datetime.strftime("%Y-%m-%dT%H:%M"),
+                "start_datetime": event.start_datetime.strftime("%Y-%m-%dT%H:%M"),  # type: ignore[union-attr]
                 "venue_name": event.venue_name,
                 "category": event.category,
                 "is_free": event.is_free,
@@ -362,15 +362,15 @@ class TestEventUpdateView:
         assert event.rejection_note == ""
 
     def test_editing_does_not_change_slug(self, client):
-        user = UserFactory()
-        event = EventFactory(submitted_by=user, status=EventStatus.APPROVED)
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, status=EventStatus.APPROVED)
         original_slug = event.slug
         client.force_login(user)
         client.post(
             reverse("event_edit", kwargs={"slug": event.slug}),
             {
                 "title": "Completely Different Title",
-                "start_datetime": event.start_datetime.strftime("%Y-%m-%dT%H:%M"),
+                "start_datetime": event.start_datetime.strftime("%Y-%m-%dT%H:%M"),  # type: ignore[union-attr]
                 "venue_name": event.venue_name,
                 "category": event.category,
                 "is_free": event.is_free,
@@ -383,31 +383,31 @@ class TestEventUpdateView:
 @pytest.mark.django_db
 class TestEventDeleteView:
     def test_unauthenticated_redirects(self, client):
-        event = EventFactory(status=EventStatus.APPROVED)
+        event = EventFactory.create(status=EventStatus.APPROVED)
         resp = client.post(reverse("event_delete", kwargs={"slug": event.slug}))
         assert resp.status_code == 302
         assert Event.objects.filter(pk=event.pk).exists()
 
     def test_owner_can_delete(self, client):
-        user = UserFactory()
-        event = EventFactory(submitted_by=user)
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
         client.force_login(user)
         resp = client.post(reverse("event_delete", kwargs={"slug": event.slug}))
         assert resp.status_code == 302
         assert not Event.objects.filter(pk=event.pk).exists()
 
     def test_non_owner_gets_403(self, client):
-        owner = UserFactory()
-        other = UserFactory()
-        event = EventFactory(submitted_by=owner)
+        owner = UserFactory.create()
+        other = UserFactory.create()
+        event = EventFactory.create(submitted_by=owner)
         client.force_login(other)
         resp = client.post(reverse("event_delete", kwargs={"slug": event.slug}))
         assert resp.status_code == 403
         assert Event.objects.filter(pk=event.pk).exists()
 
     def test_moderator_can_delete_any(self, client):
-        mod = UserFactory(is_moderator=True)
-        event = EventFactory()
+        mod = UserFactory.create(is_moderator=True)
+        event = EventFactory.create()
         client.force_login(mod)
         resp = client.post(reverse("event_delete", kwargs={"slug": event.slug}))
         assert resp.status_code == 302

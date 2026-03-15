@@ -33,19 +33,19 @@ class TestRSSFeed:
         assert "xml" in resp["Content-Type"]
 
     def test_rss_contains_approved_upcoming_event(self, client):
-        event = EventFactory(status=EventStatus.APPROVED)
+        event = EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_rss_feed"))
-        assert event.title.encode() in resp.content
+        assert str(event.title).encode() in resp.content
 
     def test_rss_excludes_pending_events(self, client):
-        event = EventFactory(status=EventStatus.PENDING)
+        event = EventFactory.create(status=EventStatus.PENDING)
         resp = client.get(reverse("event_rss_feed"))
-        assert event.title.encode() not in resp.content
+        assert str(event.title).encode() not in resp.content
 
     def test_rss_excludes_rejected_events(self, client):
-        event = EventFactory(status=EventStatus.REJECTED, rejection_note="No.")
+        event = EventFactory.create(status=EventStatus.REJECTED, rejection_note="No.")
         resp = client.get(reverse("event_rss_feed"))
-        assert event.title.encode() not in resp.content
+        assert str(event.title).encode() not in resp.content
 
     def test_rss_excludes_past_events(self, client):
         _past_event(title="Gone Event")
@@ -53,21 +53,21 @@ class TestRSSFeed:
         assert b"Gone Event" not in resp.content
 
     def test_rss_category_filter(self, client):
-        workshop = EventFactory(status=EventStatus.APPROVED, category="workshop")
-        social = EventFactory(status=EventStatus.APPROVED, category="social")
+        workshop = EventFactory.create(status=EventStatus.APPROVED, category="workshop")
+        social = EventFactory.create(status=EventStatus.APPROVED, category="social")
         resp = client.get(reverse("event_rss_feed") + "?category=workshop")
-        assert workshop.title.encode() in resp.content
-        assert social.title.encode() not in resp.content
+        assert str(workshop.title).encode() in resp.content
+        assert str(social.title).encode() not in resp.content
 
     def test_rss_no_submitter_identity(self, client):
-        user = UserFactory(email="private@example.com", username="privateuser")
-        EventFactory(status=EventStatus.APPROVED, submitted_by=user)
+        user = UserFactory.create(email="private@example.com", username="privateuser")
+        EventFactory.create(status=EventStatus.APPROVED, submitted_by=user)
         resp = client.get(reverse("event_rss_feed"))
         assert b"private@example.com" not in resp.content
         assert b"privateuser" not in resp.content
 
     def test_rss_is_valid_xml(self, client):
-        EventFactory(status=EventStatus.APPROVED)
+        EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_rss_feed"))
         import xml.etree.ElementTree as ET
 
@@ -90,14 +90,14 @@ class TestICalFeed:
         assert resp.content.startswith(b"BEGIN:VCALENDAR")
 
     def test_ical_contains_approved_upcoming_event(self, client):
-        event = EventFactory(status=EventStatus.APPROVED)
+        event = EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_ical_feed"))
-        assert event.title.encode() in resp.content
+        assert str(event.title).encode() in resp.content
 
     def test_ical_excludes_pending_events(self, client):
-        event = EventFactory(status=EventStatus.PENDING)
+        event = EventFactory.create(status=EventStatus.PENDING)
         resp = client.get(reverse("event_ical_feed"))
-        assert event.title.encode() not in resp.content
+        assert str(event.title).encode() not in resp.content
 
     def test_ical_excludes_past_events(self, client):
         _past_event(title="Past iCal Event")
@@ -105,21 +105,21 @@ class TestICalFeed:
         assert b"Past iCal Event" not in resp.content
 
     def test_ical_category_filter(self, client):
-        workshop = EventFactory(status=EventStatus.APPROVED, category="workshop")
-        social = EventFactory(status=EventStatus.APPROVED, category="social")
+        workshop = EventFactory.create(status=EventStatus.APPROVED, category="workshop")
+        social = EventFactory.create(status=EventStatus.APPROVED, category="social")
         resp = client.get(reverse("event_ical_feed") + "?category=workshop")
-        assert workshop.title.encode() in resp.content
-        assert social.title.encode() not in resp.content
+        assert str(workshop.title).encode() in resp.content
+        assert str(social.title).encode() not in resp.content
 
     def test_ical_no_submitter_identity(self, client):
-        user = UserFactory(email="secret@example.com", username="secretuser")
-        EventFactory(status=EventStatus.APPROVED, submitted_by=user)
+        user = UserFactory.create(email="secret@example.com", username="secretuser")
+        EventFactory.create(status=EventStatus.APPROVED, submitted_by=user)
         resp = client.get(reverse("event_ical_feed"))
         assert b"secret@example.com" not in resp.content
         assert b"secretuser" not in resp.content
 
     def test_ical_contains_venue(self, client):
-        EventFactory(
+        EventFactory.create(
             status=EventStatus.APPROVED,
             venue_name="The Grand Hall",
             venue_address="1 Dance St",
@@ -128,12 +128,12 @@ class TestICalFeed:
         assert b"The Grand Hall" in resp.content
 
     def test_ical_contains_uid(self, client):
-        event = EventFactory(status=EventStatus.APPROVED)
+        event = EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_ical_feed"))
         assert str(event.id).encode() in resp.content
 
     def test_ical_is_valid_ical(self, client):
-        EventFactory(status=EventStatus.APPROVED)
+        EventFactory.create(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_ical_feed"))
         from icalendar import Calendar
 
