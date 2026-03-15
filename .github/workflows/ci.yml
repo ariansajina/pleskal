@@ -31,6 +31,7 @@ jobs:
       DEBUG: "false"
       DATABASE_URL: postgres://test:test@localhost:5432/test_db
       ALLOWED_HOSTS: localhost
+      PASSWORD_PEPPER: "abababababababababababababababababababababababababababababababababab"
 
     steps:
       - uses: actions/checkout@v4
