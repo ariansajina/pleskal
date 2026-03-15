@@ -33,7 +33,7 @@ class TestRegisterView:
         assert user.is_moderator is False
 
     def test_register_redirects_authenticated_user(self):
-        user = UserFactory()
+        user = UserFactory.create()
         client = Client()
         client.force_login(user)
         response = client.get("/accounts/register/")
@@ -48,7 +48,7 @@ class TestLoginView:
         assert response.status_code == 200
 
     def test_login_with_email(self):
-        user = UserFactory(email="test@example.com")
+        user = UserFactory.create(email="test@example.com")
         user.set_password("testpass123")
         user.save()
         client = Client()
@@ -62,7 +62,7 @@ class TestLoginView:
 @pytest.mark.django_db
 class TestLogoutView:
     def test_logout(self):
-        user = UserFactory()
+        user = UserFactory.create()
         client = Client()
         client.force_login(user)
         response = client.post("/accounts/logout/")
@@ -87,7 +87,7 @@ class TestPasswordResetView:
         assert response.status_code == 302
 
         # Existing email
-        UserFactory(email="exists@example.com")
+        UserFactory.create(email="exists@example.com")
         response = client.post(
             "/accounts/password-reset/",
             {"email": "exists@example.com"},
@@ -104,14 +104,14 @@ class TestAccountDeleteView:
         assert "/accounts/login/" in response.url
 
     def test_get_delete_confirmation(self):
-        user = UserFactory()
+        user = UserFactory.create()
         client = Client()
         client.force_login(user)
         response = client.get("/accounts/delete/")
         assert response.status_code == 200
 
     def test_delete_account(self):
-        user = UserFactory()
+        user = UserFactory.create()
         client = Client()
         client.force_login(user)
         response = client.post("/accounts/delete/")
@@ -119,8 +119,8 @@ class TestAccountDeleteView:
         assert not User.objects.filter(pk=user.pk).exists()
 
     def test_delete_anonymizes_events(self):
-        user = UserFactory()
-        event = EventFactory(submitted_by=user)
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
         client = Client()
         client.force_login(user)
         client.post("/accounts/delete/")
@@ -128,7 +128,7 @@ class TestAccountDeleteView:
         assert event.submitted_by is None
 
     def test_delete_logs_out_user(self):
-        user = UserFactory()
+        user = UserFactory.create()
         client = Client()
         client.force_login(user)
         client.post("/accounts/delete/")

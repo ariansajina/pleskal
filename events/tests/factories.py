@@ -6,7 +6,7 @@ from accounts.tests.factories import UserFactory
 from ..models import Event, EventCategory, EventStatus
 
 
-class EventFactory(factory.django.DjangoModelFactory):
+class EventFactory(factory.django.DjangoModelFactory[Event]):
     class Meta:
         model = Event
         skip_postgeneration_save = True

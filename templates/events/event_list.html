@@ -1,88 +1,85 @@
 {% extends "base.html" %}
 
-{% block title %}Copenhagen Dance Calendar{% endblock %}
+{% block title %}pleskal{% endblock %}
 
 {% block content %}
-<div class="flex gap-8">
+<div class="flex flex-col md:flex-row gap-6">
 
-    {# --- Sidebar filters --- #}
-    <aside class="w-56 shrink-0">
-        <form id="filter-form"
-              hx-get="/"
-              hx-target="#event-list"
-              hx-push-url="true"
-              hx-trigger="change, submit"
-              class="space-y-5">
+    {# --- Filters --- #}
+    <aside class="md:w-44 shrink-0">
+        <details class="md:open" open>
+            <summary class="md:hidden text-xs font-semibold uppercase tracking-wide text-gray-500 cursor-pointer mb-2 select-none">Filters</summary>
+            <form id="filter-form"
+                  hx-get="/"
+                  hx-target="#event-list"
+                  hx-push-url="true"
+                  hx-trigger="change, submit"
+                  class="space-y-4 pt-2 md:pt-0">
 
-            {# Full-text search #}
-            <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Search</p>
-                <input type="search" name="q" value="{{ search_query }}"
-                       placeholder="Title, venue, description…"
-                       hx-get="/"
-                       hx-target="#event-list"
-                       hx-push-url="true"
-                       hx-trigger="keyup changed delay:400ms"
-                       hx-include="#filter-form"
-                       class="w-full text-sm border border-gray-300 rounded px-2 py-1">
-            </div>
+                {# Full-text search #}
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Search</p>
+                    <input type="search" name="q" value="{{ search_query }}"
+                           placeholder="Title, venue, description…"
+                           hx-get="/"
+                           hx-target="#event-list"
+                           hx-push-url="true"
+                           hx-trigger="keyup changed delay:400ms"
+                           hx-include="#filter-form"
+                           class="w-full text-xs border border-gray-300 px-2 py-1 bg-white">
+                </div>
 
-            {# Upcoming / Past toggle #}
-            <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">When</p>
-                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="radio" name="past" value="0"
-                           {% if not show_past %}checked{% endif %}
-                           class="accent-indigo-600">
-                    Upcoming
-                </label>
-                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer mt-1">
-                    <input type="radio" name="past" value="1"
-                           {% if show_past %}checked{% endif %}
-                           class="accent-indigo-600">
-                    Past
-                </label>
-            </div>
-
-            {# Category checkboxes #}
-            <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Category</p>
-                {% for value, label in category_choices %}
-                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer mt-1">
-                        <input type="checkbox" name="category" value="{{ value }}"
-                               {% if value in selected_categories %}checked{% endif %}
-                               class="accent-indigo-600">
-                        {{ label }}
+                {# Upcoming / Past toggle #}
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">When</p>
+                    <label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                        <input type="radio" name="past" value="0"
+                               {% if not show_past %}checked{% endif %}>
+                        Upcoming
                     </label>
-                {% endfor %}
-            </div>
+                    <label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer mt-1">
+                        <input type="radio" name="past" value="1"
+                               {% if show_past %}checked{% endif %}>
+                        Past
+                    </label>
+                </div>
 
-            {# Date range #}
-            <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Date range</p>
-                <input type="date" name="date_from" value="{{ date_from }}"
-                       placeholder="From"
-                       class="w-full text-sm border border-gray-300 rounded px-2 py-1 mb-1">
-                <input type="date" name="date_to" value="{{ date_to }}"
-                       placeholder="To"
-                       class="w-full text-sm border border-gray-300 rounded px-2 py-1">
-            </div>
+                {# Category checkboxes #}
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Category</p>
+                    {% for value, label in category_choices %}
+                        <label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer mt-1">
+                            <input type="checkbox" name="category" value="{{ value }}"
+                                   {% if value in selected_categories %}checked{% endif %}>
+                            {{ label }}
+                        </label>
+                    {% endfor %}
+                </div>
 
-            {# Free only #}
-            <div>
-                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" name="is_free" value="1"
-                           {% if is_free %}checked{% endif %}
-                           class="accent-indigo-600">
-                    Free events only
-                </label>
-            </div>
+                {# Date range #}
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Date range</p>
+                    <input type="date" name="date_from" value="{{ date_from }}"
+                           class="w-full text-xs border border-gray-300 px-2 py-1 mb-1 bg-white">
+                    <input type="date" name="date_to" value="{{ date_to }}"
+                           class="w-full text-xs border border-gray-300 px-2 py-1 bg-white">
+                </div>
 
-            <button type="submit"
-                    class="w-full bg-indigo-600 text-white text-sm py-1.5 rounded hover:bg-indigo-700">
-                Apply filters
-            </button>
-        </form>
+                {# Free only #}
+                <div>
+                    <label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="is_free" value="1"
+                               {% if is_free %}checked{% endif %}>
+                        Free only
+                    </label>
+                </div>
+
+                <button type="submit"
+                        class="w-full border border-gray-400 text-gray-700 text-xs py-1 hover:bg-gray-100">
+                    Apply
+                </button>
+            </form>
+        </details>
     </aside>
 
     {# --- Main event list --- #}
