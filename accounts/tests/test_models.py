@@ -12,24 +12,24 @@ User = get_user_model()
 @pytest.mark.django_db
 class TestUserModel:
     def test_uuid_primary_key(self):
-        user = UserFactory()
+        user = UserFactory.create()
         assert isinstance(user.pk, uuid.UUID)
 
     def test_default_is_approved_false(self):
-        user = UserFactory()
+        user = UserFactory.create()
         assert user.is_approved is False
 
     def test_default_is_moderator_false(self):
-        user = UserFactory()
+        user = UserFactory.create()
         assert user.is_moderator is False
 
     def test_email_unique(self):
-        UserFactory(email="dupe@example.com")
+        UserFactory.create(email="dupe@example.com")
         with pytest.raises(IntegrityError):
-            UserFactory(email="dupe@example.com")
+            UserFactory.create(email="dupe@example.com")
 
     def test_str_returns_username(self):
-        user = UserFactory(username="dancer")
+        user = UserFactory.create(username="dancer")
         assert str(user) == "dancer"
 
     def test_username_field_is_email(self):

@@ -55,14 +55,14 @@ class TestProcessEventImage:
     def test_png_preserved(self):
         f = _make_image_file(fmt="PNG", name="test.png")
         main, thumb = process_event_image(f)
-        assert main.name.endswith(".png")
-        assert thumb.name.endswith(".png")
+        assert main.name.endswith(".png")  # type: ignore[union-attr]
+        assert thumb.name.endswith(".png")  # type: ignore[union-attr]
 
     def test_jpeg_preserved(self):
         f = _make_image_file(fmt="JPEG", name="photo.jpg")
         main, thumb = process_event_image(f)
-        assert main.name.endswith(".jpg")
-        assert thumb.name.endswith(".jpg")
+        assert main.name.endswith(".jpg")  # type: ignore[union-attr]
+        assert thumb.name.endswith(".jpg")  # type: ignore[union-attr]
 
     def test_exif_stripped(self):
         """Re-opened image should have no EXIF data."""

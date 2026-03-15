@@ -9,14 +9,14 @@ from events.tests.factories import EventFactory
 
 
 def _make_superuser():
-    return UserFactory(is_staff=True, is_superuser=True, password="adminpass")
+    return UserFactory.create(is_staff=True, is_superuser=True, password="adminpass")
 
 
 @pytest.mark.django_db
 class TestApproveAction:
     def test_approve_action_sets_status(self, client):
         superuser = _make_superuser()
-        event = EventFactory(status=EventStatus.PENDING)
+        event = EventFactory.create(status=EventStatus.PENDING)
         client.force_login(superuser)
 
         changelist_url = reverse("admin:events_event_changelist")
@@ -33,8 +33,8 @@ class TestApproveAction:
 
     def test_approve_action_also_approves_user(self, client):
         superuser = _make_superuser()
-        user = UserFactory(is_approved=False)
-        event = EventFactory(status=EventStatus.PENDING, submitted_by=user)
+        user = UserFactory.create(is_approved=False)
+        event = EventFactory.create(status=EventStatus.PENDING, submitted_by=user)
         client.force_login(superuser)
 
         client.post(
@@ -49,7 +49,7 @@ class TestApproveAction:
 
     def test_reject_action_requires_note(self, client):
         superuser = _make_superuser()
-        event = EventFactory(status=EventStatus.PENDING)
+        event = EventFactory.create(status=EventStatus.PENDING)
         client.force_login(superuser)
 
         # First POST triggers redirect to intermediate page
@@ -75,7 +75,7 @@ class TestApproveAction:
 
     def test_reject_action_with_note_rejects_event(self, client):
         superuser = _make_superuser()
-        event = EventFactory(status=EventStatus.PENDING)
+        event = EventFactory.create(status=EventStatus.PENDING)
         client.force_login(superuser)
 
         # Trigger action to store IDs in session
@@ -102,7 +102,7 @@ class TestApproveAction:
 class TestAccountsAdmin:
     def test_promote_to_moderator_action(self, client):
         superuser = _make_superuser()
-        user = UserFactory(is_moderator=False)
+        user = UserFactory.create(is_moderator=False)
         client.force_login(superuser)
 
         resp = client.post(

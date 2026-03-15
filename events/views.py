@@ -24,8 +24,8 @@ class EventOwnerOrModeratorMixin:
     """Restrict access to the event owner or a moderator. Returns 403 otherwise."""
 
     def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
-        user = self.request.user
+        obj = super().get_object(queryset)  # type: ignore[misc]
+        user = self.request.user  # type: ignore[attr-defined]
         if obj.submitted_by != user and not user.is_moderator:
             from django.core.exceptions import PermissionDenied
 

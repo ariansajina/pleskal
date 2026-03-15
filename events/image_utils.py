@@ -15,7 +15,7 @@ def _resize_to_width(img: Image.Image, width: int) -> Image.Image:
         return img.copy()
     ratio = width / img.width
     new_height = int(img.height * ratio)
-    return img.resize((width, new_height), Image.LANCZOS)
+    return img.resize((width, new_height), Image.LANCZOS)  # type: ignore[attr-defined]
 
 
 def _strip_exif_and_save(img: Image.Image, fmt: str) -> bytes:
