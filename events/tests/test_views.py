@@ -274,7 +274,6 @@ class TestEventListView:
         assert pending.title.encode() not in resp.content
 
 
-
 # ---------------------------------------------------------------------------
 # Feature 9: Event detail
 # ---------------------------------------------------------------------------
