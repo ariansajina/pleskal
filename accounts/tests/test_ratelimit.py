@@ -6,7 +6,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.tests.factories import UserFactory
-from events.tests.factories import EventFactory
 
 
 @pytest.fixture(autouse=True)
@@ -100,7 +99,6 @@ class TestRegisterRateLimit:
             assert r.status_code != 429
 
     def test_registration_blocked_after_limit(self, client, settings):
-        from config.ratelimit import RateLimitMixin
 
         settings.AXES_ENABLED = False
         # Manually exhaust the counter so the very next request is blocked
@@ -165,7 +163,7 @@ class TestLoginRateLimit:
 
     def test_successful_login_not_blocked_within_limit(self, client, settings):
         settings.AXES_ENABLED = False
-        user = UserFactory.create(email="ok@example.com")
+        UserFactory.create(email="ok@example.com")
         resp = client.post(
             reverse("login"),
             {"username": "ok@example.com", "password": "testpass123"},

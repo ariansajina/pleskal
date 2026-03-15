@@ -10,7 +10,11 @@ from django.views.generic import CreateView
 
 from config.ratelimit import RateLimitMixin
 
-from .forms import CustomAuthenticationForm, CustomUserCreationForm, PublisherProfileForm
+from .forms import (
+    CustomAuthenticationForm,
+    CustomUserCreationForm,
+    PublisherProfileForm,
+)
 
 User = get_user_model()
 
