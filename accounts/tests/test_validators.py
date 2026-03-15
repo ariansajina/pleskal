@@ -1,3 +1,5 @@
+import contextlib
+
 import pytest
 from django.core.exceptions import ValidationError
 
@@ -89,10 +91,8 @@ class TestZxcvbnPasswordValidator:
         v = ZxcvbnPasswordValidator(min_score=1)
         # "letmein1" typically scores 1; just confirm no crash for a non-trivially
         # scored password that would fail min_score=2
-        try:
+        with contextlib.suppress(ValidationError):
             v.validate("letmein1")
-        except ValidationError:
-            pass  # still OK — zxcvbn may score this 0
 
     # ------------------------------------------------------------------
     # User inputs taken into account

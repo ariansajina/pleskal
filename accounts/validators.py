@@ -1,7 +1,6 @@
+import zxcvbn
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
-
-import zxcvbn
 
 # Minimum zxcvbn score (0–4) required for a password to be accepted.
 # Score 2 = "somewhat guessable" — good enough for typical web apps.
@@ -53,8 +52,7 @@ class ZxcvbnPasswordValidator:
 
             raise ValidationError(
                 _(
-                    "This password is %(label)s (strength %(score)d/4). "
-                    "%(hint)s"
+                    "This password is %(label)s (strength %(score)d/4). %(hint)s"
                 ).strip(),
                 code="password_too_weak",
                 params={"label": label, "score": score, "hint": hint},
