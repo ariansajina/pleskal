@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title|default:"Event" }} – CPH Dance{% endblock %}
+
+{% block extra_head %}
+    {{ form.media }}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">{{ page_title|default:"Event" }}</h1>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="bg-red-50 border border-red-200 rounded p-3 text-red-700 text-sm">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        {# Title #}
+        <div>
+            <label for="{{ form.title.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                Title <span class="text-red-500">*</span>
+            </label>
+            {{ form.title }}
+            {% if form.title.errors %}
+                <p class="text-red-600 text-xs mt-1">{{ form.title.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+
+        {# Category #}
+        <div>
+            <label for="{{ form.category.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                Category <span class="text-red-500">*</span>
+            </label>
+            {{ form.category }}
+            {% if form.category.errors %}
+                <p class="text-red-600 text-xs mt-1">{{ form.category.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+
+        {# Dates #}
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label for="{{ form.start_datetime.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                    Start <span class="text-red-500">*</span>
+                </label>
+                {{ form.start_datetime }}
+                {% if form.start_datetime.errors %}
+                    <p class="text-red-600 text-xs mt-1">{{ form.start_datetime.errors|join:", " }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label for="{{ form.end_datetime.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                    End
+                </label>
+                {{ form.end_datetime }}
+                {% if form.end_datetime.errors %}
+                    <p class="text-red-600 text-xs mt-1">{{ form.end_datetime.errors|join:", " }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Venue #}
+        <div>
+            <label for="{{ form.venue_name.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                Venue name <span class="text-red-500">*</span>
+            </label>
+            {{ form.venue_name }}
+            {% if form.venue_name.errors %}
+                <p class="text-red-600 text-xs mt-1">{{ form.venue_name.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+
+        <div>
+            <label for="{{ form.venue_address.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                Venue address
+            </label>
+            {{ form.venue_address }}
+        </div>
+
+        {# Description #}
+        <div>
+            <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                Description <span class="text-gray-400 font-normal">(Markdown supported)</span>
+            </label>
+            {{ form.description }}
+            {% if form.description.errors %}
+                <p class="text-red-600 text-xs mt-1">{{ form.description.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+
+        {# Image #}
+        <div>
+            <label for="{{ form.image.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                Image <span class="text-gray-400 font-normal">(JPEG, PNG, or WebP · max 4 MB)</span>
+            </label>
+            {% if form.instance.image %}
+                <p class="text-xs text-gray-500 mb-1">Current image: {{ form.instance.image.name }}</p>
+            {% endif %}
+            {{ form.image }}
+            {% if form.image.errors %}
+                <p class="text-red-600 text-xs mt-1">{{ form.image.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+
+        {# Pricing #}
+        <div class="flex items-center gap-3">
+            {{ form.is_free }}
+            <label for="{{ form.is_free.id_for_label }}" class="text-sm font-medium text-gray-700">
+                Free event
+            </label>
+        </div>
+
+        <div>
+            <label for="{{ form.price_note.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                Price note
+            </label>
+            {{ form.price_note }}
+        </div>
+
+        {# Source URL #}
+        <div>
+            <label for="{{ form.source_url.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                Source URL
+            </label>
+            {{ form.source_url }}
+            {% if form.source_url.errors %}
+                <p class="text-red-600 text-xs mt-1">{{ form.source_url.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+
+        <div class="flex gap-3">
+            <button type="submit"
+                    class="bg-indigo-600 text-white px-5 py-2 rounded hover:bg-indigo-700 font-medium">
+                {% if form.instance.pk %}Save changes{% else %}Submit event{% endif %}
+            </button>
+            <a href="{% if form.instance.slug %}{% url 'event_detail' form.instance.slug %}{% else %}{% url 'event_list' %}{% endif %}"
+               class="px-5 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-50">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
