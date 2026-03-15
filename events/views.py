@@ -1,8 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.postgres.search import TrigramWordSimilarity
 from django.core.paginator import Paginator
-from django.db.models.functions import Greatest
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -90,8 +88,11 @@ class EventListView(View):
     def get(self, request):
         from django.shortcuts import render
 
-        qs = Event.objects.filter(status=EventStatus.APPROVED).select_related(
-            "submitted_by"
+        expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
+        qs = (
+            Event.objects.filter(status=EventStatus.APPROVED)
+            .filter(start_datetime__gte=expiry_cutoff)
+            .select_related("submitted_by")
         )
 
         # --- Filter: upcoming vs past ---
@@ -135,19 +136,15 @@ class EventListView(View):
         if request.GET.get("is_free") == "1":
             qs = qs.filter(is_free=True)
 
-        # --- Filter: full-text search ---
+        # --- Filter: search ---
         search_query = request.GET.get("q", "").strip()
         if search_query:
-            qs = (
-                qs.annotate(
-                    similarity=Greatest(
-                        TrigramWordSimilarity(search_query, "title"),
-                        TrigramWordSimilarity(search_query, "venue_name"),
-                        TrigramWordSimilarity(search_query, "description"),
-                    )
-                )
-                .filter(similarity__gt=0.2)
-                .order_by("-similarity")
+            from django.db.models import Q
+
+            qs = qs.filter(
+                Q(title__icontains=search_query)
+                | Q(venue_name__icontains=search_query)
+                | Q(description__icontains=search_query)
             )
 
         # --- Pagination ---
