@@ -20,6 +20,14 @@
         <span class="shrink-0 text-xs border border-gray-300 text-gray-500 px-1.5 py-0 leading-4 hidden sm:inline">free</span>
     {% endif %}
 
+    {# Publisher #}
+    {% if event.submitted_by %}
+        <a href="{% url 'publisher_profile' event.submitted_by.username %}"
+           class="shrink-0 text-xs text-gray-400 hover:text-black truncate hidden lg:inline max-w-24">
+            {{ event.submitted_by.username }}
+        </a>
+    {% endif %}
+
     {# Venue #}
     <span class="shrink-0 text-xs text-gray-400 truncate hidden md:inline max-w-36">
         {{ event.venue_name }}
