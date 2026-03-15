@@ -60,6 +60,12 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+staticfiles/
+media/
+
+# Node (Tailwind build)
+node_modules/
+static/css/output.css
 
 # Flask stuff:
 instance/

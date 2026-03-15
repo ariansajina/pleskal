@@ -1,0 +1,115 @@
+import uuid
+
+import pytest
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+
+from ..models import EventCategory, EventStatus
+from .factories import EventFactory
+
+
+@pytest.mark.django_db
+class TestEventModel:
+    def test_uuid_primary_key(self):
+        event = EventFactory()
+        assert isinstance(event.pk, uuid.UUID)
+
+    def test_str_returns_title(self):
+        event = EventFactory(title="Summer Jam")
+        assert str(event) == "Summer Jam"
+
+    def test_default_status_pending(self):
+        event = EventFactory()
+        assert event.status == EventStatus.PENDING
+
+    def test_categories(self):
+        assert len(EventCategory.choices) == 6
+        values = [c[0] for c in EventCategory.choices]
+        assert "performance" in values
+        assert "workshop" in values
+        assert "work_in_progress" in values
+        assert "open_practice" in values
+        assert "social" in values
+        assert "other" in values
+
+
+@pytest.mark.django_db
+class TestSlugGeneration:
+    def test_slug_auto_generated(self):
+        event = EventFactory(title="My Cool Event")
+        assert event.slug == "my-cool-event"
+
+    def test_slug_collision_appends_suffix(self):
+        e1 = EventFactory(title="Same Title")
+        e2 = EventFactory(title="Same Title")
+        assert e1.slug == "same-title"
+        assert e2.slug != e1.slug
+        assert e2.slug.startswith("same-title-")
+
+    def test_slug_immutable_on_save(self):
+        event = EventFactory(title="Original Title")
+        original_slug = event.slug
+        event.title = "Changed Title"
+        event.save()
+        assert event.slug == original_slug
+
+    def test_empty_title_fallback_slug(self):
+        event = EventFactory(title="---")  # slugify produces empty string
+        assert event.slug == "event"
+
+
+@pytest.mark.django_db
+class TestEventValidation:
+    def test_past_start_datetime_rejected_on_creation(self):
+        event = EventFactory.build(
+            start_datetime=timezone.now() - timezone.timedelta(hours=1)
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            event.full_clean()
+        assert "start_datetime" in exc_info.value.message_dict
+
+    def test_past_start_datetime_allowed_on_edit(self):
+        event = EventFactory(start_datetime=timezone.now() + timezone.timedelta(days=1))
+        # Simulate the event's start_datetime being in the past now
+        event.start_datetime = timezone.now() - timezone.timedelta(hours=1)
+        # Should not raise - past date check only on creation
+        event.full_clean()
+
+    def test_start_more_than_one_year_future_rejected(self):
+        event = EventFactory.build(
+            start_datetime=timezone.now() + timezone.timedelta(days=400)
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            event.full_clean()
+        assert "start_datetime" in exc_info.value.message_dict
+
+    def test_end_before_start_rejected(self):
+        start = timezone.now() + timezone.timedelta(days=7)
+        event = EventFactory.build(
+            start_datetime=start,
+            end_datetime=start - timezone.timedelta(hours=1),
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            event.full_clean()
+        assert "end_datetime" in exc_info.value.message_dict
+
+    def test_end_after_start_accepted(self):
+        start = timezone.now() + timezone.timedelta(days=7)
+        event = EventFactory.build(
+            start_datetime=start,
+            end_datetime=start + timezone.timedelta(hours=2),
+        )
+        event.clean()  # Should not raise
+
+    def test_title_too_short_rejected(self):
+        event = EventFactory.build(title="Hi")
+        with pytest.raises(ValidationError) as exc_info:
+            event.full_clean()
+        assert "title" in exc_info.value.message_dict
+
+    def test_submitted_by_set_null_on_delete(self):
+        event = EventFactory()
+        user = event.submitted_by
+        user.delete()
+        event.refresh_from_db()
+        assert event.submitted_by is None

@@ -1,9 +1,51 @@
 [project]
-name = "pleskal"
+name = "cph-dance-calendar"
 version = "0.1.0"
-description = "Add your description here"
+description = "A local-first, crowd-sourced web application for discovering and sharing dance events in Copenhagen."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "django>=6.0.3",
+    "psycopg[binary]>=3.2",
+    "django-markdownx>=4.0",
+    "nh3>=0.2",
+    "django-storages[boto3]>=1.14",
+    "django-axes>=7.0",
+    "django-environ>=0.12",
+    "pillow>=11.0",
+    "gunicorn>=23.0",
+    "sentry-sdk[django]>=2.0",
+    "whitenoise>=6.8",
+    "icalendar>=6.0",
+    "pytest-xdist>=3.8.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+    "pytest>=8.0",
+    "pytest-django>=4.9",
+    "pytest-cov>=6.0",
+    "factory-boy>=3.3",
+    "django-debug-toolbar>=5.0",
+    "pre-commit>=4.0",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["tests.py", "test_*.py"]
+addopts = "--reuse-db -n 4"
+
+[tool.coverage.run]
+source = ["events", "accounts"]
+
+[tool.coverage.report]
+fail_under = 80

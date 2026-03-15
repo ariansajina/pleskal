@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Account — Copenhagen Dance Calendar{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <h1 class="text-2xl font-bold mb-4 text-red-700">Delete Your Account</h1>
+    <div class="bg-red-50 border border-red-200 rounded p-4 mb-6">
+        <p class="text-sm text-red-800 mb-2">This action is permanent and cannot be undone.</p>
+        <ul class="text-sm text-red-700 list-disc list-inside space-y-1">
+            <li>Your account will be permanently deleted.</li>
+            <li>Your submitted events will remain visible but will no longer be associated with your account.</li>
+        </ul>
+    </div>
+    <form method="post" class="flex gap-4">
+        {% csrf_token %}
+        <button type="submit" class="bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700">
+            Delete My Account
+        </button>
+        <a href="/" class="py-2 px-4 border rounded text-gray-700 hover:bg-gray-50">
+            Cancel
+        </a>
+    </form>
+</div>
+{% endblock %}
