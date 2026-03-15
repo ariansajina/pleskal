@@ -2,7 +2,12 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from .forms import CustomAuthenticationForm
-from .views import AccountDeleteView, RegisterView
+from .views import (
+    AccountDeleteView,
+    AccountProfileView,
+    PublisherProfileView,
+    RegisterView,
+)
 
 urlpatterns = [
     path(
@@ -57,5 +62,15 @@ urlpatterns = [
         "delete/",
         AccountDeleteView.as_view(),
         name="account_delete",
+    ),
+    path(
+        "profile/",
+        AccountProfileView.as_view(),
+        name="account_profile",
+    ),
+    path(
+        "publishers/<str:username>/",
+        PublisherProfileView.as_view(),
+        name="publisher_profile",
     ),
 ]

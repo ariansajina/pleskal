@@ -11,6 +11,8 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     is_approved = models.BooleanField(default=False)
     is_moderator = models.BooleanField(default=False)
+    bio = models.TextField(blank=True, max_length=500)
+    website = models.URLField(blank=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]

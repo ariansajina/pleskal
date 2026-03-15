@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile – CPH Dance{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">My Profile</h1>
+
+    <form method="post" class="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
+        {% csrf_token %}
+
+        <div>
+            <label for="id_bio" class="block text-sm font-medium text-gray-700 mb-1">
+                {{ form.bio.label }}
+            </label>
+            {{ form.bio }}
+            {% if form.bio.help_text %}
+                <p class="text-xs text-gray-400 mt-1">{{ form.bio.help_text }}</p>
+            {% endif %}
+            {% for error in form.bio.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div>
+            <label for="id_website" class="block text-sm font-medium text-gray-700 mb-1">
+                {{ form.website.label }}
+            </label>
+            {{ form.website }}
+            {% if form.website.help_text %}
+                <p class="text-xs text-gray-400 mt-1">{{ form.website.help_text }}</p>
+            {% endif %}
+            {% for error in form.website.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="flex items-center gap-4 pt-2">
+            <button type="submit"
+                    class="bg-indigo-600 text-white text-sm px-5 py-2 rounded hover:bg-indigo-700">
+                Save changes
+            </button>
+            <a href="{% url 'publisher_profile' request.user.username %}"
+               class="text-sm text-gray-500 hover:text-gray-700">
+                View public profile →
+            </a>
+        </div>
+    </form>
+
+    <div class="mt-6 border-t border-gray-200 pt-4">
+        <p class="text-sm text-gray-500">
+            Want to delete your account?
+            <a href="{% url 'account_delete' %}" class="text-red-600 hover:underline">Delete account</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

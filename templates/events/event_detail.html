@@ -81,6 +81,17 @@
         </div>
     {% endif %}
 
+    {# Publisher attribution #}
+    {% if event.submitted_by %}
+        <div class="border-t border-gray-100 pt-4 mb-2 text-sm text-gray-500">
+            Published by
+            <a href="{% url 'publisher_profile' event.submitted_by.username %}"
+               class="text-indigo-600 hover:text-indigo-800 font-medium">
+                {{ event.submitted_by.username }}
+            </a>
+        </div>
+    {% endif %}
+
     {# Owner / moderator actions #}
     {% if user.is_authenticated %}
         {% if user == event.submitted_by or user.is_moderator %}
