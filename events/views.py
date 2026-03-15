@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.postgres.search import SearchQuery, SearchVector
 from django.core.paginator import Paginator
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
@@ -127,6 +128,12 @@ class EventListView(View):
         if request.GET.get("is_free") == "1":
             qs = qs.filter(is_free=True)
 
+        # --- Filter: full-text search ---
+        search_query = request.GET.get("q", "").strip()
+        if search_query:
+            vector = SearchVector("title", "description", "venue_name")
+            qs = qs.annotate(search=vector).filter(search=SearchQuery(search_query))
+
         # --- Pagination ---
         paginator = Paginator(qs, EVENTS_PER_PAGE)
         page_number = request.GET.get("page", 1)
@@ -141,6 +148,7 @@ class EventListView(View):
             "date_from": date_from or "",
             "date_to": date_to or "",
             "is_free": request.GET.get("is_free") == "1",
+            "search_query": search_query,
         }
 
         # HTMX: return only the results partial
