@@ -248,7 +248,7 @@ EVENTS = [
             "experiences of birth and death. The performance features three characters embodying "
             "different emotional states, moving through a blurred, yet alluring landscape of light "
             "with an immersive soundscape.\n\n"
-            "Described as \"a masterpiece that grips the audience\" (Statens Kunstfonds "
+            'Described as "a masterpiece that grips the audience" (Statens Kunstfonds '
             "Legatudvalget for Scenekunst 2024)."
         ),
         "start_datetime": "2026-03-27 20:00",
@@ -661,7 +661,9 @@ class Command(BaseCommand):
                 skipped += 1
                 continue
 
-            start_naive = datetime.datetime.strptime(data["start_datetime"], "%Y-%m-%d %H:%M")
+            start_naive = datetime.datetime.strptime(
+                data["start_datetime"], "%Y-%m-%d %H:%M"
+            )
             end_naive = (
                 datetime.datetime.strptime(data["end_datetime"], "%Y-%m-%d %H:%M")
                 if data.get("end_datetime")
@@ -698,6 +700,12 @@ class Command(BaseCommand):
 
         self.stdout.write("")
         if dry_run:
-            self.stdout.write(self.style.WARNING(f"Dry run: {created} would be created, {skipped} skipped."))
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Dry run: {created} would be created, {skipped} skipped."
+                )
+            )
         else:
-            self.stdout.write(self.style.SUCCESS(f"Done: {created} created, {skipped} skipped."))
+            self.stdout.write(
+                self.style.SUCCESS(f"Done: {created} created, {skipped} skipped.")
+            )

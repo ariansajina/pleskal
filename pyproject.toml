@@ -38,6 +38,7 @@ extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
@@ -48,4 +49,4 @@ addopts = "--reuse-db -n 4"
 source = ["events", "accounts"]
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 90
