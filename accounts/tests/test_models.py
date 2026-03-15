@@ -64,6 +64,4 @@ class TestUserManager:
 
     def test_create_superuser_requires_email(self):
         with pytest.raises(ValueError, match="Email is required"):
-            User.objects.create_superuser(
-                username="admin", email=None, password="pass"
-            )
+            User.objects.create_superuser(username="admin", email=None, password="pass")

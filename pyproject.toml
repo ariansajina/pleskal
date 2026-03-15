@@ -17,6 +17,7 @@ dependencies = [
     "sentry-sdk[django]>=2.0",
     "whitenoise>=6.8",
     "icalendar>=6.0",
+    "pytest-xdist>=3.8.0",
 ]
 
 [dependency-groups]
@@ -41,7 +42,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["tests.py", "test_*.py"]
-addopts = "--reuse-db"
+addopts = "--reuse-db -n 4"
 
 [tool.coverage.run]
 source = ["events", "accounts"]

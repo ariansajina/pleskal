@@ -48,7 +48,7 @@ class TestRenderMarkdown:
         assert "alert" not in result
 
     def test_javascript_href_stripped(self):
-        result = render_markdown('[click](javascript:alert(1))')
+        result = render_markdown("[click](javascript:alert(1))")
         assert "javascript:" not in result
 
     def test_onclick_stripped(self):
@@ -68,9 +68,7 @@ class TestRenderMarkdown:
         assert "<style>" not in result
 
     def test_data_uri_stripped(self):
-        result = render_markdown(
-            '[click](data:text/html,<script>alert(1)</script>)'
-        )
+        result = render_markdown("[click](data:text/html,<script>alert(1)</script>)")
         assert "data:" not in result
 
     def test_mailto_allowed(self):

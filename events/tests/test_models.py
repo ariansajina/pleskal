@@ -69,9 +69,7 @@ class TestEventValidation:
         assert "start_datetime" in exc_info.value.message_dict
 
     def test_past_start_datetime_allowed_on_edit(self):
-        event = EventFactory(
-            start_datetime=timezone.now() + timezone.timedelta(days=1)
-        )
+        event = EventFactory(start_datetime=timezone.now() + timezone.timedelta(days=1))
         # Simulate the event's start_datetime being in the past now
         event.start_datetime = timezone.now() - timezone.timedelta(hours=1)
         # Should not raise - past date check only on creation

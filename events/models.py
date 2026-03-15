@@ -99,9 +99,7 @@ class Event(models.Model):
         # Start datetime must be in the future (only on creation)
         if self._state.adding and self.start_datetime:
             if self.start_datetime <= timezone.now():
-                errors["start_datetime"] = (
-                    "Start date and time must be in the future."
-                )
+                errors["start_datetime"] = "Start date and time must be in the future."
             # Must not be more than 1 year in the future
             one_year = timezone.now() + timezone.timedelta(days=365)
             if self.start_datetime > one_year:
@@ -137,9 +135,7 @@ class Event(models.Model):
             raise ValueError("Rejection note is required.")
         self.status = EventStatus.REJECTED
         self.rejection_note = note.strip()
-        self.save(
-            update_fields=["status", "rejection_note", "updated_at"]
-        )
+        self.save(update_fields=["status", "rejection_note", "updated_at"])
 
     def resubmit(self):
         """Resubmit a rejected event for moderation."""
