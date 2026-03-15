@@ -1,0 +1,40 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<h1>Reject events</h1>
+
+<p>You are about to reject the following {{ events.count }} event(s):</p>
+<ul>
+    {% for event in events %}
+        <li><strong>{{ event.title }}</strong> ({{ event.submitted_by }})</li>
+    {% endfor %}
+</ul>
+
+<form method="post">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+        <div class="form-row">
+            <div>
+                <label for="{{ form.rejection_note.id_for_label }}">
+                    {{ form.rejection_note.label }}:
+                </label>
+                {{ form.rejection_note }}
+                {% if form.rejection_note.errors %}
+                    <ul class="errorlist">
+                        {% for error in form.rejection_note.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                <p class="help">{{ form.rejection_note.help_text }}</p>
+            </div>
+        </div>
+    </fieldset>
+
+    <div class="submit-row">
+        <input type="submit" value="Reject events" class="default">
+        <a href="{% url 'admin:events_event_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+</form>
+{% endblock %}

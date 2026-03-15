@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party
     "axes",
+    "markdownx",
     # Local
     "accounts",
     "events",
@@ -37,6 +38,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
+    "config.middleware.ContentSecurityPolicyMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -185,3 +187,10 @@ if DEBUG:
         pass
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# django-markdownx
+
+MARKDOWNX_MARKDOWN_EXTENSIONS = ["fenced_code"]
+# Restrict image uploads via markdownx preview endpoint (not used for event images)
+MARKDOWNX_UPLOAD_MAX_SIZE = 4 * 1024 * 1024  # 4 MB
+MARKDOWNX_UPLOAD_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"]

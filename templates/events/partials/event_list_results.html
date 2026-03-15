@@ -1,0 +1,42 @@
+{% if events %}
+    <div class="space-y-4">
+        {% for event in events %}
+            {% include "events/partials/event_card.html" with event=event %}
+        {% endfor %}
+    </div>
+
+    {# Pagination #}
+    {% if page_obj.has_other_pages %}
+        <nav class="mt-8 flex justify-center gap-2 text-sm" aria-label="Pagination">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}"
+                   class="px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50"
+                   hx-get="?page={{ page_obj.previous_page_number }}"
+                   hx-target="#event-list"
+                   hx-push-url="true">
+                    &larr; Previous
+                </a>
+            {% endif %}
+
+            <span class="px-3 py-1.5 text-gray-500">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}"
+                   class="px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50"
+                   hx-get="?page={{ page_obj.next_page_number }}"
+                   hx-target="#event-list"
+                   hx-push-url="true">
+                    Next &rarr;
+                </a>
+            {% endif %}
+        </nav>
+    {% endif %}
+
+{% else %}
+    <div class="text-center py-16 text-gray-400">
+        <p class="text-lg font-medium">No events found.</p>
+        <p class="text-sm mt-1">Try adjusting your filters.</p>
+    </div>
+{% endif %}

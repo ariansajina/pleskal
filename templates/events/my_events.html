@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}My Events – CPH Dance{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">My Events</h1>
+        <a href="{% url 'event_create' %}"
+           class="bg-indigo-600 text-white text-sm px-4 py-2 rounded hover:bg-indigo-700">
+            + Submit event
+        </a>
+    </div>
+
+    {% if events %}
+        <div class="space-y-3">
+            {% for event in events %}
+                <div class="bg-white border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                        {# Status badge #}
+                        <span class="inline-block text-xs font-medium px-2 py-0.5 rounded mr-2
+                            {% if event.status == 'approved' %}bg-green-100 text-green-700
+                            {% elif event.status == 'pending' %}bg-yellow-100 text-yellow-700
+                            {% else %}bg-red-100 text-red-700{% endif %}">
+                            {{ event.get_status_display }}
+                        </span>
+                        <span class="text-xs text-gray-400">{{ event.get_category_display }}</span>
+
+                        <h2 class="text-base font-semibold text-gray-900 mt-1 truncate">
+                            <a href="{% url 'event_detail' event.slug %}"
+                               class="hover:text-indigo-600">
+                                {{ event.title }}
+                            </a>
+                        </h2>
+
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {{ event.start_datetime|date:"d M Y · H:i" }}
+                            · {{ event.venue_name }}
+                        </p>
+
+                        {% if event.status == 'rejected' and event.rejection_note %}
+                            <p class="text-xs text-red-600 mt-1">
+                                Rejection reason: {{ event.rejection_note }}
+                            </p>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex gap-2 shrink-0">
+                        <a href="{% url 'event_edit' event.slug %}"
+                           class="text-sm px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">
+                            Edit
+                        </a>
+                        <a href="{% url 'event_delete' event.slug %}"
+                           class="text-sm px-3 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">
+                            Delete
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-16 text-gray-400">
+            <p class="text-lg font-medium">No events yet.</p>
+            <p class="text-sm mt-1">
+                <a href="{% url 'event_create' %}" class="text-indigo-600 hover:underline">Submit your first event</a>
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
