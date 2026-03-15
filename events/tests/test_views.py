@@ -230,6 +230,54 @@ class TestEventListView:
         assert str(near.title).encode() in resp.content
         assert str(far.title).encode() not in resp.content
 
+    def test_search_matches_title(self, client):
+        match = EventFactory(status=EventStatus.APPROVED, title="Tango Evening Special")
+        no_match = EventFactory(status=EventStatus.APPROVED, title="Ballet Workshop")
+        resp = client.get(reverse("event_list") + "?q=Tango")
+        assert match.title.encode() in resp.content
+        assert no_match.title.encode() not in resp.content
+
+    def test_search_matches_venue(self, client):
+        match = EventFactory(
+            status=EventStatus.APPROVED, venue_name="Vega Concert Hall"
+        )
+        no_match = EventFactory(
+            status=EventStatus.APPROVED, venue_name="City Dance Studio"
+        )
+        resp = client.get(reverse("event_list") + "?q=Vega")
+        assert match.title.encode() in resp.content
+        assert no_match.title.encode() not in resp.content
+
+    def test_search_matches_description(self, client):
+        match = EventFactory(
+            status=EventStatus.APPROVED,
+            description="An evening of flamenco dance.",
+        )
+        no_match = EventFactory(
+            status=EventStatus.APPROVED,
+            description="Hip-hop jam session.",
+        )
+        resp = client.get(reverse("event_list") + "?q=flamenco")
+        assert match.title.encode() in resp.content
+        assert no_match.title.encode() not in resp.content
+
+    def test_empty_search_returns_all_approved(self, client):
+        e1 = EventFactory(status=EventStatus.APPROVED)
+        e2 = EventFactory(status=EventStatus.APPROVED)
+        resp = client.get(reverse("event_list") + "?q=")
+        assert e1.title.encode() in resp.content
+        assert e2.title.encode() in resp.content
+
+    def test_search_does_not_return_unapproved(self, client):
+        pending = EventFactory(status=EventStatus.PENDING, title="Unique Salsa Night")
+        resp = client.get(reverse("event_list") + "?q=Salsa")
+        assert pending.title.encode() not in resp.content
+
+    def test_search_fuzzy_typo_in_title(self, client):
+        match = EventFactory(status=EventStatus.APPROVED, title="Tango Evening")
+        resp = client.get(reverse("event_list") + "?q=Tnago")
+        assert match.title.encode() in resp.content
+
 
 # ---------------------------------------------------------------------------
 # Feature 9: Event detail

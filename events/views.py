@@ -1,6 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.postgres.search import TrigramWordSimilarity
 from django.core.paginator import Paginator
+from django.db.models.functions import Greatest
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -127,6 +129,21 @@ class EventListView(View):
         if request.GET.get("is_free") == "1":
             qs = qs.filter(is_free=True)
 
+        # --- Filter: full-text search ---
+        search_query = request.GET.get("q", "").strip()
+        if search_query:
+            qs = (
+                qs.annotate(
+                    similarity=Greatest(
+                        TrigramWordSimilarity(search_query, "title"),
+                        TrigramWordSimilarity(search_query, "venue_name"),
+                        TrigramWordSimilarity(search_query, "description"),
+                    )
+                )
+                .filter(similarity__gt=0.2)
+                .order_by("-similarity")
+            )
+
         # --- Pagination ---
         paginator = Paginator(qs, EVENTS_PER_PAGE)
         page_number = request.GET.get("page", 1)
@@ -141,6 +158,7 @@ class EventListView(View):
             "date_from": date_from or "",
             "date_to": date_to or "",
             "is_free": request.GET.get("is_free") == "1",
+            "search_query": search_query,
         }
 
         # HTMX: return only the results partial

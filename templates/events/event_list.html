@@ -16,6 +16,19 @@
                   hx-trigger="change, submit"
                   class="space-y-4 pt-2 md:pt-0">
 
+                {# Full-text search #}
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Search</p>
+                    <input type="search" name="q" value="{{ search_query }}"
+                           placeholder="Title, venue, description…"
+                           hx-get="/"
+                           hx-target="#event-list"
+                           hx-push-url="true"
+                           hx-trigger="keyup changed delay:400ms"
+                           hx-include="#filter-form"
+                           class="w-full text-xs border border-gray-300 px-2 py-1 bg-white">
+                </div>
+
                 {# Upcoming / Past toggle #}
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">When</p>
