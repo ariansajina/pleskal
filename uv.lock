@@ -136,65 +136,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cph-dance-calendar"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "django" },
-    { name = "django-axes" },
-    { name = "django-environ" },
-    { name = "django-markdownx" },
-    { name = "django-storages", extra = ["boto3"] },
-    { name = "gunicorn" },
-    { name = "icalendar" },
-    { name = "nh3" },
-    { name = "pillow" },
-    { name = "psycopg", extra = ["binary"] },
-    { name = "pytest-xdist" },
-    { name = "sentry-sdk", extra = ["django"] },
-    { name = "whitenoise" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "django-debug-toolbar" },
-    { name = "factory-boy" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-django" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "django", specifier = ">=6.0.3" },
-    { name = "django-axes", specifier = ">=7.0" },
-    { name = "django-environ", specifier = ">=0.12" },
-    { name = "django-markdownx", specifier = ">=4.0" },
-    { name = "django-storages", extras = ["boto3"], specifier = ">=1.14" },
-    { name = "gunicorn", specifier = ">=23.0" },
-    { name = "icalendar", specifier = ">=6.0" },
-    { name = "nh3", specifier = ">=0.2" },
-    { name = "pillow", specifier = ">=11.0" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
-    { name = "pytest-xdist", specifier = ">=3.8.0" },
-    { name = "sentry-sdk", extras = ["django"], specifier = ">=2.0" },
-    { name = "whitenoise", specifier = ">=6.8" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "django-debug-toolbar", specifier = ">=5.0" },
-    { name = "factory-boy", specifier = ">=3.3" },
-    { name = "pre-commit", specifier = ">=4.0" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-cov", specifier = ">=6.0" },
-    { name = "pytest-django", specifier = ">=4.9" },
-    { name = "ruff", specifier = ">=0.9" },
-]
-
-[[package]]
 name = "distlib"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -503,6 +444,65 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/19/56/8d4c30c8a1d07013911a8fdbd8f89440ef9f08d07a1b50ab8ca8be5a20f9/platformdirs-4.9.4.tar.gz", hash = "sha256:1ec356301b7dc906d83f371c8f487070e99d3ccf9e501686456394622a01a934", size = 28737, upload-time = "2026-03-05T18:34:13.271Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/63/d7/97f7e3a6abb67d8080dd406fd4df842c2be0efaf712d1c899c32a075027c/platformdirs-4.9.4-py3-none-any.whl", hash = "sha256:68a9a4619a666ea6439f2ff250c12a853cd1cbd5158d258bd824a7df6be2f868", size = 21216, upload-time = "2026-03-05T18:34:12.172Z" },
+]
+
+[[package]]
+name = "pleskal"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "django" },
+    { name = "django-axes" },
+    { name = "django-environ" },
+    { name = "django-markdownx" },
+    { name = "django-storages", extra = ["boto3"] },
+    { name = "gunicorn" },
+    { name = "icalendar" },
+    { name = "nh3" },
+    { name = "pillow" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pytest-xdist" },
+    { name = "sentry-sdk", extra = ["django"] },
+    { name = "whitenoise" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "django-debug-toolbar" },
+    { name = "factory-boy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-django" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "django", specifier = ">=6.0.3" },
+    { name = "django-axes", specifier = ">=7.0" },
+    { name = "django-environ", specifier = ">=0.12" },
+    { name = "django-markdownx", specifier = ">=4.0" },
+    { name = "django-storages", extras = ["boto3"], specifier = ">=1.14" },
+    { name = "gunicorn", specifier = ">=23.0" },
+    { name = "icalendar", specifier = ">=6.0" },
+    { name = "nh3", specifier = ">=0.2" },
+    { name = "pillow", specifier = ">=11.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "pytest-xdist", specifier = ">=3.8.0" },
+    { name = "sentry-sdk", extras = ["django"], specifier = ">=2.0" },
+    { name = "whitenoise", specifier = ">=6.8" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "django-debug-toolbar", specifier = ">=5.0" },
+    { name = "factory-boy", specifier = ">=3.3" },
+    { name = "pre-commit", specifier = ">=4.0" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=6.0" },
+    { name = "pytest-django", specifier = ">=4.9" },
+    { name = "ruff", specifier = ">=0.9" },
 ]
 
 [[package]]
