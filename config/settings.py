@@ -78,6 +78,16 @@ LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 
+PASSWORD_PEPPER = env("PASSWORD_PEPPER", default="")
+
+PASSWORD_HASHERS = [
+    # Primary: PBKDF2-SHA256 with an HMAC-SHA256 server-side pepper.
+    # Existing plain PBKDF2 hashes are verified via the fallback below and
+    # automatically re-hashed with this hasher on next successful login.
+    "accounts.hashers.HmacPepperedPasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation."
