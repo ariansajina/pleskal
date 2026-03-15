@@ -273,6 +273,11 @@ class TestEventListView:
         resp = client.get(reverse("event_list") + "?q=Salsa")
         assert pending.title.encode() not in resp.content
 
+    def test_search_fuzzy_typo_in_title(self, client):
+        match = EventFactory(status=EventStatus.APPROVED, title="Tango Evening")
+        resp = client.get(reverse("event_list") + "?q=Tnago")
+        assert match.title.encode() in resp.content
+
 
 # ---------------------------------------------------------------------------
 # Feature 9: Event detail

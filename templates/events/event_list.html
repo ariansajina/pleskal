@@ -19,6 +19,11 @@
                 <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Search</p>
                 <input type="search" name="q" value="{{ search_query }}"
                        placeholder="Title, venue, description…"
+                       hx-get="/"
+                       hx-target="#event-list"
+                       hx-push-url="true"
+                       hx-trigger="keyup changed delay:400ms"
+                       hx-include="#filter-form"
                        class="w-full text-sm border border-gray-300 rounded px-2 py-1">
             </div>
 

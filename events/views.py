@@ -1,7 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.postgres.search import SearchQuery, SearchVector
+from django.contrib.postgres.search import TrigramWordSimilarity
 from django.core.paginator import Paginator
+from django.db.models.functions import Greatest
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -131,8 +132,17 @@ class EventListView(View):
         # --- Filter: full-text search ---
         search_query = request.GET.get("q", "").strip()
         if search_query:
-            vector = SearchVector("title", "description", "venue_name")
-            qs = qs.annotate(search=vector).filter(search=SearchQuery(search_query))
+            qs = (
+                qs.annotate(
+                    similarity=Greatest(
+                        TrigramWordSimilarity(search_query, "title"),
+                        TrigramWordSimilarity(search_query, "venue_name"),
+                        TrigramWordSimilarity(search_query, "description"),
+                    )
+                )
+                .filter(similarity__gt=0.2)
+                .order_by("-similarity")
+            )
 
         # --- Pagination ---
         paginator = Paginator(qs, EVENTS_PER_PAGE)
