@@ -19,8 +19,6 @@ dependencies = [
     "icalendar>=6.0",
     "pytest-xdist>=3.8.0",
     "zxcvbn>=4.4",
-    "cryptography>=43.0",
-    "kyber-py>=1.2.0",
 ]
 
 [dependency-groups]

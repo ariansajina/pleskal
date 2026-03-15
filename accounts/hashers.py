@@ -18,12 +18,12 @@ login, so the transition is transparent to users.
 """
 
 import base64
+import hashlib
+import hmac
 
 from django.conf import settings
 from django.contrib.auth.hashers import PBKDF2PasswordHasher
 from django.core.exceptions import ImproperlyConfigured
-
-from config.crypto import hmac_sha256
 
 # Insecure all-zeros pepper used in development when PASSWORD_PEPPER is unset.
 _DEV_PEPPER_HEX = "00" * 32
@@ -60,7 +60,7 @@ def _get_pepper() -> bytes:
 
 def _apply_pepper(password: str) -> str:
     """Apply HMAC-SHA256 pepper to *password* and return a base64-encoded string."""
-    peppered = hmac_sha256(_get_pepper(), password.encode())
+    peppered = hmac.new(_get_pepper(), password.encode(), hashlib.sha256).digest()
     return base64.b64encode(peppered).decode()
 
 
