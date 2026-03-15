@@ -1,0 +1,40 @@
+{% extends "events/moderation/base_moderation.html" %}
+
+{% block title %}Users – Moderation – pleskal{% endblock %}
+
+{% block moderation_content %}
+
+{# Filters #}
+<form id="mod-user-form"
+      hx-get="{% url 'moderation_users' %}"
+      hx-target="#mod-user-list"
+      hx-push-url="true"
+      hx-trigger="change, submit"
+      class="flex flex-wrap items-center gap-3 mb-4">
+
+    <input type="search" name="q" value="{{ search_query }}"
+           placeholder="Search username or email..."
+           hx-get="{% url 'moderation_users' %}"
+           hx-target="#mod-user-list"
+           hx-push-url="true"
+           hx-trigger="keyup changed delay:400ms"
+           hx-include="#mod-user-form"
+           class="text-xs border border-gray-300 px-2 py-1 w-52 bg-white">
+
+    <select name="filter" class="text-xs border border-gray-300 px-2 py-1 bg-white">
+        <option value="">All users</option>
+        <option value="pending" {% if selected_filter == "pending" %}selected{% endif %}>Pending</option>
+        <option value="approved" {% if selected_filter == "approved" %}selected{% endif %}>Approved</option>
+        <option value="moderators" {% if selected_filter == "moderators" %}selected{% endif %}>Moderators</option>
+    </select>
+
+    <button type="submit" class="text-xs border border-gray-400 text-gray-700 px-3 py-1 hover:bg-gray-100">
+        Apply
+    </button>
+</form>
+
+{# Results #}
+<div id="mod-user-list">
+    {% include "events/moderation/partials/user_list_results.html" %}
+</div>
+{% endblock %}

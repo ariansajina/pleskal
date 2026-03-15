@@ -1,0 +1,24 @@
+{% extends "events/moderation/base_moderation.html" %}
+
+{% block title %}History – Moderation – pleskal{% endblock %}
+
+{% block moderation_content %}
+
+{# Filter #}
+<form id="mod-history-form"
+      hx-get="{% url 'moderation_history' %}"
+      hx-target="#mod-history-list"
+      hx-push-url="true"
+      hx-trigger="change"
+      class="flex items-center gap-3 mb-4">
+    <select name="status" class="text-xs border border-gray-300 px-2 py-1 bg-white">
+        <option value="">All decisions</option>
+        <option value="approved" {% if selected_status == "approved" %}selected{% endif %}>Approved</option>
+        <option value="rejected" {% if selected_status == "rejected" %}selected{% endif %}>Rejected</option>
+    </select>
+</form>
+
+<div id="mod-history-list">
+    {% include "events/moderation/partials/history_results.html" %}
+</div>
+{% endblock %}

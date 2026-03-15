@@ -1,0 +1,66 @@
+{% extends "events/moderation/base_moderation.html" %}
+
+{% block title %}Moderation – pleskal{% endblock %}
+
+{% block moderation_content %}
+
+{# Stats #}
+<div class="grid grid-cols-3 gap-4 mb-8">
+    <div class="border border-gray-200 p-4">
+        <p class="text-2xl font-bold text-gray-900">{{ stats.pending_events }}</p>
+        <p class="text-xs text-gray-500 mt-1">Pending events</p>
+    </div>
+    <div class="border border-gray-200 p-4">
+        <p class="text-2xl font-bold text-gray-900">{{ stats.pending_users }}</p>
+        <p class="text-xs text-gray-500 mt-1">Pending users</p>
+    </div>
+    <div class="border border-gray-200 p-4">
+        <p class="text-2xl font-bold text-gray-900">{{ stats.approved_today }}</p>
+        <p class="text-xs text-gray-500 mt-1">Approved today</p>
+    </div>
+</div>
+
+{# Pending events #}
+<section class="mb-8">
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">Pending Events</h2>
+        {% if stats.pending_events > 10 %}
+            <a href="{% url 'moderation_events' %}?status=pending" class="text-xs text-gray-500 hover:text-black">
+                View all {{ stats.pending_events }}
+            </a>
+        {% endif %}
+    </div>
+
+    {% if pending_events %}
+        <div class="border border-gray-200 divide-y divide-gray-100">
+            {% for event in pending_events %}
+                {% include "events/moderation/partials/event_row.html" with event=event %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-sm text-gray-400 py-4">No pending events.</p>
+    {% endif %}
+</section>
+
+{# Pending users #}
+<section>
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">Pending Users</h2>
+        {% if stats.pending_users > 10 %}
+            <a href="{% url 'moderation_users' %}?filter=pending" class="text-xs text-gray-500 hover:text-black">
+                View all {{ stats.pending_users }}
+            </a>
+        {% endif %}
+    </div>
+
+    {% if pending_users %}
+        <div class="border border-gray-200 divide-y divide-gray-100">
+            {% for u in pending_users %}
+                {% include "events/moderation/partials/user_row.html" with u=u %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-sm text-gray-400 py-4">No pending users.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "events/moderation/base_moderation.html" %}
+
+{% block title %}Events – Moderation – pleskal{% endblock %}
+
+{% block moderation_content %}
+
+{# Filters #}
+<form id="mod-filter-form"
+      hx-get="{% url 'moderation_events' %}"
+      hx-target="#mod-event-list"
+      hx-push-url="true"
+      hx-trigger="change, submit"
+      class="flex flex-wrap items-center gap-3 mb-4">
+
+    <input type="search" name="q" value="{{ search_query }}"
+           placeholder="Search events or users..."
+           hx-get="{% url 'moderation_events' %}"
+           hx-target="#mod-event-list"
+           hx-push-url="true"
+           hx-trigger="keyup changed delay:400ms"
+           hx-include="#mod-filter-form"
+           class="text-xs border border-gray-300 px-2 py-1 w-52 bg-white">
+
+    <select name="status" class="text-xs border border-gray-300 px-2 py-1 bg-white">
+        <option value="">All statuses</option>
+        {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if value == selected_status %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+
+    <select name="category" class="text-xs border border-gray-300 px-2 py-1 bg-white">
+        <option value="">All categories</option>
+        {% for value, label in category_choices %}
+            <option value="{{ value }}" {% if value == selected_category %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+
+    <button type="submit" class="text-xs border border-gray-400 text-gray-700 px-3 py-1 hover:bg-gray-100">
+        Apply
+    </button>
+</form>
+
+{# Results #}
+<div id="mod-event-list">
+    {% include "events/moderation/partials/event_list_results.html" %}
+</div>
+{% endblock %}
