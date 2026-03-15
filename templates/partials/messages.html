@@ -1,11 +1,11 @@
 {% if messages %}
-<div class="space-y-2 mb-4">
+<div class="space-y-1 mb-4">
     {% for message in messages %}
-    <div class="p-3 rounded text-sm
-        {% if message.tags == 'success' %}bg-green-50 text-green-800 border border-green-200
-        {% elif message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200
-        {% elif message.tags == 'warning' %}bg-yellow-50 text-yellow-800 border border-yellow-200
-        {% else %}bg-blue-50 text-blue-800 border border-blue-200
+    <div class="px-3 py-2 border text-xs
+        {% if message.tags == 'success' %}border-gray-400 text-gray-700
+        {% elif message.tags == 'error' %}border-gray-600 text-gray-800
+        {% elif message.tags == 'warning' %}border-gray-400 text-gray-700
+        {% else %}border-gray-300 text-gray-600
         {% endif %}">
         {{ message }}
     </div>

@@ -3,41 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Copenhagen Dance Calendar{% endblock %}</title>
+    <title>{% block title %}pleskal{% endblock %}</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/output.css' %}">
     <script src="{% static 'js/htmx.min.js' %}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-    <nav class="bg-white shadow-sm border-b border-gray-200">
-        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <a href="/" class="text-xl font-bold text-gray-900">CPH Dance</a>
+<body class="bg-white min-h-screen flex flex-col text-gray-900" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <nav class="border-b border-gray-300">
+        <div class="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between">
+            <a href="/" class="text-sm font-bold tracking-tight text-black">pleskal</a>
             <div class="flex items-center gap-4 text-sm">
                 {% if user.is_authenticated %}
-                    <a href="{% url 'event_create' %}" class="text-indigo-600 hover:text-indigo-800">Submit Event</a>
-                    <a href="{% url 'my_events' %}" class="text-gray-600 hover:text-gray-800">My Events</a>
+                    <a href="{% url 'event_create' %}" class="text-gray-700 hover:text-black">Submit</a>
+                    <a href="{% url 'my_events' %}" class="text-gray-500 hover:text-black">My events</a>
                     <span class="text-gray-400">{{ user.username }}</span>
                     <form method="post" action="{% url 'logout' %}" class="inline">
                         {% csrf_token %}
-                        <button type="submit" class="text-gray-600 hover:text-gray-800">Log out</button>
+                        <button type="submit" class="text-gray-500 hover:text-black">Log out</button>
                     </form>
                 {% else %}
-                    <a href="{% url 'login' %}" class="text-gray-600 hover:text-gray-800">Log in</a>
-                    <a href="{% url 'register' %}" class="bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700">Register</a>
+                    <a href="{% url 'login' %}" class="text-gray-600 hover:text-black">Log in</a>
+                    <a href="{% url 'register' %}" class="text-black border border-black px-2 py-0.5 text-xs hover:bg-black hover:text-white">Register</a>
                 {% endif %}
             </div>
         </div>
     </nav>
 
-    <main class="flex-1 max-w-5xl mx-auto px-4 py-6 w-full">
+    <main class="flex-1 max-w-4xl mx-auto px-4 py-4 w-full">
         {% include "partials/messages.html" %}
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="border-t border-gray-200 bg-white mt-auto">
-        <div class="max-w-5xl mx-auto px-4 py-4 text-sm text-gray-500 flex justify-between">
-            <span>Copenhagen Dance Calendar</span>
+    <footer class="border-t border-gray-200 mt-auto">
+        <div class="max-w-4xl mx-auto px-4 py-3 text-xs text-gray-400 flex justify-between">
+            <span>pleskal</span>
             <div class="flex gap-4">
                 <a href="{% url 'event_ical_feed' %}" class="hover:text-gray-700">iCal</a>
                 <a href="{% url 'event_rss_feed' %}" class="hover:text-gray-700">RSS</a>
