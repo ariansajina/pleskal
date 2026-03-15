@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth import get_user_model, logout
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -7,12 +8,22 @@ from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView
 
-from .forms import CustomUserCreationForm, PublisherProfileForm
+from config.ratelimit import RateLimitMixin
+
+from .forms import (
+    CustomAuthenticationForm,
+    CustomUserCreationForm,
+    PublisherProfileForm,
+)
 
 User = get_user_model()
 
 
-class RegisterView(CreateView):
+class RegisterView(RateLimitMixin, CreateView):
+    rate_limit_key = "register"
+    rate_limit_limit = 10
+    rate_limit_window = 3600
+
     form_class = CustomUserCreationForm
     template_name = "accounts/register.html"
     success_url = reverse_lazy("login")
@@ -57,6 +68,24 @@ class AccountProfileView(LoginRequiredMixin, View):
             messages.success(request, "Profile updated.")
             return redirect("account_profile")
         return render(request, "accounts/account_profile.html", {"form": form})
+
+
+class RateLimitedLoginView(RateLimitMixin, auth_views.LoginView):
+    rate_limit_key = "login"
+    rate_limit_limit = 20
+    rate_limit_window = 3600
+
+    template_name = "accounts/login.html"
+    authentication_form = CustomAuthenticationForm
+
+
+class RateLimitedPasswordResetView(RateLimitMixin, auth_views.PasswordResetView):
+    rate_limit_key = "password_reset"
+    rate_limit_limit = 5
+    rate_limit_window = 3600
+
+    template_name = "accounts/password_reset.html"
+    success_url = "/accounts/password-reset/done/"
 
 
 class PublisherProfileView(View):

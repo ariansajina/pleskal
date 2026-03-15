@@ -10,6 +10,8 @@ from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 from django.views.generic.detail import DetailView
 
+from config.ratelimit import UserRateLimitMixin
+
 from .forms import EventForm
 from .image_utils import process_event_image
 from .models import Event, EventCategory, EventStatus
@@ -40,7 +42,11 @@ class EventOwnerOrModeratorMixin:
 # ---------------------------------------------------------------------------
 
 
-class EventCreateView(LoginRequiredMixin, CreateView):
+class EventCreateView(UserRateLimitMixin, LoginRequiredMixin, CreateView):
+    rate_limit_key = "event_create"
+    rate_limit_limit = 20
+    rate_limit_window = 3600
+
     model = Event
     form_class = EventForm
     template_name = "events/event_form.html"

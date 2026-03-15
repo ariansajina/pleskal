@@ -1,11 +1,12 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from .forms import CustomAuthenticationForm
 from .views import (
     AccountDeleteView,
     AccountProfileView,
     PublisherProfileView,
+    RateLimitedLoginView,
+    RateLimitedPasswordResetView,
     RegisterView,
 )
 
@@ -17,10 +18,7 @@ urlpatterns = [
     ),
     path(
         "login/",
-        auth_views.LoginView.as_view(
-            template_name="accounts/login.html",
-            authentication_form=CustomAuthenticationForm,
-        ),
+        RateLimitedLoginView.as_view(),
         name="login",
     ),
     path(
@@ -30,10 +28,7 @@ urlpatterns = [
     ),
     path(
         "password-reset/",
-        auth_views.PasswordResetView.as_view(
-            template_name="accounts/password_reset.html",
-            success_url="/accounts/password-reset/done/",
-        ),
+        RateLimitedPasswordResetView.as_view(),
         name="password_reset",
     ),
     path(
