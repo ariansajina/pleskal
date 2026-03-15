@@ -1,0 +1,11 @@
+{% if users %}
+    <div class="border border-gray-200 divide-y divide-gray-100">
+        {% for u in users %}
+            {% include "events/moderation/partials/user_row.html" with u=u %}
+        {% endfor %}
+    </div>
+
+    {% include "events/moderation/partials/pagination.html" with base_url="moderation_users" target="#mod-user-list" %}
+{% else %}
+    <p class="text-sm text-gray-400 py-8">No users found.</p>
+{% endif %}

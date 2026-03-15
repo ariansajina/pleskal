@@ -12,6 +12,7 @@ urlpatterns = [
         TemplateView.as_view(template_name="pages/privacy.html"),
         name="privacy",
     ),
+    path("moderation/", include("events.moderation_urls")),
     path("", include("events.urls")),
 ]
 

@@ -1,0 +1,81 @@
+<div id="event-{{ event.pk }}" class="p-3 flex items-start gap-3">
+    {# Event info #}
+    <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+            <span class="inline-block text-xs font-medium px-1.5 py-0.5
+                {% if event.status == 'approved' %}bg-green-100 text-green-700
+                {% elif event.status == 'pending' %}bg-yellow-100 text-yellow-700
+                {% else %}bg-red-100 text-red-700{% endif %}">
+                {{ event.get_status_display }}
+            </span>
+            <span class="text-xs text-gray-400">{{ event.get_category_display }}</span>
+            {% if event.submitted_by %}
+                <span class="text-xs text-gray-400">by {{ event.submitted_by.username }}</span>
+            {% endif %}
+        </div>
+        <a href="{% url 'event_detail' event.slug %}" class="text-sm font-medium text-gray-900 hover:text-black mt-0.5 block truncate">
+            {{ event.title }}
+        </a>
+        <p class="text-xs text-gray-500">
+            {{ event.start_datetime|date:"d M Y H:i" }} &middot; {{ event.venue_name }}
+        </p>
+        {% if event.status == 'rejected' and event.rejection_note %}
+            <p class="text-xs text-red-600 mt-1">Reason: {{ event.rejection_note }}</p>
+        {% endif %}
+    </div>
+
+    {# Actions #}
+    <div class="flex items-center gap-2 shrink-0">
+        {% if event.status == 'pending' %}
+            {# Approve #}
+            <button hx-post="{% url 'moderation_event_approve' event.pk %}"
+                    hx-target="#event-{{ event.pk }}"
+                    hx-swap="outerHTML"
+                    class="text-xs px-2 py-1 border border-green-300 text-green-700 hover:bg-green-50">
+                Approve
+            </button>
+
+            {# Reject (expandable form) #}
+            <details class="relative">
+                <summary class="text-xs px-2 py-1 border border-red-300 text-red-700 hover:bg-red-50 cursor-pointer list-none">
+                    Reject
+                </summary>
+                <form hx-post="{% url 'moderation_event_reject' event.pk %}"
+                      hx-target="#event-{{ event.pk }}"
+                      hx-swap="outerHTML"
+                      class="absolute right-0 top-full mt-1 z-10 bg-white border border-gray-300 p-3 w-72 shadow-sm">
+                    <textarea name="rejection_note" rows="3" required
+                              placeholder="Reason for rejection..."
+                              class="w-full text-xs border border-gray-300 p-2 mb-2"></textarea>
+                    <div class="flex gap-2">
+                        <button type="submit" class="text-xs px-3 py-1 bg-red-600 text-white hover:bg-red-700">
+                            Confirm reject
+                        </button>
+                    </div>
+                </form>
+            </details>
+        {% endif %}
+
+        {# Delete #}
+        <details class="relative">
+            <summary class="text-xs px-2 py-1 border border-gray-300 text-gray-500 hover:bg-gray-50 cursor-pointer list-none">
+                Delete
+            </summary>
+            <div class="absolute right-0 top-full mt-1 z-10 bg-white border border-gray-300 p-3 w-56 shadow-sm">
+                <p class="text-xs text-gray-700 mb-2">Delete this event permanently?</p>
+                <button hx-post="{% url 'moderation_event_delete' event.pk %}"
+                        hx-target="#event-{{ event.pk }}"
+                        hx-swap="outerHTML"
+                        class="text-xs px-3 py-1 bg-red-600 text-white hover:bg-red-700">
+                    Confirm delete
+                </button>
+            </div>
+        </details>
+
+        {# Edit link #}
+        <a href="{% url 'event_edit' event.slug %}"
+           class="text-xs px-2 py-1 border border-gray-300 text-gray-500 hover:bg-gray-50">
+            Edit
+        </a>
+    </div>
+</div>

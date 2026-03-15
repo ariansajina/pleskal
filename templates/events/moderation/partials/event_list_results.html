@@ -1,0 +1,11 @@
+{% if events %}
+    <div class="border border-gray-200 divide-y divide-gray-100">
+        {% for event in events %}
+            {% include "events/moderation/partials/event_row.html" with event=event %}
+        {% endfor %}
+    </div>
+
+    {% include "events/moderation/partials/pagination.html" with base_url="moderation_events" target="#mod-event-list" %}
+{% else %}
+    <p class="text-sm text-gray-400 py-8">No events found.</p>
+{% endif %}
