@@ -70,6 +70,7 @@ class TestRSSFeed:
         EventFactory(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_rss_feed"))
         import xml.etree.ElementTree as ET
+
         # Should not raise
         ET.fromstring(resp.content)
 
@@ -135,6 +136,7 @@ class TestICalFeed:
         EventFactory(status=EventStatus.APPROVED)
         resp = client.get(reverse("event_ical_feed"))
         from icalendar import Calendar
+
         # Should not raise
         cal = Calendar.from_ical(resp.content)
         assert cal is not None

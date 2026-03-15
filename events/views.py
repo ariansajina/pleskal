@@ -191,9 +191,8 @@ class MyEventsView(LoginRequiredMixin, ListView):
     context_object_name = "events"
 
     def get_queryset(self):
-        return (
-            Event.objects.filter(submitted_by=self.request.user)
-            .order_by("-created_at")
+        return Event.objects.filter(submitted_by=self.request.user).order_by(
+            "-created_at"
         )
 
 

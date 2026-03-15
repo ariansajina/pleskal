@@ -19,9 +19,7 @@ def _make_image_upload(width=100, height=100, fmt="JPEG", name="test.jpg"):
     buf = io.BytesIO()
     img = Image.new("RGB", (width, height), color=(255, 0, 0))
     img.save(buf, format=fmt)
-    content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[
-        fmt
-    ]
+    content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[fmt]
     return SimpleUploadedFile(name, buf.getvalue(), content_type=content_type)
 
 
@@ -193,9 +191,7 @@ class TestEventListView:
 
     def test_htmx_request_returns_partial(self, client):
         EventFactory(status=EventStatus.APPROVED)
-        resp = client.get(
-            reverse("event_list"), HTTP_HX_REQUEST="true"
-        )
+        resp = client.get(reverse("event_list"), HTTP_HX_REQUEST="true")
         assert resp.status_code == 200
         # Partial should not contain the full <html> tag
         assert b"<!DOCTYPE html>" not in resp.content

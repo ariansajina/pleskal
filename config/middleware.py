@@ -33,16 +33,18 @@ class ContentSecurityPolicyMiddleware:
         if r2_domain:
             img_src = f"'self' data: https://{r2_domain}"
 
-        csp = "; ".join([
-            "default-src 'self'",
-            "script-src 'self'",
-            "style-src 'self' 'unsafe-inline'",
-            f"img-src {img_src}",
-            "font-src 'self'",
-            "connect-src 'self'",
-            "frame-ancestors 'none'",
-            "base-uri 'self'",
-            "form-action 'self'",
-        ])
+        csp = "; ".join(
+            [
+                "default-src 'self'",
+                "script-src 'self'",
+                "style-src 'self' 'unsafe-inline'",
+                f"img-src {img_src}",
+                "font-src 'self'",
+                "connect-src 'self'",
+                "frame-ancestors 'none'",
+                "base-uri 'self'",
+                "form-action 'self'",
+            ]
+        )
         response["Content-Security-Policy"] = csp
         return response
