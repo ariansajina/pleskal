@@ -1,4 +1,4 @@
-"""iCal and RSS feed views for approved upcoming events."""
+"""iCal and RSS feed views for upcoming events."""
 
 import re
 
@@ -37,7 +37,7 @@ def _upcoming_qs(category: str | None = None):
 
 class EventRSSFeed(Feed):
     title = "Copenhagen Dance Calendar"
-    description = "Upcoming approved dance events in Copenhagen."
+    description = "Upcoming dance events in Copenhagen."
 
     def get_object(self, request, *args, **kwargs):
         # Store request so we can access query params
