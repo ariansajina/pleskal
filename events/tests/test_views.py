@@ -288,6 +288,22 @@ class TestEventListView:
         assert match.title.encode() in resp.content
         assert no_match.title.encode() not in resp.content
 
+    def test_search_matches_publisher_username(self, client):
+        user = UserFactory.create(username="salsaking")
+        match = EventFactory(status=EventStatus.APPROVED, submitted_by=user)
+        no_match = EventFactory(status=EventStatus.APPROVED)
+        resp = client.get(reverse("event_list") + "?q=salsaking")
+        assert match.title.encode() in resp.content
+        assert no_match.title.encode() not in resp.content
+
+    def test_search_matches_publisher_display_name(self, client):
+        user = UserFactory.create(display_name="DJ Mambo")
+        match = EventFactory(status=EventStatus.APPROVED, submitted_by=user)
+        no_match = EventFactory(status=EventStatus.APPROVED)
+        resp = client.get(reverse("event_list") + "?q=mambo")
+        assert match.title.encode() in resp.content
+        assert no_match.title.encode() not in resp.content
+
     def test_empty_search_returns_all_approved(self, client):
         e1 = EventFactory(status=EventStatus.APPROVED)
         e2 = EventFactory(status=EventStatus.APPROVED)

@@ -145,6 +145,8 @@ class EventListView(View):
                 Q(title__icontains=search_query)
                 | Q(venue_name__icontains=search_query)
                 | Q(description__icontains=search_query)
+                | Q(submitted_by__display_name__icontains=search_query)
+                | Q(submitted_by__username__icontains=search_query)
             )
 
         # --- Pagination ---
