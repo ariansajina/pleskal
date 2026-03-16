@@ -1,28 +1,23 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto">
+<div class="content-wrap" style="max-width:1000px;">
+
     {# Moderation nav #}
-    <div class="flex items-center gap-6 border-b border-gray-200 mb-6 pb-2">
-        <h1 class="text-lg font-bold text-gray-900">Moderation</h1>
-        <nav class="flex gap-4 text-sm">
+    <div style="display:flex;align-items:center;gap:1.5rem;margin-bottom:2rem;flex-wrap:wrap;">
+        <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:1rem;color:var(--blue);flex-shrink:0;">
+            Moderation
+        </span>
+        <div class="page-tabs" style="flex:1;">
             <a href="{% url 'moderation_dashboard' %}"
-               class="{% if active_tab == 'dashboard' %}text-black font-medium border-b-2 border-black{% else %}text-gray-500 hover:text-black{% endif %} pb-1">
-                Dashboard
-            </a>
+               class="page-tab {% if active_tab == 'dashboard' %}active{% endif %}">Dashboard</a>
             <a href="{% url 'moderation_events' %}"
-               class="{% if active_tab == 'events' %}text-black font-medium border-b-2 border-black{% else %}text-gray-500 hover:text-black{% endif %} pb-1">
-                Events
-            </a>
+               class="page-tab {% if active_tab == 'events' %}active{% endif %}">Events</a>
             <a href="{% url 'moderation_users' %}"
-               class="{% if active_tab == 'users' %}text-black font-medium border-b-2 border-black{% else %}text-gray-500 hover:text-black{% endif %} pb-1">
-                Users
-            </a>
+               class="page-tab {% if active_tab == 'users' %}active{% endif %}">Users</a>
             <a href="{% url 'moderation_history' %}"
-               class="{% if active_tab == 'history' %}text-black font-medium border-b-2 border-black{% else %}text-gray-500 hover:text-black{% endif %} pb-1">
-                History
-            </a>
-        </nav>
+               class="page-tab {% if active_tab == 'history' %}active{% endif %}">History</a>
+        </div>
     </div>
 
     {% block moderation_content %}{% endblock %}

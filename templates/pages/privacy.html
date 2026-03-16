@@ -1,58 +1,60 @@
 {% extends "base.html" %}
 
-{% block title %}Privacy Notice – CPH Dance{% endblock %}
+{% block title %}Privacy Notice – pleskal{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto prose prose-gray">
+<div class="page-hero" style="padding-bottom:1rem;">
+    <div class="page-hero__ornrow">✦</div>
+    <h1 class="page-hero__title" style="font-size:2rem;">Privacy Notice</h1>
+    <p class="page-hero__sub" style="font-size:0.73rem;opacity:0.6;">Last updated: January 2025</p>
+</div>
 
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Privacy Notice</h1>
+<div class="content-wrap">
+    <div class="prose-content">
 
-    <p class="text-sm text-gray-500 mb-6">Last updated: January 2025</p>
+        <h2>What data we collect</h2>
+        <ul>
+            <li><strong>Account data:</strong> your email address and username, collected when you register.</li>
+            <li><strong>Event content:</strong> titles, descriptions, images, dates, and venue information you submit.</li>
+            <li><strong>Server logs:</strong> standard web server logs (IP address, browser, pages visited) retained for up to 30 days for security purposes.</li>
+        </ul>
 
-    <h2 class="text-lg font-semibold text-gray-800 mt-6 mb-2">What data we collect</h2>
-    <ul class="text-gray-700 space-y-1 list-disc list-inside">
-        <li><strong>Account data:</strong> your email address and username, collected when you register.</li>
-        <li><strong>Event content:</strong> titles, descriptions, images, dates, and venue information you submit.</li>
-        <li><strong>Server logs:</strong> standard web server logs (IP address, browser, pages visited) retained for up to 30 days for security purposes.</li>
-    </ul>
+        <h2>Why we collect it</h2>
+        <ul>
+            <li>To allow you to submit and manage dance events.</li>
+            <li>To display approved events publicly on the calendar.</li>
+            <li>To send password-reset emails when you request them.</li>
+            <li>To protect the platform from abuse (brute-force protection via IP logging).</li>
+        </ul>
 
-    <h2 class="text-lg font-semibold text-gray-800 mt-6 mb-2">Why we collect it</h2>
-    <ul class="text-gray-700 space-y-1 list-disc list-inside">
-        <li>To allow you to submit and manage dance events.</li>
-        <li>To display approved events publicly on the calendar.</li>
-        <li>To send password-reset emails when you request them.</li>
-        <li>To protect the platform from abuse (brute-force protection via IP logging).</li>
-    </ul>
+        <h2>What we do not do</h2>
+        <ul>
+            <li>We do not sell or share your data with third parties.</li>
+            <li>We do not use analytics cookies or third-party tracking.</li>
+            <li>We do not display your name or email on public event listings — only the event content you choose to share.</li>
+        </ul>
 
-    <h2 class="text-lg font-semibold text-gray-800 mt-6 mb-2">What we do not do</h2>
-    <ul class="text-gray-700 space-y-1 list-disc list-inside">
-        <li>We do not sell or share your data with third parties.</li>
-        <li>We do not use analytics cookies or third-party tracking.</li>
-        <li>We do not display your name or email on public event listings — only the event content you choose to share.</li>
-    </ul>
+        <h2>Data retention</h2>
+        <p>
+            Your account data is retained as long as your account exists.
+            If you delete your account, your personal data (email, username) is permanently removed.
+            Events you submitted will remain on the calendar but will no longer be attributed to you.
+        </p>
 
-    <h2 class="text-lg font-semibold text-gray-800 mt-6 mb-2">Data retention</h2>
-    <p class="text-gray-700">
-        Your account data is retained as long as your account exists.
-        If you delete your account, your personal data (email, username) is permanently removed.
-        Events you submitted will remain on the calendar but will no longer be attributed to you.
-    </p>
+        <h2>Your rights</h2>
+        <p>
+            You have the right to access, correct, or delete your personal data at any time.
+            To delete your account and anonymise your submitted events, use the
+            <a href="{% url 'account_delete' %}">account deletion page</a>.
+            For other requests, contact us at the email below.
+        </p>
 
-    <h2 class="text-lg font-semibold text-gray-800 mt-6 mb-2">Your rights</h2>
-    <p class="text-gray-700">
-        You have the right to access, correct, or delete your personal data at any time.
-        To delete your account and anonymise your submitted events, use the
-        <a href="{% url 'account_delete' %}" class="text-indigo-600 hover:underline">account deletion page</a>.
-        For other requests, contact us at the email below.
-    </p>
+        <h2>Contact</h2>
+        <p>
+            For privacy-related questions, email
+            <a href="mailto:privacy@cphdance.example.com">privacy@cphdance.example.com</a>.
+        </p>
 
-    <h2 class="text-lg font-semibold text-gray-800 mt-6 mb-2">Contact</h2>
-    <p class="text-gray-700">
-        For privacy-related questions, email
-        <a href="mailto:privacy@cphdance.example.com" class="text-indigo-600 hover:underline">
-            privacy@cphdance.example.com
-        </a>.
-    </p>
-
+    </div>
 </div>
 {% endblock %}

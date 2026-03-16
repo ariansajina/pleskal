@@ -1,35 +1,41 @@
-<div class="py-1.5 flex items-baseline gap-3 text-sm leading-snug">
-    {# Time #}
-    <span class="shrink-0 text-xs text-gray-400 w-11 text-right tabular-nums">
-        {{ event.start_datetime|date:"H:i" }}
-    </span>
-
-    {# Title #}
-    <a href="{% url 'event_detail' event.slug %}"
-       class="flex-1 min-w-0 font-medium text-gray-900 hover:text-black truncate">
-        {{ event.title }}
-    </a>
-
-    {# Category chip #}
-    <span class="shrink-0 text-xs border border-gray-300 text-gray-500 px-1.5 py-0 leading-4 hidden sm:inline">
-        {{ event.get_category_display }}
-    </span>
-
-    {# Free badge #}
-    {% if event.is_free %}
-        <span class="shrink-0 text-xs border border-gray-300 text-gray-500 px-1.5 py-0 leading-4 hidden sm:inline">free</span>
-    {% endif %}
-
-    {# Publisher #}
-    {% if event.submitted_by %}
-        <a href="{% url 'publisher_profile' event.submitted_by.username %}"
-           class="shrink-0 text-xs text-gray-400 hover:text-black truncate hidden lg:inline max-w-24">
-            {{ event.submitted_by.username }}
-        </a>
-    {% endif %}
-
-    {# Venue #}
-    <span class="shrink-0 text-xs text-gray-400 truncate hidden md:inline max-w-36">
-        {{ event.venue_name }}
-    </span>
-</div>
+<a href="{% url 'event_detail' event.slug %}" class="card">
+    <div class="event-row">
+        <div class="event-row__body">
+            <div class="event-tags" style="margin-top:0;margin-bottom:0.45rem;">
+                <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
+                {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
+            </div>
+            <div class="event-title">{{ event.title }}</div>
+            <div class="event-meta">
+                <span>{{ event.start_datetime|date:"l, j F · H:i" }}</span>
+                {% if event.end_datetime %}
+                    <span>–</span>
+                    <span>{{ event.end_datetime|date:"H:i" }}</span>
+                {% endif %}
+            </div>
+            <div class="event-meta">
+                <span class="event-meta--venue">{{ event.venue_name }}</span>
+                {% if event.venue_address %}
+                    <span style="opacity:0.5;">·</span>
+                    <span>{{ event.venue_address }}</span>
+                {% endif %}
+            </div>
+            {% if event.submitted_by %}
+                <div class="event-meta" style="margin-top:0.3rem;">
+                    <span style="opacity:0.5;">by</span>
+                    <a href="{% url 'publisher_profile' event.submitted_by.username %}"
+                       style="color:var(--blue);" onclick="event.stopPropagation();">
+                        {{ event.submitted_by.username }}
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+        {% if event.image %}
+            <div class="event-row__thumb">
+                <div class="event-row__thumb-inner">
+                    <img src="{{ event.image.url }}" alt="{{ event.title }}">
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</a>

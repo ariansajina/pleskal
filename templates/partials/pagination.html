@@ -1,20 +1,18 @@
 {% if page_obj.has_other_pages %}
-<nav class="flex justify-center gap-2 mt-6">
+<nav class="mt-6" style="display:flex;justify-content:center;align-items:center;gap:0.75rem;" aria-label="Pagination">
     {% if page_obj.has_previous %}
-    <a href="?page={{ page_obj.previous_page_number }}"
-       class="px-3 py-1 border rounded text-sm text-gray-700 hover:bg-gray-100">
-        Previous
+    <a href="?page={{ page_obj.previous_page_number }}" class="btn btn--ghost btn--sm">
+        &larr; Prev
     </a>
     {% endif %}
 
-    <span class="px-3 py-1 text-sm text-gray-500">
-        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    <span style="font-size:0.73rem;color:var(--ink-muted);">
+        {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
     </span>
 
     {% if page_obj.has_next %}
-    <a href="?page={{ page_obj.next_page_number }}"
-       class="px-3 py-1 border rounded text-sm text-gray-700 hover:bg-gray-100">
-        Next
+    <a href="?page={{ page_obj.next_page_number }}" class="btn btn--ghost btn--sm">
+        Next &rarr;
     </a>
     {% endif %}
 </nav>

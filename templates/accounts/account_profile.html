@@ -1,57 +1,52 @@
 {% extends "base.html" %}
 
-{% block title %}My Profile – CPH Dance{% endblock %}
+{% block title %}My Profile – pleskal{% endblock %}
 
 {% block content %}
-<div class="max-w-xl mx-auto">
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">My Profile</h1>
+<div class="content-wrap">
+    <div style="max-width:520px;">
+        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:1.8rem;color:var(--blue);margin-bottom:2rem;">
+            My Profile
+        </h1>
 
-    <form method="post" class="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
-        {% csrf_token %}
+        <form method="post" style="display:flex;flex-direction:column;gap:1.5rem;background:rgba(255,255,255,0.6);border:1.5px solid var(--border-light);padding:1.75rem;">
+            {% csrf_token %}
 
-        <div>
-            <label for="id_bio" class="block text-sm font-medium text-gray-700 mb-1">
-                {{ form.bio.label }}
-            </label>
-            {{ form.bio }}
-            {% if form.bio.help_text %}
-                <p class="text-xs text-gray-400 mt-1">{{ form.bio.help_text }}</p>
-            {% endif %}
-            {% for error in form.bio.errors %}
-                <p class="text-xs text-red-600 mt-1">{{ error }}</p>
-            {% endfor %}
-        </div>
+            <div>
+                <label for="id_bio" class="form-label">{{ form.bio.label }}</label>
+                {{ form.bio }}
+                {% if form.bio.help_text %}
+                    <p class="form-help">{{ form.bio.help_text }}</p>
+                {% endif %}
+                {% for error in form.bio.errors %}
+                    <p class="form-field-error">{{ error }}</p>
+                {% endfor %}
+            </div>
 
-        <div>
-            <label for="id_website" class="block text-sm font-medium text-gray-700 mb-1">
-                {{ form.website.label }}
-            </label>
-            {{ form.website }}
-            {% if form.website.help_text %}
-                <p class="text-xs text-gray-400 mt-1">{{ form.website.help_text }}</p>
-            {% endif %}
-            {% for error in form.website.errors %}
-                <p class="text-xs text-red-600 mt-1">{{ error }}</p>
-            {% endfor %}
-        </div>
+            <div>
+                <label for="id_website" class="form-label">{{ form.website.label }}</label>
+                {{ form.website }}
+                {% if form.website.help_text %}
+                    <p class="form-help">{{ form.website.help_text }}</p>
+                {% endif %}
+                {% for error in form.website.errors %}
+                    <p class="form-field-error">{{ error }}</p>
+                {% endfor %}
+            </div>
 
-        <div class="flex items-center gap-4 pt-2">
-            <button type="submit"
-                    class="bg-indigo-600 text-white text-sm px-5 py-2 rounded hover:bg-indigo-700">
-                Save changes
-            </button>
-            <a href="{% url 'publisher_profile' request.user.username %}"
-               class="text-sm text-gray-500 hover:text-gray-700">
-                View public profile →
-            </a>
-        </div>
-    </form>
+            <div style="display:flex;align-items:center;gap:1rem;padding-top:0.5rem;">
+                <button type="submit" class="btn btn--primary">Save changes</button>
+                <a href="{% url 'publisher_profile' request.user.username %}"
+                   style="font-size:0.78rem;color:var(--ink-muted);">
+                    View public profile →
+                </a>
+            </div>
+        </form>
 
-    <div class="mt-6 border-t border-gray-200 pt-4">
-        <p class="text-sm text-gray-500">
+        <div style="margin-top:1.5rem;border-top:1px solid var(--border-light);padding-top:1rem;font-size:0.78rem;color:var(--ink-muted);">
             Want to delete your account?
-            <a href="{% url 'account_delete' %}" class="text-red-600 hover:underline">Delete account</a>
-        </p>
+            <a href="{% url 'account_delete' %}" style="color:var(--c-perf);">Delete account</a>
+        </div>
     </div>
 </div>
 {% endblock %}

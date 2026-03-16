@@ -1,5 +1,5 @@
 {% if events %}
-    <div class="border border-gray-200 divide-y divide-gray-100">
+    <div style="border:1.5px solid var(--border-light);">
         {% for event in events %}
             {% include "events/moderation/partials/event_row.html" with event=event %}
         {% endfor %}
@@ -7,5 +7,5 @@
 
     {% include "events/moderation/partials/pagination.html" with base_url="moderation_history" target="#mod-history-list" %}
 {% else %}
-    <p class="text-sm text-gray-400 py-8">No moderation history yet.</p>
+    <p style="font-size:0.78rem;color:var(--ink-muted);padding:2rem 0;text-align:center;">No moderation history yet.</p>
 {% endif %}

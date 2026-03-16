@@ -4,109 +4,119 @@
 {% block title %}{{ event.title }} – pleskal{% endblock %}
 
 {% block content %}
-<article class="max-w-2xl">
+<div class="content-wrap">
+    <article>
 
-    {# Status banner for owner/moderator #}
-    {% if event.status != "approved" %}
-        <div class="mb-4 px-3 py-2 border text-xs
-            {% if event.status == 'pending' %}border-gray-400 text-gray-600
-            {% elif event.status == 'rejected' %}border-gray-400 text-gray-600{% endif %}">
-            {% if event.status == 'pending' %}
-                Awaiting moderation.
-            {% elif event.status == 'rejected' %}
-                Rejected.
-                {% if event.rejection_note %}
-                    <span class="ml-1">Reason: {{ event.rejection_note }}</span>
+        {# Status banner for owner/moderator #}
+        {% if event.status != "approved" %}
+            <div class="alert alert--{% if event.status == 'pending' %}warning{% else %}error{% endif %}" style="margin-bottom:1.5rem;">
+                {% if event.status == 'pending' %}
+                    ✦ Awaiting moderation.
+                {% elif event.status == 'rejected' %}
+                    ✦ Rejected.
+                    {% if event.rejection_note %}
+                        Reason: {{ event.rejection_note }}
+                    {% endif %}
                 {% endif %}
+            </div>
+        {% endif %}
+
+        {# Category + free badge #}
+        <div class="event-tags" style="margin-bottom:1rem;">
+            <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
+            {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
+        </div>
+
+        {# Title #}
+        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:clamp(1.6rem,4vw,2.4rem);color:var(--blue);line-height:1.1;margin-bottom:1.25rem;">
+            {{ event.title }}
+        </h1>
+
+        {# Date / time #}
+        <div class="event-meta" style="margin-bottom:0.5rem;font-size:0.88rem;">
+            <span><strong>{{ event.start_datetime|date:"l, j F Y" }}</strong></span>
+            <span style="opacity:0.4;">·</span>
+            <span>{{ event.start_datetime|date:"H:i" }}</span>
+            {% if event.end_datetime %}
+                <span>–</span>
+                <span>{{ event.end_datetime|date:"H:i" }}</span>
             {% endif %}
         </div>
-    {% endif %}
 
-    {# Category + free badge #}
-    <div class="flex items-center gap-2 mb-2">
-        <span class="text-xs border border-gray-400 text-gray-600 px-1.5 py-0">
-            {{ event.get_category_display }}
-        </span>
-        {% if event.is_free %}
-            <span class="text-xs border border-gray-400 text-gray-600 px-1.5 py-0">
-                free
-            </span>
-        {% endif %}
-    </div>
-
-    <h1 class="text-2xl font-bold text-black mb-3">{{ event.title }}</h1>
-
-    {# Date / time #}
-    <p class="text-sm text-gray-700 mb-1">
-        <strong>{{ event.start_datetime|date:"l, j F Y" }}</strong>
-        · {{ event.start_datetime|date:"H:i" }}
-        {% if event.end_datetime %}
-            – {{ event.end_datetime|date:"H:i" }}
-        {% endif %}
-    </p>
-
-    {# Venue #}
-    <p class="text-sm text-gray-600 mb-1">
-        {{ event.venue_name }}{% if event.venue_address %}, {{ event.venue_address }}{% endif %}
-    </p>
-
-    {# Price #}
-    <p class="text-sm text-gray-600 mb-4">
-        {% if event.is_free %}
-            Free admission
-        {% else %}
-            {{ event.price_note|default:"See source for pricing" }}
-        {% endif %}
-    </p>
-
-    {# Description #}
-    {% if event.description %}
-        <div class="prose prose-sm prose-gray max-w-none border-t border-gray-200 pt-4 mb-6">
-            {{ event.description|render_markdown }}
-        </div>
-    {% endif %}
-
-    {# Source link #}
-    {% if event.source_url %}
-        <div class="border-t border-gray-200 pt-3 mb-6">
-            <a href="{{ event.source_url }}"
-               target="_blank"
-               rel="noopener noreferrer"
-               class="text-sm text-gray-700 underline hover:text-black">
-                More info / tickets &rarr;
-            </a>
-            {% if event.external_source %}
-                <span class="text-xs text-gray-400 ml-2">via {{ event.external_source }}</span>
+        {# Venue #}
+        <div class="event-meta" style="margin-bottom:0.5rem;font-size:0.88rem;">
+            <span class="event-meta--venue">{{ event.venue_name }}</span>
+            {% if event.venue_address %}
+                <span style="opacity:0.4;">·</span>
+                <span>{{ event.venue_address }}</span>
             {% endif %}
         </div>
-    {% endif %}
 
-    {# Publisher attribution #}
-    {% if event.submitted_by %}
-        <div class="border-t border-gray-100 pt-4 mb-2 text-sm text-gray-500">
-            Published by
-            <a href="{% url 'publisher_profile' event.submitted_by.username %}"
-               class="text-indigo-600 hover:text-indigo-800 font-medium">
-                {{ event.submitted_by.username }}
-            </a>
+        {# Price #}
+        <div class="event-meta" style="margin-bottom:1.5rem;font-size:0.88rem;">
+            {% if event.is_free %}
+                <span style="color:var(--c-op);">Free admission</span>
+            {% elif event.price_note %}
+                <span>{{ event.price_note }}</span>
+            {% else %}
+                <span>See source for pricing</span>
+            {% endif %}
         </div>
-    {% endif %}
 
-    {# Owner / moderator actions #}
-    {% if user.is_authenticated %}
-        {% if user == event.submitted_by or user.is_moderator %}
-            <div class="border-t border-gray-200 pt-3 flex gap-3">
-                <a href="{% url 'event_edit' event.slug %}"
-                   class="text-xs px-3 py-1 border border-gray-400 text-gray-600 hover:bg-gray-100">
-                    Edit
+        {# Event image #}
+        {% if event.image %}
+            <div style="margin-bottom:1.5rem;border:1.5px solid var(--border-light);overflow:hidden;">
+                <img src="{{ event.image.url }}" alt="{{ event.title }}"
+                     style="width:100%;max-height:360px;object-fit:cover;display:block;">
+            </div>
+        {% endif %}
+
+        {# Description #}
+        {% if event.description %}
+            <hr class="rule">
+            <div class="prose-content" style="margin-bottom:1.5rem;">
+                {{ event.description|render_markdown }}
+            </div>
+        {% endif %}
+
+        {# Source link #}
+        {% if event.source_url %}
+            <hr class="rule">
+            <div style="margin-bottom:1.5rem;">
+                <a href="{{ event.source_url }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="btn btn--primary">
+                    More info / tickets &rarr;
                 </a>
-                <a href="{% url 'event_delete' event.slug %}"
-                   class="text-xs px-3 py-1 border border-gray-400 text-gray-600 hover:bg-gray-100">
-                    Delete
+                {% if event.external_source %}
+                    <span style="font-size:0.73rem;color:var(--ink-muted);margin-left:0.75rem;">via {{ event.external_source }}</span>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {# Publisher attribution #}
+        {% if event.submitted_by %}
+            <hr class="rule">
+            <div style="font-size:0.78rem;color:var(--ink-muted);margin-bottom:1rem;">
+                Published by
+                <a href="{% url 'publisher_profile' event.submitted_by.username %}" class="link-accent" style="font-weight:600;">
+                    {{ event.submitted_by.username }}
                 </a>
             </div>
         {% endif %}
-    {% endif %}
 
-</article>
+        {# Owner / moderator actions #}
+        {% if user.is_authenticated %}
+            {% if user == event.submitted_by or user.is_moderator %}
+                <hr class="rule">
+                <div style="display:flex;gap:0.75rem;">
+                    <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
+                    <a href="{% url 'event_delete' event.slug %}" class="btn btn--danger btn--sm">Delete</a>
+                </div>
+            {% endif %}
+        {% endif %}
+
+    </article>
+</div>
 {% endblock %}
