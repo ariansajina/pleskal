@@ -6,8 +6,6 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError("Email is required.")
         email = self.normalize_email(email)
-        extra_fields.setdefault("is_approved", False)
-        extra_fields.setdefault("is_moderator", False)
         return super().create_user(
             username=username, email=email, password=password, **extra_fields
         )
@@ -17,8 +15,6 @@ class UserManager(BaseUserManager):
     ):
         if not email:
             raise ValueError("Email is required.")
-        extra_fields.setdefault("is_approved", True)
-        extra_fields.setdefault("is_moderator", True)
         return super().create_superuser(
             username=username, email=email, password=password, **extra_fields
         )

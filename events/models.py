@@ -1,6 +1,5 @@
 import secrets
 import uuid
-from typing import TYPE_CHECKING, cast
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -10,9 +9,6 @@ from django.utils.text import slugify
 
 from .validators import validate_image_file, validate_url_scheme
 
-if TYPE_CHECKING:
-    from accounts.models import User
-
 
 class EventCategory(models.TextChoices):
     PERFORMANCE = "performance", "Performance"
@@ -21,12 +17,6 @@ class EventCategory(models.TextChoices):
     OPEN_PRACTICE = "open_practice", "Open Practice"
     SOCIAL = "social", "Social"
     OTHER = "other", "Other"
-
-
-class EventStatus(models.TextChoices):
-    PENDING = "pending", "Pending"
-    APPROVED = "approved", "Approved"
-    REJECTED = "rejected", "Rejected"
 
 
 class Event(models.Model):
@@ -69,15 +59,6 @@ class Event(models.Model):
         blank=True,
         related_name="events",
     )
-    submitted_by_id: (
-        uuid.UUID | None
-    )  # Django adds this attribute for ForeignKey fields
-    status = models.CharField(
-        max_length=20,
-        choices=EventStatus.choices,
-        default=EventStatus.PENDING,
-    )
-    rejection_note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -129,42 +110,7 @@ class Event(models.Model):
         if errors:
             raise ValidationError(errors)
 
-    def approve(self):
-        """Approve the event and auto-approve the submitting user."""
-        self.status = EventStatus.APPROVED
-        self.rejection_note = ""
-        self.save(update_fields=["status", "rejection_note", "updated_at"])
-        user = cast("User | None", self.submitted_by)
-        if user and not user.is_approved:
-            user.is_approved = True
-            user.save(update_fields=["is_approved"])
-
-    def reject(self, note):
-        """Reject the event with a required note."""
-        if not note or not note.strip():
-            raise ValueError("Rejection note is required.")
-        self.status = EventStatus.REJECTED
-        self.rejection_note = note.strip()
-        self.save(update_fields=["status", "rejection_note", "updated_at"])
-
-    def resubmit(self):
-        """Resubmit a rejected event for moderation."""
-        if self.status != EventStatus.REJECTED:
-            raise ValueError("Only rejected events can be resubmitted.")
-        self.status = EventStatus.PENDING
-        self.rejection_note = ""
-        self.save(update_fields=["status", "rejection_note", "updated_at"])
-
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = self._generate_unique_slug()
-        # Auto-approve on creation if user is approved
-        if self._state.adding and self.submitted_by_id:
-            # Need to check is_approved; use cached submitted_by if loaded
-            try:
-                user = cast("User | None", self.submitted_by)
-            except Exception:
-                user = None
-            if user and user.is_approved:
-                self.status = EventStatus.APPROVED
         super().save(*args, **kwargs)

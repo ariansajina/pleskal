@@ -1,4 +1,4 @@
-"""Tests for rate limiting on registration, login, password reset, and event submission."""
+"""Tests for rate limiting on login, password reset, and event submission."""
 
 import pytest
 from django.core.cache import cache
@@ -65,76 +65,6 @@ class TestGetClientIp:
             REMOTE_ADDR="1.2.3.4",
         )
         assert get_client_ip(request) == "9.8.7.6"
-
-
-# ---------------------------------------------------------------------------
-# Registration rate limiting
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestRegisterRateLimit:
-    def _post_register(self, client, n):
-        """Post n registration attempts; each uses a unique email to avoid
-        duplicate-user validation errors masking rate limit behavior."""
-        url = reverse("register")
-        responses = []
-        for i in range(n):
-            resp = client.post(
-                url,
-                {
-                    "username": f"rluser{i}",
-                    "email": f"rluser{i}@example.com",
-                    "password1": "Str0ng!Pass#",
-                    "password2": "Str0ng!Pass#",
-                },
-            )
-            responses.append(resp)
-        return responses
-
-    def test_registrations_within_limit_succeed(self, client, settings):
-        settings.AXES_ENABLED = False
-        responses = self._post_register(client, 3)
-        for r in responses:
-            assert r.status_code != 429
-
-    def test_registration_blocked_after_limit(self, client, settings):
-
-        settings.AXES_ENABLED = False
-        # Manually exhaust the counter so the very next request is blocked
-        from accounts.views import RegisterView
-        from config.ratelimit import check_rate_limit
-
-        limit = RegisterView.rate_limit_limit
-        window = RegisterView.rate_limit_window
-        key = "rl:register:127.0.0.1"
-        for _ in range(limit):
-            check_rate_limit(key, limit, window)
-
-        url = reverse("register")
-        resp = client.post(
-            url,
-            {
-                "username": "blocked",
-                "email": "blocked@example.com",
-                "password1": "Str0ng!Pass#",
-                "password2": "Str0ng!Pass#",
-            },
-        )
-        assert resp.status_code == 429
-
-    def test_get_requests_are_never_rate_limited(self, client):
-        from accounts.views import RegisterView
-        from config.ratelimit import check_rate_limit
-
-        limit = RegisterView.rate_limit_limit
-        window = RegisterView.rate_limit_window
-        key = "rl:register:127.0.0.1"
-        for _ in range(limit):
-            check_rate_limit(key, limit, window)
-
-        resp = client.get(reverse("register"))
-        assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------

@@ -11,8 +11,6 @@ class UserFactory(factory.django.DjangoModelFactory[User]):
 
     username = factory.Sequence(lambda n: f"user{n}")
     email = factory.LazyAttribute(lambda obj: f"{obj.username}@example.com")
-    is_approved = False
-    is_moderator = False
 
     @factory.post_generation
     def password(

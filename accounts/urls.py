@@ -9,21 +9,9 @@ from .views import (
     PublisherProfileView,
     RateLimitedLoginView,
     RateLimitedPasswordResetView,
-    RegisterView,
-    RegistrationPendingView,
 )
 
 urlpatterns = [
-    path(
-        "register/",
-        RegisterView.as_view(),
-        name="register",
-    ),
-    path(
-        "register/pending/",
-        RegistrationPendingView.as_view(),
-        name="registration_pending",
-    ),
     path(
         "login/",
         RateLimitedLoginView.as_view(),

@@ -3,7 +3,7 @@ from django.utils import timezone
 
 from accounts.tests.factories import UserFactory
 
-from ..models import Event, EventCategory, EventStatus
+from ..models import Event, EventCategory
 
 
 class EventFactory(factory.django.DjangoModelFactory[Event]):
@@ -18,5 +18,4 @@ class EventFactory(factory.django.DjangoModelFactory[Event]):
     )
     venue_name = "Dance Hall"
     category = EventCategory.SOCIAL
-    status = EventStatus.PENDING
     submitted_by = factory.SubFactory(UserFactory)

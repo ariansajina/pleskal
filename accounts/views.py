@@ -4,43 +4,17 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views import View
-from django.views.generic import CreateView
 
 from config.ratelimit import RateLimitMixin
 
 from .forms import (
     CustomAuthenticationForm,
-    CustomUserCreationForm,
     ProfileForm,
 )
 
 User = get_user_model()
-
-
-class RegisterView(RateLimitMixin, CreateView):
-    rate_limit_key = "register"
-    rate_limit_limit = 10
-    rate_limit_window = 3600
-
-    form_class = CustomUserCreationForm
-    template_name = "accounts/register.html"
-    success_url = reverse_lazy("registration_pending")
-
-    def form_valid(self, form):
-        return super().form_valid(form)
-
-    def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            return redirect("/")
-        return super().dispatch(request, *args, **kwargs)
-
-
-class RegistrationPendingView(View):
-    def get(self, request):
-        return render(request, "accounts/registration_pending.html")
 
 
 class AccountDeleteView(LoginRequiredMixin, View):
@@ -122,14 +96,12 @@ class RateLimitedPasswordResetView(RateLimitMixin, auth_views.PasswordResetView)
 
 class PublisherProfileView(View):
     def get(self, request, username):
-        from events.models import Event, EventStatus
+        from events.models import Event
 
         publisher = get_object_or_404(User, username=username)
         is_own_profile = request.user.is_authenticated and request.user == publisher
 
         qs = Event.objects.filter(submitted_by=publisher).select_related("submitted_by")
-        if not is_own_profile:
-            qs = qs.filter(status=EventStatus.APPROVED)
 
         show_past = request.GET.get("past") == "1"
         now = timezone.now()

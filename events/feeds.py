@@ -9,7 +9,7 @@ from django.views import View
 from icalendar import Calendar
 from icalendar import Event as ICalEvent
 
-from .models import Event, EventCategory, EventStatus
+from .models import Event, EventCategory
 
 
 def _plain_text(markdown_text: str) -> str:
@@ -21,9 +21,8 @@ def _plain_text(markdown_text: str) -> str:
     return text.strip()
 
 
-def _approved_upcoming_qs(category: str | None = None):
+def _upcoming_qs(category: str | None = None):
     qs = Event.objects.filter(
-        status=EventStatus.APPROVED,
         start_datetime__gte=timezone.now(),
     ).order_by("start_datetime")
     if category and category in {c.value for c in EventCategory}:
@@ -52,7 +51,7 @@ class EventRSSFeed(Feed):
         category = getattr(self, "_request", None)
         if category:
             category = self._request.GET.get("category")
-        return _approved_upcoming_qs(category)[:50]
+        return _upcoming_qs(category)[:50]
 
     def item_title(self, item):
         return str(item.title)
@@ -79,7 +78,7 @@ class EventRSSFeed(Feed):
 class EventICalFeed(View):
     def get(self, request):
         category = request.GET.get("category")
-        queryset = _approved_upcoming_qs(category)
+        queryset = _upcoming_qs(category)
 
         cal = Calendar()
         cal.add("prodid", "-//Copenhagen Dance Calendar//EN")

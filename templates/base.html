@@ -395,14 +395,6 @@
            class="nav-link {% if request.resolver_match.url_name == 'event_list' %}nav-link--active{% endif %}">
           Events
         </a>
-        {% if user.is_authenticated %}
-          {% if user.is_moderator %}
-            <a href="{% url 'moderation_dashboard' %}"
-               class="nav-link {% if 'moderation' in request.resolver_match.url_name %}nav-link--active{% endif %}">
-              Moderation
-            </a>
-          {% endif %}
-        {% endif %}
 
         <span class="nav-divider"></span>
         <span id="htmx-indicator">loading…</span>
@@ -419,7 +411,6 @@
           </form>
         {% else %}
           <a href="{% url 'login' %}" class="nav-btn">Log in</a>
-          <a href="{% url 'register' %}" class="nav-btn nav-btn--filled">Register</a>
         {% endif %}
       </nav>
     </div>

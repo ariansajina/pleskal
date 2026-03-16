@@ -1,7 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
-from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -12,7 +11,7 @@ from config.ratelimit import UserRateLimitMixin
 
 from .forms import EventForm
 from .image_utils import process_event_image
-from .models import Event, EventCategory, EventStatus
+from .models import Event, EventCategory
 
 EVENTS_PER_PAGE = 20
 
@@ -22,13 +21,13 @@ EVENTS_PER_PAGE = 20
 # ---------------------------------------------------------------------------
 
 
-class EventOwnerOrModeratorMixin:
-    """Restrict access to the event owner or a moderator. Returns 403 otherwise."""
+class EventOwnerMixin:
+    """Restrict access to the event owner. Returns 403 otherwise."""
 
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)  # type: ignore[misc]
         user = self.request.user  # type: ignore[attr-defined]
-        if obj.submitted_by != user and not user.is_moderator:
+        if obj.submitted_by != user:
             from django.core.exceptions import PermissionDenied
 
             raise PermissionDenied
@@ -89,10 +88,8 @@ class EventListView(View):
         from django.shortcuts import render
 
         expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
-        qs = (
-            Event.objects.filter(status=EventStatus.APPROVED)
-            .filter(start_datetime__gte=expiry_cutoff)
-            .select_related("submitted_by")
+        qs = Event.objects.filter(start_datetime__gte=expiry_cutoff).select_related(
+            "submitted_by"
         )
 
         # --- Filter: upcoming vs past ---
@@ -185,22 +182,7 @@ class EventDetailView(DetailView):
     slug_url_kwarg = "slug"
 
     def get_object(self, queryset=None):
-        obj = get_object_or_404(Event, slug=self.kwargs["slug"])
-        user = self.request.user
-
-        # Approved events are public
-        if obj.status == EventStatus.APPROVED:
-            return obj
-
-        # Owner can see their own pending/rejected events
-        if user.is_authenticated and obj.submitted_by == user:
-            return obj
-
-        # Moderators can see everything
-        if user.is_authenticated and user.is_moderator:
-            return obj
-
-        raise Http404
+        return get_object_or_404(Event, slug=self.kwargs["slug"])
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +195,7 @@ class MyEventsView(LoginRequiredMixin, View):
         return redirect("publisher_profile", username=request.user.username)
 
 
-class EventUpdateView(LoginRequiredMixin, EventOwnerOrModeratorMixin, UpdateView):
+class EventUpdateView(LoginRequiredMixin, EventOwnerMixin, UpdateView):
     model = Event
     form_class = EventForm
     template_name = "events/event_form.html"
@@ -227,11 +209,6 @@ class EventUpdateView(LoginRequiredMixin, EventOwnerOrModeratorMixin, UpdateView
 
     def form_valid(self, form):
         event = form.save(commit=False)
-
-        # If editing a rejected event, reset to pending
-        if event.status == EventStatus.REJECTED:
-            event.status = EventStatus.PENDING
-            event.rejection_note = ""
 
         # Process newly uploaded image
         image_file = form.cleaned_data.get("image")
@@ -250,7 +227,7 @@ class EventUpdateView(LoginRequiredMixin, EventOwnerOrModeratorMixin, UpdateView
         return ctx
 
 
-class EventDeleteView(LoginRequiredMixin, EventOwnerOrModeratorMixin, DeleteView):
+class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
     model = Event
     template_name = "events/event_confirm_delete.html"
     success_url = reverse_lazy("my_events")

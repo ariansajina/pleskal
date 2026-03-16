@@ -1,34 +1,8 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm
 
 User = get_user_model()
-
-
-class CustomUserCreationForm(UserCreationForm):
-    email = forms.EmailField(required=True)
-    intro_message = forms.CharField(
-        required=True,
-        max_length=500,
-        widget=forms.Textarea(
-            attrs={"rows": 4, "maxlength": 500, "class": "form-textarea"}
-        ),
-        label="Tell us about yourself",
-        help_text=(
-            "Briefly describe who you are and why you want to post events "
-            "(up to 500 characters). A moderator will review your account."
-        ),
-    )
-
-    class Meta:
-        model = User
-        fields = ("username", "email", "password1", "password2", "intro_message")
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            if not isinstance(field.widget, forms.Textarea):
-                field.widget.attrs.setdefault("class", "form-input")
 
 
 class CustomAuthenticationForm(AuthenticationForm):

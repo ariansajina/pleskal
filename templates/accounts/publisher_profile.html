@@ -43,7 +43,6 @@
                         <div class="event-row">
                             <div class="event-row__body">
                                 <div class="event-tags" style="margin-bottom:0.5rem;margin-top:0;">
-                                    <span class="badge status--{{ event.status }}">{{ event.get_status_display }}</span>
                                     <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
                                 </div>
                                 <div class="event-title">
@@ -56,11 +55,6 @@
                                     <span style="opacity:0.4;">·</span>
                                     <span class="event-meta--venue">{{ event.venue_name }}</span>
                                 </div>
-                                {% if event.status == 'rejected' and event.rejection_note %}
-                                    <p style="font-size:0.73rem;color:var(--c-perf);margin-top:0.4rem;">
-                                        Rejection reason: {{ event.rejection_note }}
-                                    </p>
-                                {% endif %}
                             </div>
                             <div style="display:flex;align-items:center;gap:0.5rem;padding:0.85rem 1rem;flex-shrink:0;">
                                 <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>

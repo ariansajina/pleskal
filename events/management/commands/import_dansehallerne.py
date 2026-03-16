@@ -3,7 +3,7 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from events.models import Event, EventCategory, EventStatus
+from events.models import Event, EventCategory
 
 
 def make_aware_cph(naive_dt):
@@ -691,7 +691,6 @@ class Command(BaseCommand):
                 source_url=source_url,
                 external_source="dansehallerne",
                 submitted_by=None,
-                status=EventStatus.APPROVED,
             )
             # Skip clean() date-in-future validation for imported past/future events
             event.save()

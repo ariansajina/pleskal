@@ -9,8 +9,6 @@ from .managers import UserManager
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
-    is_approved = models.BooleanField(default=False)
-    is_moderator = models.BooleanField(default=False)
     display_name = models.CharField(blank=True, max_length=100)
     bio = models.TextField(blank=True, max_length=500)
     website = models.URLField(blank=True)

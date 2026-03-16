@@ -15,14 +15,6 @@ class TestUserModel:
         user = UserFactory.create()
         assert isinstance(user.pk, uuid.UUID)
 
-    def test_default_is_approved_false(self):
-        user = UserFactory.create()
-        assert user.is_approved is False
-
-    def test_default_is_moderator_false(self):
-        user = UserFactory.create()
-        assert user.is_moderator is False
-
     def test_email_unique(self):
         UserFactory.create(email="dupe@example.com")
         with pytest.raises(IntegrityError):
@@ -49,16 +41,12 @@ class TestUserManager:
         user = User.objects.create_user(
             username="newuser", email="new@example.com", password="pass123"
         )
-        assert user.is_approved is False
-        assert user.is_moderator is False
         assert user.is_staff is False
 
     def test_create_superuser_defaults(self):
         user = User.objects.create_superuser(
             username="admin", email="admin@example.com", password="pass123"
         )
-        assert user.is_approved is True
-        assert user.is_moderator is True
         assert user.is_staff is True
         assert user.is_superuser is True
 

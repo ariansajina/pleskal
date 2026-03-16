@@ -7,20 +7,6 @@
 <div class="content-wrap">
     <article>
 
-        {# Status banner for owner/moderator #}
-        {% if event.status != "approved" %}
-            <div class="alert alert--{% if event.status == 'pending' %}warning{% else %}error{% endif %}" style="margin-bottom:1.5rem;">
-                {% if event.status == 'pending' %}
-                    ✦ Awaiting moderation.
-                {% elif event.status == 'rejected' %}
-                    ✦ Rejected.
-                    {% if event.rejection_note %}
-                        Reason: {{ event.rejection_note }}
-                    {% endif %}
-                {% endif %}
-            </div>
-        {% endif %}
-
         {# Category + free badge #}
         <div class="event-tags" style="margin-bottom:1rem;">
             <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
@@ -106,9 +92,9 @@
             </div>
         {% endif %}
 
-        {# Owner / moderator actions #}
+        {# Owner actions #}
         {% if user.is_authenticated %}
-            {% if user == event.submitted_by or user.is_moderator %}
+            {% if user == event.submitted_by %}
                 <hr class="rule">
                 <div style="display:flex;gap:0.75rem;">
                     <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>

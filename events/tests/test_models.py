@@ -4,7 +4,6 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from ..models import EventStatus
 from .factories import EventFactory
 
 
@@ -17,10 +16,6 @@ class TestEventModel:
     def test_str_returns_title(self):
         event = EventFactory.create(title="Summer Jam")
         assert str(event) == "Summer Jam"
-
-    def test_default_status_pending(self):
-        event = EventFactory.create()
-        assert event.status == EventStatus.PENDING
 
 
 @pytest.mark.django_db
