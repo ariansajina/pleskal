@@ -38,11 +38,11 @@
                 <div style="display:flex;gap:0.75rem;">
                     <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;cursor:pointer;">
                         <input type="radio" name="past" value="0" {% if not show_past %}checked{% endif %}>
-                        Upcoming
+                        <span id="upcoming-count">Upcoming ({{ upcoming_count }})</span>
                     </label>
                     <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;cursor:pointer;">
                         <input type="radio" name="past" value="1" {% if show_past %}checked{% endif %}>
-                        Past
+                        <span id="past-count">Past ({{ past_count }})</span>
                     </label>
                 </div>
             </div>

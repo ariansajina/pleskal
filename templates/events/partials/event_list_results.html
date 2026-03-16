@@ -1,3 +1,6 @@
+<span id="upcoming-count" hx-swap-oob="true">Upcoming ({{ upcoming_count }})</span>
+<span id="past-count" hx-swap-oob="true">Past ({{ past_count }})</span>
+
 {% if events %}
     {% regroup events by start_datetime|date:"Y-m-d" as events_by_date %}
 

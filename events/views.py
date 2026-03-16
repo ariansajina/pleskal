@@ -92,14 +92,6 @@ class EventListView(View):
             "submitted_by"
         )
 
-        # --- Filter: upcoming vs past ---
-        show_past = request.GET.get("past") == "1"
-        now = timezone.now()
-        if show_past:
-            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime")
-        else:
-            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
-
         # --- Filter: category (multi-value) ---
         categories = request.GET.getlist("category")
         valid_categories = {c.value for c in EventCategory}
@@ -146,6 +138,18 @@ class EventListView(View):
                 | Q(submitted_by__username__icontains=search_query)
             )
 
+        # --- Counts for upcoming/past toggle (computed after other filters) ---
+        now = timezone.now()
+        upcoming_count = qs.filter(start_datetime__gte=now).count()
+        past_count = qs.filter(start_datetime__lt=now).count()
+
+        # --- Filter: upcoming vs past ---
+        show_past = request.GET.get("past") == "1"
+        if show_past:
+            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime")
+        else:
+            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
+
         # --- Pagination ---
         paginator = Paginator(qs, EVENTS_PER_PAGE)
         page_number = request.GET.get("page", 1)
@@ -161,6 +165,8 @@ class EventListView(View):
             "date_to": date_to or "",
             "is_free": request.GET.get("is_free") == "1",
             "search_query": search_query,
+            "upcoming_count": upcoming_count,
+            "past_count": past_count,
         }
 
         # HTMX: return only the results partial
