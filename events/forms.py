@@ -20,6 +20,7 @@ class EventForm(forms.ModelForm):
             "venue_address",
             "category",
             "is_free",
+            "is_wheelchair_accessible",
             "price_note",
             "source_url",
         ]

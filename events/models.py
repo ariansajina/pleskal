@@ -46,6 +46,7 @@ class Event(models.Model):
         default=EventCategory.OTHER,
     )
     is_free = models.BooleanField(default=False)
+    is_wheelchair_accessible = models.BooleanField(default=False)
     price_note = models.CharField(max_length=200, blank=True)
     source_url = models.URLField(
         blank=True,

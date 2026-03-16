@@ -11,6 +11,7 @@
         <div class="event-tags" style="margin-bottom:1rem;">
             <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
             {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
+            {% if event.is_wheelchair_accessible %}<span class="badge badge--wheelchair">♿</span>{% endif %}
         </div>
 
         {# Title #}

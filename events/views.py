@@ -125,6 +125,10 @@ class EventListView(View):
         if request.GET.get("is_free") == "1":
             qs = qs.filter(is_free=True)
 
+        # --- Filter: wheelchair accessible events ---
+        if request.GET.get("is_wheelchair_accessible") == "1":
+            qs = qs.filter(is_wheelchair_accessible=True)
+
         # --- Filter: search ---
         search_query = request.GET.get("q", "").strip()
         if search_query:
@@ -164,6 +168,8 @@ class EventListView(View):
             "date_from": date_from or "",
             "date_to": date_to or "",
             "is_free": request.GET.get("is_free") == "1",
+            "is_wheelchair_accessible": request.GET.get("is_wheelchair_accessible")
+            == "1",
             "search_query": search_query,
             "upcoming_count": upcoming_count,
             "past_count": past_count,

@@ -76,12 +76,9 @@
     }
 
     .site-logo {
-      font-family: 'Playfair Display', serif;
-      font-weight: 900; font-style: italic;
-      font-size: 1.15rem; color: var(--blue);
-      white-space: nowrap; flex-shrink: 0; line-height: 1;
+      display: flex; align-items: center; flex-shrink: 0; line-height: 1;
     }
-    .site-logo .logo-star { font-style: normal; font-size: 0.85em; opacity: 0.7; margin-right: 0.2em; }
+    .site-logo img { height: 40px; width: auto; display: block; }
 
     .site-nav { display: flex; align-items: center; gap: 0.2rem; flex: 1; }
     .nav-link {
@@ -215,6 +212,7 @@
     .badge--social       { color: var(--c-social); background: #FFF5EE; }
     .badge--other        { color: var(--ink-muted); background: var(--surface-2); border-color: var(--border); }
     .badge--free         { color: var(--c-op); background: #EEFBF3; border-color: var(--c-op); }
+    .badge--wheelchair   { color: #1565C0; background: #E3F2FD; border-color: #1565C0; }
 
     /* ─── STATUS BADGES ─────────────────────────────────── */
     .status--pending  { color: #926C00; background: #FFF8E1; border-color: #926C00; }
@@ -382,7 +380,7 @@
     <div class="site-header__inner">
 
       <a href="{% url 'event_list' %}" class="site-logo">
-        <span class="logo-star">✦</span>pleskal<span class="logo-star">✦</span>
+        <img src="{% static 'images/logo.png' %}" alt="pleskal" height="40">
       </a>
 
       <button class="nav-toggle" aria-label="Toggle menu"
