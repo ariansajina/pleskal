@@ -5,6 +5,7 @@ from .views import (
     EventCreateView,
     EventDeleteView,
     EventDetailView,
+    EventDuplicateView,
     EventListView,
     EventUpdateView,
     MyEventsView,
@@ -20,6 +21,7 @@ urlpatterns = [
     # Event management
     path("events/<slug:slug>/edit/", EventUpdateView.as_view(), name="event_edit"),
     path("events/<slug:slug>/delete/", EventDeleteView.as_view(), name="event_delete"),
+    path("events/<slug:slug>/duplicate/", EventDuplicateView.as_view(), name="event_duplicate"),
     path("my-events/", MyEventsView.as_view(), name="my_events"),
     # Feeds
     path("feed/events.ics", EventICalFeed.as_view(), name="event_ical_feed"),

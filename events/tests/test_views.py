@@ -384,3 +384,52 @@ class TestEventDeleteView:
         resp = client.post(reverse("event_delete", kwargs={"slug": event.slug}))
         assert resp.status_code == 403
         assert Event.objects.filter(pk=event.pk).exists()
+
+
+# ---------------------------------------------------------------------------
+# Feature 10: Event Duplicate
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestEventDuplicateView:
+    def test_unauthenticated_redirects(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_duplicate", kwargs={"slug": event.slug}))
+        assert resp.status_code == 302
+
+    def test_owner_sees_prepopulated_form(self, client):
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, title="Salsa Night")
+        client.force_login(user)
+        resp = client.get(reverse("event_duplicate", kwargs={"slug": event.slug}))
+        assert resp.status_code == 200
+        assert b"Salsa Night" in resp.content
+        assert b"Duplicate Event" in resp.content
+
+    def test_non_owner_gets_403(self, client):
+        owner = UserFactory.create()
+        other = UserFactory.create()
+        event = EventFactory.create(submitted_by=owner)
+        client.force_login(other)
+        resp = client.get(reverse("event_duplicate", kwargs={"slug": event.slug}))
+        assert resp.status_code == 403
+
+    def test_submitting_form_creates_new_event(self, client):
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, title="Tango Night")
+        client.force_login(user)
+        new_start = _future_dt(days=14)
+        resp = client.post(
+            reverse("event_duplicate", kwargs={"slug": event.slug}),
+            {
+                "title": "Tango Night II",
+                "start_datetime": new_start.strftime("%Y-%m-%dT%H:%M"),
+                "venue_name": event.venue_name,
+                "category": event.category,
+                "is_free": event.is_free,
+            },
+        )
+        assert resp.status_code == 302
+        assert Event.objects.filter(title="Tango Night II").exists()
+        assert Event.objects.filter(title="Tango Night").exists()  # original unchanged

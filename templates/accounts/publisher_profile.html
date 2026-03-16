@@ -58,6 +58,7 @@
                             </div>
                             <div style="display:flex;align-items:center;gap:0.5rem;padding:0.85rem 1rem;flex-shrink:0;">
                                 <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
+                                <a href="{% url 'event_duplicate' event.slug %}" class="btn btn--ghost btn--sm">Duplicate</a>
                                 <a href="{% url 'event_delete' event.slug %}" class="btn btn--danger btn--sm">Delete</a>
                             </div>
                         </div>

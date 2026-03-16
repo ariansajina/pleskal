@@ -249,3 +249,59 @@ class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
     def form_valid(self, form):
         messages.success(self.request, "Event deleted.")
         return super().form_valid(form)
+
+
+class EventDuplicateView(LoginRequiredMixin, View):
+    def _check_owner(self, request, source):
+        if source.submitted_by != request.user:
+            from django.core.exceptions import PermissionDenied
+
+            raise PermissionDenied
+
+    def get(self, request, slug):
+        from django.shortcuts import render
+
+        source = get_object_or_404(Event, slug=slug)
+        self._check_owner(request, source)
+        form = EventForm(
+            creation=True,
+            initial={
+                "title": source.title,
+                "description": source.description,
+                "venue_name": source.venue_name,
+                "venue_address": source.venue_address,
+                "category": source.category,
+                "is_free": source.is_free,
+                "is_wheelchair_accessible": source.is_wheelchair_accessible,
+                "price_note": source.price_note,
+                "source_url": source.source_url,
+            },
+        )
+        return render(
+            request,
+            "events/event_form.html",
+            {"form": form, "page_title": "Duplicate Event"},
+        )
+
+    def post(self, request, slug):
+        from django.shortcuts import render
+
+        source = get_object_or_404(Event, slug=slug)
+        self._check_owner(request, source)
+        form = EventForm(request.POST, request.FILES, creation=True)
+        if form.is_valid():
+            event = form.save(commit=False)
+            event.submitted_by = request.user
+            image_file = form.cleaned_data.get("image")
+            if image_file:
+                processed, thumbnail = process_event_image(image_file)
+                event.image = processed
+                event.image_thumbnail = thumbnail
+            event.save()
+            messages.success(request, "Event duplicated.")
+            return redirect("event_detail", slug=event.slug)
+        return render(
+            request,
+            "events/event_form.html",
+            {"form": form, "page_title": "Duplicate Event"},
+        )
