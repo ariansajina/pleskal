@@ -11,6 +11,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     is_approved = models.BooleanField(default=False)
     is_moderator = models.BooleanField(default=False)
+    display_name = models.CharField(blank=True, max_length=100)
     bio = models.TextField(blank=True, max_length=500)
     website = models.URLField(blank=True)
     intro_message = models.TextField(blank=True, max_length=500)
@@ -25,3 +26,7 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    @property
+    def public_name(self):
+        return self.display_name if self.display_name else self.username

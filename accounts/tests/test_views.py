@@ -181,6 +181,16 @@ class TestAccountDeleteView:
         event.refresh_from_db()
         assert event.submitted_by is None
 
+    def test_delete_with_delete_posts_removes_events(self):
+        from events.models import Event
+
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        client = Client()
+        client.force_login(user)
+        client.post("/accounts/delete/", {"delete_posts": "1"})
+        assert not Event.objects.filter(pk=event.pk).exists()
+
     def test_delete_logs_out_user(self):
         user = UserFactory.create()
         client = Client()

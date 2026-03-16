@@ -1,6 +1,7 @@
 from django.contrib import messages
-from django.contrib.auth import get_user_model, logout
+from django.contrib.auth import get_user_model, logout, update_session_auth_hash
 from django.contrib.auth import views as auth_views
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -13,7 +14,7 @@ from config.ratelimit import RateLimitMixin
 from .forms import (
     CustomAuthenticationForm,
     CustomUserCreationForm,
-    PublisherProfileForm,
+    ProfileForm,
 )
 
 User = get_user_model()
@@ -48,8 +49,10 @@ class AccountDeleteView(LoginRequiredMixin, View):
 
     def post(self, request):
         user = request.user
-        # Anonymize events (SET_NULL happens via FK, but let's be explicit)
-        user.events.update(submitted_by=None)
+        if request.POST.get("delete_posts"):
+            user.events.all().delete()
+        else:
+            user.events.update(submitted_by=None)
         logout(request)
         user.delete()
         messages.success(request, "Your account has been deleted.")
@@ -58,16 +61,38 @@ class AccountDeleteView(LoginRequiredMixin, View):
 
 class AccountProfileView(LoginRequiredMixin, View):
     def get(self, request):
-        form = PublisherProfileForm(instance=request.user)
+        form = ProfileForm(instance=request.user)
         return render(request, "accounts/account_profile.html", {"form": form})
 
     def post(self, request):
-        form = PublisherProfileForm(request.POST, instance=request.user)
+        form = ProfileForm(request.POST, instance=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "Profile updated.")
             return redirect("account_profile")
         return render(request, "accounts/account_profile.html", {"form": form})
+
+
+def _styled_password_change_form(user, data=None):
+    form = PasswordChangeForm(user=user, data=data)
+    for field in form.fields.values():
+        field.widget.attrs.setdefault("class", "form-input")
+    return form
+
+
+class ChangePasswordView(LoginRequiredMixin, View):
+    def get(self, request):
+        form = _styled_password_change_form(request.user)
+        return render(request, "accounts/change_password.html", {"form": form})
+
+    def post(self, request):
+        form = _styled_password_change_form(request.user, data=request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, "Password changed successfully.")
+            return redirect("account_profile")
+        return render(request, "accounts/change_password.html", {"form": form})
 
 
 class RateLimitedLoginView(RateLimitMixin, auth_views.LoginView):

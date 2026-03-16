@@ -4,6 +4,7 @@ from django.urls import path
 from .views import (
     AccountDeleteView,
     AccountProfileView,
+    ChangePasswordView,
     PublisherProfileView,
     RateLimitedLoginView,
     RateLimitedPasswordResetView,
@@ -58,6 +59,11 @@ urlpatterns = [
             template_name="accounts/password_reset_complete.html",
         ),
         name="password_reset_complete",
+    ),
+    path(
+        "change-password/",
+        ChangePasswordView.as_view(),
+        name="change_password",
     ),
     path(
         "delete/",

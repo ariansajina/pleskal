@@ -13,14 +13,20 @@
             <p style="font-weight:600;margin-bottom:0.5rem;">This action is permanent and cannot be undone.</p>
             <ul style="padding-left:1.2em;margin:0;">
                 <li>Your account will be permanently deleted.</li>
-                <li>Your submitted events will remain visible but will no longer be associated with your account.</li>
+                <li>By default, your submitted events will remain visible but will no longer be associated with your account.</li>
             </ul>
         </div>
 
-        <form method="post" style="display:flex;gap:0.75rem;">
+        <form method="post" style="display:flex;flex-direction:column;gap:1.25rem;">
             {% csrf_token %}
-            <button type="submit" class="btn btn--danger">Delete My Account</button>
-            <a href="/" class="btn btn--ghost">Cancel</a>
+            <label style="display:flex;align-items:center;gap:0.6rem;font-size:0.9rem;cursor:pointer;">
+                <input type="checkbox" name="delete_posts" value="1" style="width:1rem;height:1rem;cursor:pointer;">
+                Also permanently delete all my submitted events
+            </label>
+            <div style="display:flex;gap:0.75rem;">
+                <button type="submit" class="btn btn--danger">Delete My Account</button>
+                <a href="/" class="btn btn--ghost">Cancel</a>
+            </div>
         </form>
     </div>
 </div>

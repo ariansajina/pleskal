@@ -13,6 +13,39 @@
             {% csrf_token %}
 
             <div>
+                <label for="id_username" class="form-label">{{ form.username.label }}</label>
+                {{ form.username }}
+                {% if form.username.help_text %}
+                    <p class="form-help">{{ form.username.help_text }}</p>
+                {% endif %}
+                {% for error in form.username.errors %}
+                    <p class="form-field-error">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                <label for="id_display_name" class="form-label">{{ form.display_name.label }}</label>
+                {{ form.display_name }}
+                {% if form.display_name.help_text %}
+                    <p class="form-help">{{ form.display_name.help_text }}</p>
+                {% endif %}
+                {% for error in form.display_name.errors %}
+                    <p class="form-field-error">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
+                <label for="id_email" class="form-label">{{ form.email.label }}</label>
+                {{ form.email }}
+                {% if form.email.help_text %}
+                    <p class="form-help">{{ form.email.help_text }}</p>
+                {% endif %}
+                {% for error in form.email.errors %}
+                    <p class="form-field-error">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
                 <label for="id_bio" class="form-label">{{ form.bio.label }}</label>
                 {{ form.bio }}
                 {% if form.bio.help_text %}
@@ -43,8 +76,8 @@
             </div>
         </form>
 
-        <div style="margin-top:1.5rem;border-top:1px solid var(--border-light);padding-top:1rem;font-size:0.78rem;color:var(--ink-muted);">
-            Want to delete your account?
+        <div style="margin-top:1.5rem;border-top:1px solid var(--border-light);padding-top:1rem;font-size:0.85rem;display:flex;gap:1.5rem;align-items:center;">
+            <a href="{% url 'change_password' %}" style="color:var(--blue);font-weight:500;">Change password</a>
             <a href="{% url 'account_delete' %}" style="color:var(--c-perf);">Delete account</a>
         </div>
     </div>

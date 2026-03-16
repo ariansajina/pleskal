@@ -101,7 +101,7 @@
             <div style="font-size:0.78rem;color:var(--ink-muted);margin-bottom:1rem;">
                 Published by
                 <a href="{% url 'publisher_profile' event.submitted_by.username %}" class="link-accent" style="font-weight:600;">
-                    {{ event.submitted_by.username }}
+                    {{ event.submitted_by.public_name }}
                 </a>
             </div>
         {% endif %}
