@@ -10,7 +10,9 @@ class CustomUserCreationForm(UserCreationForm):
     intro_message = forms.CharField(
         required=True,
         max_length=500,
-        widget=forms.Textarea(attrs={"rows": 4, "maxlength": 500}),
+        widget=forms.Textarea(
+            attrs={"rows": 4, "maxlength": 500, "class": "form-textarea"}
+        ),
         label="Tell us about yourself",
         help_text=(
             "Briefly describe who you are and why you want to post events "
@@ -22,12 +24,20 @@ class CustomUserCreationForm(UserCreationForm):
         model = User
         fields = ("username", "email", "password1", "password2", "intro_message")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if not isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-input")
+
 
 class CustomAuthenticationForm(AuthenticationForm):
     username = forms.EmailField(label="Email")
 
-
-_INPUT_CLASSES = "w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-input")
 
 
 class PublisherProfileForm(forms.ModelForm):
@@ -36,10 +46,10 @@ class PublisherProfileForm(forms.ModelForm):
         fields = ("bio", "website")
         widgets = {
             "bio": forms.Textarea(
-                attrs={"rows": 4, "maxlength": 500, "class": _INPUT_CLASSES}
+                attrs={"rows": 4, "maxlength": 500, "class": "form-textarea"}
             ),
             "website": forms.URLInput(
-                attrs={"placeholder": "https://", "class": _INPUT_CLASSES}
+                attrs={"placeholder": "https://", "class": "form-input"}
             ),
         }
         labels = {

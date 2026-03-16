@@ -1,52 +1,464 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}pleskal{% endblock %}</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/output.css' %}">
-    <script src="{% static 'js/htmx.min.js' %}" defer></script>
-    {% block extra_head %}{% endblock %}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}pleskal{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}A local-first community-maintained calendar for dance and performance art in Copenhagen.{% endblock %}">
+  {% load static %}
+
+  {# Compiled Tailwind CSS #}
+  <link rel="stylesheet" href="{% static 'css/output.css' %}">
+
+  {# Google Fonts #}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+  {# HTMX #}
+  <script src="{% static 'js/htmx.min.js' %}" defer></script>
+
+  <style>
+    /* ─── CSS Variables ─────────────────────────────────── */
+    :root {
+      --blue:          #3333CC;
+      --blue-dark:     #2222AA;
+      --blue-deep:     #1a1a88;
+      --cream:         #E8E4D8;
+      --cream-dim:     #C8C4B4;
+      --surface:       #F4F0E8;
+      --surface-2:     #EAE6DC;
+      --ink:           #1A1866;
+      --ink-muted:     #4A48A0;
+      --border:        #AAAADD;
+      --border-light:  #CCCCEE;
+      --star:          #FFDD44;
+      --c-perf:        #CC2244;
+      --c-ws:          #2266CC;
+      --c-wip:         #8833BB;
+      --c-op:          #116633;
+      --c-social:      #BB5500;
+    }
+
+    /* ─── Base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Instrument Sans', system-ui, sans-serif;
+      font-size: 15px;
+      background-color: var(--surface);
+      color: var(--ink);
+      min-height: 100vh;
+      background-image: radial-gradient(circle, rgba(51,51,204,0.10) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--surface-2); }
+    ::-webkit-scrollbar-thumb { background: var(--blue); }
+    ::selection { background: var(--blue); color: var(--cream); }
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: var(--blue); }
+    .link-accent { color: var(--blue); }
+    :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+    /* ─── HEADER ────────────────────────────────────────── */
+    .site-header {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(244, 240, 232, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 2px solid var(--blue);
+    }
+    .site-header__inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 1.5rem;
+      height: 56px; display: flex; align-items: center; gap: 1rem;
+    }
+
+    .site-logo {
+      font-family: 'Playfair Display', serif;
+      font-weight: 900; font-style: italic;
+      font-size: 1.15rem; color: var(--blue);
+      white-space: nowrap; flex-shrink: 0; line-height: 1;
+    }
+    .site-logo .logo-star { font-style: normal; font-size: 0.85em; opacity: 0.7; margin-right: 0.2em; }
+
+    .site-nav { display: flex; align-items: center; gap: 0.2rem; flex: 1; }
+    .nav-link {
+      font-size: 0.73rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--ink-muted);
+      padding: 0.3rem 0.7rem; border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+    }
+    .nav-link:hover, .nav-link--active { color: var(--blue); border-bottom-color: var(--blue); }
+    .nav-divider { flex: 1; }
+
+    .nav-btn {
+      font-family: 'Instrument Sans', sans-serif;
+      font-size: 0.71rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0.32rem 0.85rem; border: 1.5px solid var(--blue); color: var(--blue);
+      background: transparent; cursor: pointer; transition: background 0.15s, color 0.15s; white-space: nowrap;
+      display: inline-block;
+    }
+    .nav-btn:hover { background: var(--blue); color: var(--cream); }
+    .nav-btn--filled { background: var(--blue); color: var(--cream); }
+    .nav-btn--filled:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+
+    /* Mobile nav toggle */
+    .nav-toggle {
+      display: none; flex-direction: column; gap: 4px;
+      cursor: pointer; padding: 4px; margin-left: auto;
+      background: transparent; border: none;
+    }
+    .nav-toggle span { display: block; width: 20px; height: 2px; background: var(--ink); }
+
+    @media (max-width: 640px) {
+      .nav-toggle { display: flex; }
+      .site-nav {
+        display: none; position: absolute; top: 56px; left: 0; right: 0;
+        background: var(--surface); border-bottom: 2px solid var(--blue);
+        flex-direction: column; align-items: flex-start; padding: 0.75rem 1.5rem; gap: 0.25rem;
+      }
+      .site-nav.open { display: flex; }
+      .nav-divider { display: none; }
+      .nav-link, .nav-btn { width: 100%; }
+    }
+
+    /* ─── HTMX indicator ────────────────────────────────── */
+    #htmx-indicator {
+      display: none; font-size: 0.68rem; color: var(--ink-muted);
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .htmx-request #htmx-indicator { display: inline; }
+
+    /* ─── HERO / PAGE HEADER ────────────────────────────── */
+    .page-hero { text-align: center; padding: 3rem 1.5rem 1.75rem; }
+    .page-hero__ornrow {
+      font-size: 1rem; letter-spacing: 0.35em;
+      color: var(--blue); opacity: 0.35; margin-bottom: 0.7rem; user-select: none;
+    }
+    .page-hero__title {
+      font-family: 'Playfair Display', serif;
+      font-weight: 900; font-style: italic;
+      font-size: clamp(2rem, 6vw, 3.4rem); color: var(--blue);
+      line-height: 1.05; letter-spacing: -0.02em; margin-bottom: 0.85rem;
+    }
+    .page-hero__sub {
+      font-size: 0.85rem; color: var(--ink-muted);
+      line-height: 1.75; max-width: 420px; margin: 0 auto 0.5rem;
+    }
+
+    /* ─── MAIN CONTENT WRAPPER ──────────────────────────── */
+    .content-wrap { max-width: 800px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+
+    /* ─── SECTION DIVIDER ───────────────────────────────── */
+    .section-rule {
+      display: flex; align-items: center; gap: 0.75rem;
+      margin: 1.5rem 0 1rem; color: var(--blue); opacity: 0.4;
+      font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; user-select: none;
+    }
+    .section-rule::before, .section-rule::after { content: ''; flex: 1; border-top: 1px solid currentColor; }
+
+    /* ─── CARDS / EVENT ROWS ────────────────────────────── */
+    .event-list { display: flex; flex-direction: column; gap: 0.45rem; }
+
+    .card {
+      display: block; background: rgba(255,255,255,0.6);
+      border: 1.5px solid var(--border-light);
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+      text-decoration: none;
+    }
+    .card:hover {
+      border-color: var(--blue); background: rgba(255,255,255,0.9);
+      box-shadow: 3px 3px 0 var(--blue);
+    }
+
+    .event-row { display: flex; align-items: stretch; }
+    .event-row__body { flex: 1; padding: 0.85rem 1rem; min-width: 0; }
+
+    .event-title {
+      font-family: 'Playfair Display', serif;
+      font-weight: 700; font-size: 1rem; color: var(--ink);
+      line-height: 1.25; margin-bottom: 0.45rem;
+    }
+    .event-meta {
+      font-size: 0.73rem; color: var(--ink-muted);
+      display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem;
+    }
+    .event-meta--venue { color: var(--blue); }
+    .event-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; margin-top: 0.65rem; }
+
+    .event-row__thumb {
+      flex-shrink: 0; width: 110px; overflow: hidden;
+      border-left: 1.5px solid var(--border-light);
+    }
+    .event-row__thumb-inner {
+      width: 100%; height: 100%; min-height: 90px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .event-row__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    @media (max-width: 480px) { .event-row__thumb { width: 80px; } }
+
+    /* ─── CATEGORY BADGES ───────────────────────────────── */
+    .badge {
+      display: inline-block; font-size: 0.62rem; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0.18rem 0.5rem; border: 1.5px solid currentColor;
+    }
+    .badge--performance  { color: var(--c-perf);   background: #FFF0F3; }
+    .badge--workshop     { color: var(--c-ws);     background: #EEF3FF; }
+    .badge--wip,
+    .badge--work_in_progress { color: var(--c-wip);    background: #F6EEFF; }
+    .badge--open-practice,
+    .badge--open_practice    { color: var(--c-op);     background: #EEFBF3; }
+    .badge--social       { color: var(--c-social); background: #FFF5EE; }
+    .badge--other        { color: var(--ink-muted); background: var(--surface-2); border-color: var(--border); }
+    .badge--free         { color: var(--c-op); background: #EEFBF3; border-color: var(--c-op); }
+
+    /* ─── STATUS BADGES ─────────────────────────────────── */
+    .status--pending  { color: #926C00; background: #FFF8E1; border-color: #926C00; }
+    .status--approved { color: var(--c-op); background: #EEFBF3; border-color: var(--c-op); }
+    .status--rejected { color: var(--c-perf); background: #FFF0F3; border-color: var(--c-perf); }
+    .badge--moderator { color: var(--c-wip); background: #F6EEFF; border-color: var(--c-wip); }
+    .badge--approve-action { color: var(--c-op); border-color: var(--c-op); background: transparent; }
+    .badge--approve-action:hover { background: #EEFBF3; }
+    .badge--revoke-action { color: #926C00; border-color: #926C00; background: transparent; }
+    .badge--revoke-action:hover { background: #FFF8E1; }
+
+    /* ─── FORM ELEMENTS ─────────────────────────────────── */
+    .form-label {
+      display: block; font-size: 0.68rem; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 0.3rem;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; background: transparent; border: none;
+      border-bottom: 1.5px solid var(--border); padding: 0.5rem 0;
+      font-family: 'Instrument Sans', sans-serif; font-size: 0.9rem;
+      color: var(--ink); transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none; border-bottom-color: var(--blue);
+    }
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--cream-dim); }
+    .form-textarea { resize: vertical; min-height: 120px; }
+
+    .form-check { display: flex; align-items: center; gap: 0.6rem; cursor: pointer; }
+    .form-check input[type="checkbox"] {
+      appearance: none; width: 0.9rem; height: 0.9rem; border: 1.5px solid var(--border);
+      position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.15s;
+    }
+    .form-check input[type="checkbox"]:checked { background: var(--blue); border-color: var(--blue); }
+    .form-check input[type="checkbox"]:checked::after {
+      content: '✓'; position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.6rem; color: var(--cream); font-weight: 700;
+    }
+    .form-field-error { font-size: 0.7rem; color: var(--c-perf); margin-top: 0.3rem; }
+    .form-help { font-size: 0.7rem; color: var(--ink-muted); margin-top: 0.3rem; }
+    .form-required { color: var(--c-perf); }
+
+    /* ─── BUTTONS ───────────────────────────────────────── */
+    .btn {
+      display: inline-block; font-family: 'Instrument Sans', sans-serif;
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0.55rem 1.3rem; border: 1.5px solid var(--blue); color: var(--blue);
+      cursor: pointer; transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+      background: transparent; white-space: nowrap;
+    }
+    .btn:hover { background: var(--blue); color: var(--cream); box-shadow: 3px 3px 0 var(--blue-dark); }
+    .btn--primary { background: var(--blue); color: var(--cream); }
+    .btn--primary:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+    .btn--ghost { border-color: var(--border); color: var(--ink-muted); }
+    .btn--ghost:hover { border-color: var(--ink-muted); color: var(--ink); background: transparent; box-shadow: none; }
+    .btn--danger { border-color: var(--c-perf); color: var(--c-perf); }
+    .btn--danger:hover { background: var(--c-perf); color: #fff; box-shadow: none; }
+    .btn--sm { font-size: 0.65rem; padding: 0.3rem 0.75rem; }
+    .btn--approve { border-color: var(--c-op); color: var(--c-op); }
+    .btn--approve:hover { background: var(--c-op); color: #fff; box-shadow: none; }
+
+    /* ─── MESSAGES / ALERTS ─────────────────────────────── */
+    .alert { font-size: 0.78rem; padding: 0.7rem 1rem; border-left: 3px solid; margin-bottom: 1rem; }
+    .alert--info    { border-color: var(--blue);   background: #EEF0FF; color: var(--blue-deep); }
+    .alert--success { border-color: var(--c-op);   background: #EEFBF3; color: #0D5228; }
+    .alert--warning { border-color: #926C00;        background: #FFF8E1; color: #6B4F00; }
+    .alert--error   { border-color: var(--c-perf); background: #FFF0F3; color: #8B0020; }
+
+    /* ─── RULE ──────────────────────────────────────────── */
+    .rule { border: none; border-top: 1px solid var(--border-light); margin: 2rem 0; }
+
+    /* ─── PROSE (Markdown content) ──────────────────────── */
+    .prose-content { font-size: 0.9rem; line-height: 1.8; color: var(--ink); }
+    .prose-content p       { margin-bottom: 1em; }
+    .prose-content a       { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+    .prose-content h2      { font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: 700; margin: 1.5em 0 0.5em; }
+    .prose-content h3      { font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 700; margin: 1.25em 0 0.4em; }
+    .prose-content h4      { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin: 1em 0 0.4em; }
+    .prose-content ul, .prose-content ol { padding-left: 1.4em; margin-bottom: 1em; }
+    .prose-content li      { margin-bottom: 0.3em; }
+    .prose-content blockquote { border-left: 3px solid var(--blue); padding: 0.5em 1em; color: var(--ink-muted); font-style: italic; margin: 1em 0; }
+    .prose-content code    { font-size: 0.82em; background: var(--surface-2); padding: 0.1em 0.35em; border: 1px solid var(--border-light); }
+    .prose-content pre     { background: var(--surface-2); border: 1px solid var(--border-light); padding: 1em; overflow-x: auto; margin: 1em 0; }
+    .prose-content pre code { background: none; border: none; padding: 0; }
+    .prose-content strong  { font-weight: 700; }
+    .prose-content em      { font-style: italic; }
+
+    /* ─── PAGE TABS ─────────────────────────────────────── */
+    .page-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border-light); margin-bottom: 1.25rem; }
+    .page-tab {
+      font-size: 0.73rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0.5rem 1.2rem; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      color: var(--ink-muted); cursor: pointer; background: none;
+      border-top: none; border-left: none; border-right: none; transition: color 0.15s;
+      text-decoration: none; display: inline-block;
+    }
+    .page-tab:hover { color: var(--blue); }
+    .page-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+    /* ─── FILTER PANEL ──────────────────────────────────── */
+    .filter-panel {
+      background: rgba(255,255,255,0.5); border: 1.5px solid var(--border-light);
+      padding: 0.85rem 1.1rem; margin-bottom: 1.25rem;
+      display: flex; flex-wrap: wrap; gap: 0.85rem 2rem; align-items: flex-end;
+    }
+    .filter-panel__group { display: flex; flex-direction: column; gap: 0.45rem; }
+    .filter-panel__group-label {
+      font-size: 0.64rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted);
+    }
+    .filter-checkboxes { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .filter-chip {
+      font-size: 0.64rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 0.22rem 0.6rem; border: 1.5px solid var(--border); color: var(--ink-muted);
+      cursor: pointer; transition: all 0.12s; background: transparent;
+    }
+    .filter-chip:hover { border-color: var(--blue); color: var(--blue); }
+    .filter-chip.active { border-color: var(--blue); color: var(--cream); background: var(--blue); }
+
+    /* ─── FOOTER ────────────────────────────────────────── */
+    .site-footer {
+      border-top: 2px solid var(--blue); background: var(--blue);
+      color: var(--cream-dim); padding: 1.25rem 1.5rem;
+      font-size: 0.68rem; letter-spacing: 0.04em;
+    }
+    .site-footer__inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem 2rem;
+    }
+    .site-footer a { color: var(--cream-dim); }
+    .site-footer a:hover { color: var(--cream); }
+
+    /* ─── Page transition ───────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    main { animation: fadeUp 0.3s ease both; }
+
+    /* ─── Moderation stats ──────────────────────────────── */
+    .stat-card {
+      background: rgba(255,255,255,0.6); border: 1.5px solid var(--border-light);
+      padding: 1.25rem 1.5rem;
+    }
+    .stat-card__number {
+      font-family: 'Playfair Display', serif; font-weight: 900;
+      font-size: 2rem; color: var(--blue); line-height: 1;
+    }
+    .stat-card__label {
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--ink-muted); margin-top: 0.4rem;
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-white min-h-screen flex flex-col text-gray-900" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-    <nav class="border-b border-gray-300">
-        <div class="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between">
-            <a href="/" class="text-sm font-bold tracking-tight text-black">pleskal</a>
-            <div class="flex items-center gap-4 text-sm">
-                {% if user.is_authenticated %}
-                    <a href="{% url 'event_create' %}" class="text-gray-700 hover:text-black">Submit</a>
-                    <a href="{% url 'my_events' %}" class="text-gray-500 hover:text-black">My events</a>
-                    {% if user.is_moderator %}
-                        <a href="{% url 'moderation_dashboard' %}" class="text-gray-500 hover:text-black">Moderation</a>
-                    {% endif %}
-                    <a href="{% url 'account_profile' %}" class="text-gray-400 hover:text-black">{{ user.username }}</a>
-                    <form method="post" action="{% url 'logout' %}" class="inline">
-                        {% csrf_token %}
-                        <button type="submit" class="text-gray-500 hover:text-black">Log out</button>
-                    </form>
-                {% else %}
-                    <a href="{% url 'login' %}" class="text-gray-600 hover:text-black">Log in</a>
-                    <a href="{% url 'register' %}" class="text-black border border-black px-2 py-0.5 text-xs hover:bg-black hover:text-white">Register</a>
-                {% endif %}
-            </div>
-        </div>
-    </nav>
 
-    <main class="flex-1 max-w-4xl mx-auto px-4 py-4 w-full">
-        {% include "partials/messages.html" %}
-        {% block content %}{% endblock %}
-    </main>
+<body
+  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+  style="display:flex;flex-direction:column;min-height:100vh;"
+>
 
-    <footer class="border-t border-gray-200 mt-auto">
-        <div class="max-w-4xl mx-auto px-4 py-3 text-xs text-gray-400 flex justify-between">
-            <span>pleskal</span>
-            <div class="flex gap-4">
-                <a href="{% url 'event_ical_feed' %}" class="hover:text-gray-700">iCal</a>
-                <a href="{% url 'event_rss_feed' %}" class="hover:text-gray-700">RSS</a>
-                <a href="{% url 'privacy' %}" class="hover:text-gray-700">Privacy</a>
-            </div>
+  {# ── SITE HEADER ──────────────────────────────────────── #}
+  <header class="site-header">
+    <div class="site-header__inner">
+
+      <a href="{% url 'event_list' %}" class="site-logo">
+        <span class="logo-star">✦</span>pleskal<span class="logo-star">✦</span>
+      </a>
+
+      <button class="nav-toggle" aria-label="Toggle menu"
+              onclick="this.closest('.site-header').querySelector('.site-nav').classList.toggle('open')">
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav class="site-nav" role="navigation" aria-label="Main">
+        <a href="{% url 'event_list' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'event_list' %}nav-link--active{% endif %}">
+          Events
+        </a>
+        {% if user.is_authenticated %}
+          <a href="{% url 'my_events' %}"
+             class="nav-link {% if request.resolver_match.url_name == 'my_events' %}nav-link--active{% endif %}">
+            My Events
+          </a>
+          {% if user.is_moderator %}
+            <a href="{% url 'moderation_dashboard' %}"
+               class="nav-link {% if 'moderation' in request.resolver_match.url_name %}nav-link--active{% endif %}">
+              Moderation
+            </a>
+          {% endif %}
+        {% endif %}
+
+        <span class="nav-divider"></span>
+        <span id="htmx-indicator">loading…</span>
+
+        {% if user.is_authenticated %}
+          <a href="{% url 'event_create' %}" class="nav-btn nav-btn--filled">✦ Submit event</a>
+          <form method="post" action="{% url 'logout' %}" style="display:inline-block;">
+            {% csrf_token %}
+            <button type="submit" class="nav-btn">Log out</button>
+          </form>
+        {% else %}
+          <a href="{% url 'login' %}" class="nav-btn">Log in</a>
+          <a href="{% url 'register' %}" class="nav-btn nav-btn--filled">Register</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  {# ── DJANGO MESSAGES ──────────────────────────────────── #}
+  {% if messages %}
+    <div class="content-wrap" style="padding-top:1rem;padding-bottom:0;">
+      {% for message in messages %}
+        <div class="alert alert--{{ message.tags|default:'info' }}" role="alert">
+          ✦ {{ message }}
         </div>
-    </footer>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── MAIN CONTENT ─────────────────────────────────────── #}
+  <main style="flex:1;">
+    {% block content %}{% endblock %}
+  </main>
+
+  {# ── SITE FOOTER ──────────────────────────────────────── #}
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <span style="color:var(--star);">✦</span>
+      <span>© {% now "Y" %} pleskal</span>
+      <span style="opacity:0.4;">·</span>
+      <a href="{% url 'event_ical_feed' %}">iCal</a>
+      <span style="opacity:0.4;">·</span>
+      <a href="{% url 'event_rss_feed' %}">RSS</a>
+      <span style="opacity:0.4;">·</span>
+      <a href="{% url 'privacy' %}">Privacy</a>
+      {% if user.is_authenticated %}
+        <span style="opacity:0.4;">·</span>
+        <a href="{% url 'account_delete' %}">Delete account</a>
+      {% endif %}
+    </div>
+  </footer>
+
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

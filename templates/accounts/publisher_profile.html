@@ -1,49 +1,44 @@
 {% extends "base.html" %}
 
-{% block title %}{{ publisher.username }} – CPH Dance{% endblock %}
+{% block title %}{{ publisher.username }} – pleskal{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto">
+<div class="page-hero">
+    <div class="page-hero__ornrow">✦</div>
+    <h1 class="page-hero__title" style="font-size:2rem;">{{ publisher.username }}</h1>
+    {% if publisher.bio %}
+        <p class="page-hero__sub">{{ publisher.bio }}</p>
+    {% endif %}
+    {% if publisher.website %}
+        <a href="{{ publisher.website }}"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="link-accent"
+           style="font-size:0.78rem;display:inline-block;margin-top:0.5rem;">
+            {{ publisher.website }} →
+        </a>
+    {% endif %}
+</div>
 
-    {# Publisher info header #}
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-900 mb-1">{{ publisher.username }}</h1>
-        {% if publisher.bio %}
-            <p class="text-gray-600 mt-2 max-w-prose">{{ publisher.bio }}</p>
-        {% endif %}
-        {% if publisher.website %}
-            <a href="{{ publisher.website }}"
-               target="_blank"
-               rel="noopener noreferrer"
-               class="inline-block mt-2 text-sm text-indigo-600 hover:text-indigo-800">
-                🔗 {{ publisher.website }}
-            </a>
-        {% endif %}
-    </div>
+<div class="content-wrap">
 
     {# Upcoming / Past toggle #}
-    <div class="flex items-center gap-1 mb-6 border-b border-gray-200 pb-3">
-        <a href="?past=0"
-           class="text-sm px-3 py-1.5 rounded {% if not show_past %}bg-indigo-600 text-white{% else %}text-gray-600 hover:bg-gray-100{% endif %}">
-            Upcoming
-        </a>
-        <a href="?past=1"
-           class="text-sm px-3 py-1.5 rounded {% if show_past %}bg-indigo-600 text-white{% else %}text-gray-600 hover:bg-gray-100{% endif %}">
-            Past
-        </a>
+    <div class="page-tabs" style="margin-bottom:1.5rem;">
+        <a href="?past=0" class="page-tab {% if not show_past %}active{% endif %}">Upcoming</a>
+        <a href="?past=1" class="page-tab {% if show_past %}active{% endif %}">Past</a>
     </div>
 
     {# Event list #}
     {% if events %}
-        <div class="space-y-4">
+        <div class="event-list">
             {% for event in events %}
                 {% include "events/partials/event_card.html" with event=event %}
             {% endfor %}
         </div>
     {% else %}
-        <div class="text-center py-16 text-gray-400">
-            <p class="text-lg font-medium">No {% if show_past %}past{% else %}upcoming{% endif %} events.</p>
-        </div>
+        <p style="font-size:0.85rem;color:var(--ink-muted);padding:2rem 0;text-align:center;">
+            No {% if show_past %}past{% else %}upcoming{% endif %} events.
+        </p>
     {% endif %}
 
 </div>

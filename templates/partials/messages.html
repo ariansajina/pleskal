@@ -1,13 +1,8 @@
 {% if messages %}
-<div class="space-y-1 mb-4">
+<div style="margin-bottom:1rem;">
     {% for message in messages %}
-    <div class="px-3 py-2 border text-xs
-        {% if message.tags == 'success' %}border-gray-400 text-gray-700
-        {% elif message.tags == 'error' %}border-gray-600 text-gray-800
-        {% elif message.tags == 'warning' %}border-gray-400 text-gray-700
-        {% else %}border-gray-300 text-gray-600
-        {% endif %}">
-        {{ message }}
+    <div class="alert alert--{{ message.tags|default:'info' }}" role="alert">
+        ✦ {{ message }}
     </div>
     {% endfor %}
 </div>

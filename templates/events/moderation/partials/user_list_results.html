@@ -1,5 +1,5 @@
 {% if users %}
-    <div class="border border-gray-200 divide-y divide-gray-100">
+    <div style="border:1.5px solid var(--border-light);">
         {% for u in users %}
             {% include "events/moderation/partials/user_row.html" with u=u %}
         {% endfor %}
@@ -7,5 +7,5 @@
 
     {% include "events/moderation/partials/pagination.html" with base_url="moderation_users" target="#mod-user-list" %}
 {% else %}
-    <p class="text-sm text-gray-400 py-8">No users found.</p>
+    <p style="font-size:0.78rem;color:var(--ink-muted);padding:2rem 0;text-align:center;">No users found.</p>
 {% endif %}

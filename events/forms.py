@@ -25,10 +25,12 @@ class EventForm(forms.ModelForm):
         ]
         widgets = {
             "start_datetime": forms.DateTimeInput(
-                attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"
+                attrs={"type": "datetime-local", "class": "form-input"},
+                format="%Y-%m-%dT%H:%M",
             ),
             "end_datetime": forms.DateTimeInput(
-                attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"
+                attrs={"type": "datetime-local", "class": "form-input"},
+                format="%Y-%m-%dT%H:%M",
             ),
             "description": MarkdownxWidget(attrs={"rows": 8}),
         }
@@ -36,6 +38,19 @@ class EventForm(forms.ModelForm):
     def __init__(self, *args, creation=True, **kwargs):
         super().__init__(*args, **kwargs)
         self._is_creation = creation
+        # Apply new style CSS classes to remaining fields
+        _text_fields = [
+            "title",
+            "venue_name",
+            "venue_address",
+            "price_note",
+            "source_url",
+        ]
+        for fname in _text_fields:
+            if fname in self.fields:
+                self.fields[fname].widget.attrs.setdefault("class", "form-input")
+        if "category" in self.fields:
+            self.fields["category"].widget.attrs.setdefault("class", "form-select")
         # Make datetime fields input_formats aware of the local format
         self.fields["start_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]
         self.fields["end_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]

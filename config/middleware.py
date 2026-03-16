@@ -1,4 +1,4 @@
-"""Custom middleware for the CPH Dance Calendar."""
+"""Custom middleware for the pleskal."""
 
 
 class ContentSecurityPolicyMiddleware:

@@ -1,27 +1,21 @@
 {% if events %}
     {% regroup events by start_datetime|date:"Y-m-d" as events_by_date %}
 
-    <div class="divide-y divide-gray-200">
+    <div class="event-list">
         {% for date_group in events_by_date %}
-            <div>
-                {# Date anchor #}
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 pt-3 pb-1">
-                    {{ date_group.grouper|date:"l, j F Y" }}
-                </p>
-                {# Events for this date #}
-                {% for event in date_group.list %}
-                    {% include "events/partials/event_card.html" with event=event %}
-                {% endfor %}
-            </div>
+            <div class="section-rule">{{ date_group.grouper|date:"l, j F Y" }}</div>
+            {% for event in date_group.list %}
+                {% include "events/partials/event_card.html" with event=event %}
+            {% endfor %}
         {% endfor %}
     </div>
 
     {# Pagination #}
     {% if page_obj.has_other_pages %}
-        <nav class="mt-6 flex items-center gap-3 text-xs text-gray-500" aria-label="Pagination">
+        <nav class="mt-6" style="display:flex;align-items:center;gap:0.75rem;" aria-label="Pagination">
             {% if page_obj.has_previous %}
                 <a href="?page={{ page_obj.previous_page_number }}"
-                   class="border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                   class="btn btn--ghost btn--sm"
                    hx-get="?page={{ page_obj.previous_page_number }}"
                    hx-target="#event-list"
                    hx-push-url="true">
@@ -29,11 +23,13 @@
                 </a>
             {% endif %}
 
-            <span class="text-gray-400">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            <span style="font-size:0.73rem;color:var(--ink-muted);">
+                {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+            </span>
 
             {% if page_obj.has_next %}
                 <a href="?page={{ page_obj.next_page_number }}"
-                   class="border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                   class="btn btn--ghost btn--sm"
                    hx-get="?page={{ page_obj.next_page_number }}"
                    hx-target="#event-list"
                    hx-push-url="true">
@@ -44,5 +40,7 @@
     {% endif %}
 
 {% else %}
-    <p class="text-sm text-gray-400 py-8">No events found. Try adjusting your filters.</p>
+    <p style="font-size:0.85rem;color:var(--ink-muted);padding:2rem 0;text-align:center;">
+        No events found. Try adjusting your filters.
+    </p>
 {% endif %}

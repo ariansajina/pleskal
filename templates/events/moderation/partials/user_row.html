@@ -1,42 +1,45 @@
-<div id="user-{{ u.pk }}" class="p-3 flex items-start gap-3">
+<div id="user-{{ u.pk }}" style="padding:0.85rem 1rem;display:flex;align-items:flex-start;gap:1rem;border-bottom:1px solid var(--border-light);">
     {# User info #}
-    <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2">
-            <a href="{% url 'publisher_profile' u.username %}" class="text-sm font-medium text-gray-900 hover:text-black">
+    <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.25rem;">
+            <a href="{% url 'publisher_profile' u.username %}"
+               style="font-size:0.88rem;font-weight:600;color:var(--ink);">
                 {{ u.username }}
             </a>
             {% if u.is_moderator %}
-                <span class="text-xs font-medium px-1.5 py-0.5 bg-purple-100 text-purple-700">Moderator</span>
+                <span class="badge badge--moderator">Moderator</span>
             {% endif %}
             {% if u.is_approved %}
-                <span class="text-xs font-medium px-1.5 py-0.5 bg-green-100 text-green-700">Approved</span>
+                <span class="badge status--approved">Approved</span>
             {% else %}
-                <span class="text-xs font-medium px-1.5 py-0.5 bg-yellow-100 text-yellow-700">Pending</span>
+                <span class="badge status--pending">Pending</span>
             {% endif %}
         </div>
-        <p class="text-xs text-gray-500 mt-0.5">
-            {{ u.email }} &middot; Joined {{ u.date_joined|date:"d M Y" }}
-            {% if u.event_count is not None %}&middot; {{ u.event_count }} event{{ u.event_count|pluralize }}{% endif %}
+        <p style="font-size:0.7rem;color:var(--ink-muted);">
+            {{ u.email }} · Joined {{ u.date_joined|date:"j M Y" }}
+            {% if u.event_count is not None %} · {{ u.event_count }} event{{ u.event_count|pluralize }}{% endif %}
         </p>
         {% if u.intro_message %}
-            <p class="text-xs text-gray-600 mt-1 italic">"{{ u.intro_message|truncatewords:30 }}"</p>
+            <p style="font-size:0.7rem;color:var(--ink-muted);margin-top:0.25rem;font-style:italic;">
+                "{{ u.intro_message|truncatewords:30 }}"
+            </p>
         {% endif %}
     </div>
 
     {# Actions #}
-    <div class="flex items-center gap-2 shrink-0">
+    <div style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0;">
         {% if not u.is_approved %}
             <button hx-post="{% url 'moderation_user_approve' u.pk %}"
                     hx-target="#user-{{ u.pk }}"
                     hx-swap="outerHTML"
-                    class="text-xs px-2 py-1 border border-green-300 text-green-700 hover:bg-green-50">
+                    class="btn btn--approve btn--sm">
                 Approve
             </button>
         {% else %}
             <button hx-post="{% url 'moderation_user_revoke' u.pk %}"
                     hx-target="#user-{{ u.pk }}"
                     hx-swap="outerHTML"
-                    class="text-xs px-2 py-1 border border-yellow-300 text-yellow-700 hover:bg-yellow-50">
+                    class="btn btn--ghost btn--sm">
                 Revoke
             </button>
         {% endif %}
@@ -44,7 +47,7 @@
         <button hx-post="{% url 'moderation_user_toggle_moderator' u.pk %}"
                 hx-target="#user-{{ u.pk }}"
                 hx-swap="outerHTML"
-                class="text-xs px-2 py-1 border border-purple-300 text-purple-700 hover:bg-purple-50">
+                class="btn btn--ghost btn--sm" style="border-color:var(--c-wip);color:var(--c-wip);">
             {% if u.is_moderator %}Demote{% else %}Promote{% endif %}
         </button>
     </div>

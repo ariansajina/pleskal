@@ -9,13 +9,17 @@
       hx-get="{% url 'moderation_history' %}"
       hx-target="#mod-history-list"
       hx-push-url="true"
-      hx-trigger="change"
-      class="flex items-center gap-3 mb-4">
-    <select name="status" class="text-xs border border-gray-300 px-2 py-1 bg-white">
-        <option value="">All decisions</option>
-        <option value="approved" {% if selected_status == "approved" %}selected{% endif %}>Approved</option>
-        <option value="rejected" {% if selected_status == "rejected" %}selected{% endif %}>Rejected</option>
-    </select>
+      hx-trigger="change">
+    <div class="filter-panel" style="margin-bottom:1.25rem;">
+        <div class="filter-panel__group">
+            <span class="filter-panel__group-label">Decision</span>
+            <select name="status" class="form-select" style="width:auto;">
+                <option value="">All decisions</option>
+                <option value="approved" {% if selected_status == "approved" %}selected{% endif %}>Approved</option>
+                <option value="rejected" {% if selected_status == "rejected" %}selected{% endif %}>Rejected</option>
+            </select>
+        </div>
+    </div>
 </form>
 
 <div id="mod-history-list">

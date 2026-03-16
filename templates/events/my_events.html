@@ -1,69 +1,58 @@
 {% extends "base.html" %}
 
-{% block title %}My Events – CPH Dance{% endblock %}
+{% block title %}My Events – pleskal{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold text-gray-900">My Events</h1>
-        <a href="{% url 'event_create' %}"
-           class="bg-indigo-600 text-white text-sm px-4 py-2 rounded hover:bg-indigo-700">
-            + Submit event
-        </a>
+<div class="content-wrap">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1.5rem;">
+        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:1.8rem;color:var(--blue);">
+            My Events
+        </h1>
+        <a href="{% url 'event_create' %}" class="btn btn--primary btn--sm">✦ Submit event</a>
     </div>
 
     {% if events %}
-        <div class="space-y-3">
+        <div class="event-list">
             {% for event in events %}
-                <div class="bg-white border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4">
-                    <div class="flex-1 min-w-0">
-                        {# Status badge #}
-                        <span class="inline-block text-xs font-medium px-2 py-0.5 rounded mr-2
-                            {% if event.status == 'approved' %}bg-green-100 text-green-700
-                            {% elif event.status == 'pending' %}bg-yellow-100 text-yellow-700
-                            {% else %}bg-red-100 text-red-700{% endif %}">
-                            {{ event.get_status_display }}
-                        </span>
-                        <span class="text-xs text-gray-400">{{ event.get_category_display }}</span>
+                <div class="card" style="display:block;">
+                    <div class="event-row">
+                        <div class="event-row__body">
+                            <div class="event-tags" style="margin-bottom:0.5rem;margin-top:0;">
+                                <span class="badge status--{{ event.status }}">{{ event.get_status_display }}</span>
+                                <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
+                            </div>
 
-                        <h2 class="text-base font-semibold text-gray-900 mt-1 truncate">
-                            <a href="{% url 'event_detail' event.slug %}"
-                               class="hover:text-indigo-600">
-                                {{ event.title }}
-                            </a>
-                        </h2>
+                            <div class="event-title">
+                                <a href="{% url 'event_detail' event.slug %}" style="color:var(--ink);">
+                                    {{ event.title }}
+                                </a>
+                            </div>
 
-                        <p class="text-sm text-gray-500 mt-0.5">
-                            {{ event.start_datetime|date:"d M Y · H:i" }}
-                            · {{ event.venue_name }}
-                        </p>
+                            <div class="event-meta" style="margin-top:0.25rem;">
+                                <span>{{ event.start_datetime|date:"j M Y · H:i" }}</span>
+                                <span style="opacity:0.4;">·</span>
+                                <span class="event-meta--venue">{{ event.venue_name }}</span>
+                            </div>
 
-                        {% if event.status == 'rejected' and event.rejection_note %}
-                            <p class="text-xs text-red-600 mt-1">
-                                Rejection reason: {{ event.rejection_note }}
-                            </p>
-                        {% endif %}
-                    </div>
+                            {% if event.status == 'rejected' and event.rejection_note %}
+                                <p style="font-size:0.73rem;color:var(--c-perf);margin-top:0.4rem;">
+                                    Rejection reason: {{ event.rejection_note }}
+                                </p>
+                            {% endif %}
+                        </div>
 
-                    <div class="flex gap-2 shrink-0">
-                        <a href="{% url 'event_edit' event.slug %}"
-                           class="text-sm px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">
-                            Edit
-                        </a>
-                        <a href="{% url 'event_delete' event.slug %}"
-                           class="text-sm px-3 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">
-                            Delete
-                        </a>
+                        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.85rem 1rem;flex-shrink:0;">
+                            <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
+                            <a href="{% url 'event_delete' event.slug %}" class="btn btn--danger btn--sm">Delete</a>
+                        </div>
                     </div>
                 </div>
             {% endfor %}
         </div>
     {% else %}
-        <div class="text-center py-16 text-gray-400">
-            <p class="text-lg font-medium">No events yet.</p>
-            <p class="text-sm mt-1">
-                <a href="{% url 'event_create' %}" class="text-indigo-600 hover:underline">Submit your first event</a>
-            </p>
+        <div style="text-align:center;padding:4rem 0;color:var(--ink-muted);">
+            <p style="font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:0.75rem;">No events yet.</p>
+            <a href="{% url 'event_create' %}" class="link-accent">Submit your first event →</a>
         </div>
     {% endif %}
 </div>

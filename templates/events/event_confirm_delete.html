@@ -1,28 +1,25 @@
 {% extends "base.html" %}
 
-{% block title %}Delete Event – CPH Dance{% endblock %}
+{% block title %}Delete Event – pleskal{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto">
-    <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-        <h1 class="text-xl font-bold text-gray-900 mb-2">Delete event?</h1>
-        <p class="text-gray-600 mb-6">
+<div class="content-wrap">
+    <div style="max-width:480px;">
+        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:1.8rem;color:var(--blue);margin-bottom:1.5rem;">
+            Delete event?
+        </h1>
+
+        <div class="alert alert--error" style="margin-bottom:1.5rem;">
             Are you sure you want to permanently delete
             <strong>{{ object.title }}</strong>?
             This cannot be undone.
-        </p>
+        </div>
 
         <form method="post">
             {% csrf_token %}
-            <div class="flex gap-3">
-                <button type="submit"
-                        class="bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700 font-medium">
-                    Yes, delete
-                </button>
-                <a href="{% url 'event_detail' object.slug %}"
-                   class="px-5 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-50">
-                    Cancel
-                </a>
+            <div style="display:flex;gap:0.75rem;">
+                <button type="submit" class="btn btn--danger">Yes, delete</button>
+                <a href="{% url 'event_detail' object.slug %}" class="btn btn--ghost">Cancel</a>
             </div>
         </form>
     </div>
