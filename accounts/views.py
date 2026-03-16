@@ -60,6 +60,13 @@ class AccountDeleteView(LoginRequiredMixin, View):
 
 
 class AccountProfileView(LoginRequiredMixin, View):
+    """Redirects to the user's public profile page."""
+
+    def get(self, request):
+        return redirect("publisher_profile", username=request.user.username)
+
+
+class EditProfileView(LoginRequiredMixin, View):
     def get(self, request):
         form = ProfileForm(instance=request.user)
         return render(request, "accounts/account_profile.html", {"form": form})
@@ -69,7 +76,7 @@ class AccountProfileView(LoginRequiredMixin, View):
         if form.is_valid():
             form.save()
             messages.success(request, "Profile updated.")
-            return redirect("account_profile")
+            return redirect("publisher_profile", username=request.user.username)
         return render(request, "accounts/account_profile.html", {"form": form})
 
 
@@ -91,7 +98,7 @@ class ChangePasswordView(LoginRequiredMixin, View):
             user = form.save()
             update_session_auth_hash(request, user)
             messages.success(request, "Password changed successfully.")
-            return redirect("account_profile")
+            return redirect("publisher_profile", username=request.user.username)
         return render(request, "accounts/change_password.html", {"form": form})
 
 
@@ -118,9 +125,11 @@ class PublisherProfileView(View):
         from events.models import Event, EventStatus
 
         publisher = get_object_or_404(User, username=username)
-        qs = Event.objects.filter(
-            submitted_by=publisher, status=EventStatus.APPROVED
-        ).select_related("submitted_by")
+        is_own_profile = request.user.is_authenticated and request.user == publisher
+
+        qs = Event.objects.filter(submitted_by=publisher).select_related("submitted_by")
+        if not is_own_profile:
+            qs = qs.filter(status=EventStatus.APPROVED)
 
         show_past = request.GET.get("past") == "1"
         now = timezone.now()
@@ -136,5 +145,6 @@ class PublisherProfileView(View):
                 "publisher": publisher,
                 "events": qs,
                 "show_past": show_past,
+                "is_own_profile": is_own_profile,
             },
         )

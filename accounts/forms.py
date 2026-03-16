@@ -70,7 +70,7 @@ class ProfileForm(forms.ModelForm):
         }
         help_texts = {
             "display_name": "Optional. Shown instead of your username on events. Can include spaces and special characters.",
-            "bio": "Up to 500 characters. Displayed on your public profile.",
+            "bio": "Up to 500 characters. Markdown supported. Displayed on your public profile.",
             "website": "Optional link displayed on your public profile.",
             "email": "Used for password resets.",
         }

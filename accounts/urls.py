@@ -5,6 +5,7 @@ from .views import (
     AccountDeleteView,
     AccountProfileView,
     ChangePasswordView,
+    EditProfileView,
     PublisherProfileView,
     RateLimitedLoginView,
     RateLimitedPasswordResetView,
@@ -74,6 +75,11 @@ urlpatterns = [
         "profile/",
         AccountProfileView.as_view(),
         name="account_profile",
+    ),
+    path(
+        "profile/edit/",
+        EditProfileView.as_view(),
+        name="edit_profile",
     ),
     path(
         "publishers/<str:username>/",

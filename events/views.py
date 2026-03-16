@@ -5,7 +5,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, UpdateView, View
 from django.views.generic.detail import DetailView
 
 from config.ratelimit import UserRateLimitMixin
@@ -206,15 +206,9 @@ class EventDetailView(DetailView):
 # ---------------------------------------------------------------------------
 
 
-class MyEventsView(LoginRequiredMixin, ListView):
-    model = Event
-    template_name = "events/my_events.html"
-    context_object_name = "events"
-
-    def get_queryset(self):
-        return Event.objects.filter(submitted_by=self.request.user).order_by(
-            "-created_at"
-        )
+class MyEventsView(LoginRequiredMixin, View):
+    def get(self, request):
+        return redirect("publisher_profile", username=request.user.username)
 
 
 class EventUpdateView(LoginRequiredMixin, EventOwnerOrModeratorMixin, UpdateView):

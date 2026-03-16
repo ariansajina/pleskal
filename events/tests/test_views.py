@@ -366,7 +366,7 @@ class TestEventDetailView:
 @pytest.mark.django_db
 class TestMyEventsView:
     def test_unauthenticated_redirects(self, client):
-        resp = client.get(reverse("my_events"))
+        resp = client.get("/my-events/")
         assert resp.status_code == 302
 
     def test_owner_sees_their_events(self, client):
@@ -374,7 +374,9 @@ class TestMyEventsView:
         event = EventFactory.create(submitted_by=user)
         other = EventFactory.create()
         client.force_login(user)
-        resp = client.get(reverse("my_events"))
+        resp = client.get(
+            reverse("publisher_profile", kwargs={"username": user.username})
+        )
         assert resp.status_code == 200
         assert str(event.title).encode() in resp.content
         assert str(other.title).encode() not in resp.content

@@ -396,10 +396,6 @@
           Events
         </a>
         {% if user.is_authenticated %}
-          <a href="{% url 'my_events' %}"
-             class="nav-link {% if request.resolver_match.url_name == 'my_events' %}nav-link--active{% endif %}">
-            My Events
-          </a>
           {% if user.is_moderator %}
             <a href="{% url 'moderation_dashboard' %}"
                class="nav-link {% if 'moderation' in request.resolver_match.url_name %}nav-link--active{% endif %}">
@@ -413,6 +409,10 @@
 
         {% if user.is_authenticated %}
           <a href="{% url 'event_create' %}" class="nav-btn nav-btn--filled">✦ Submit event</a>
+          <a href="{% url 'account_profile' %}"
+             class="nav-link {% if request.resolver_match.url_name == 'publisher_profile' and request.resolver_match.kwargs.username == user.username %}nav-link--active{% endif %}">
+            Profile
+          </a>
           <form method="post" action="{% url 'logout' %}" style="display:inline-block;">
             {% csrf_token %}
             <button type="submit" class="nav-btn">Log out</button>
