@@ -23,10 +23,7 @@
             {% if event.submitted_by %}
                 <div class="event-meta" style="margin-top:0.3rem;">
                     <span style="opacity:0.5;">by</span>
-                    <a href="{% url 'publisher_profile' event.submitted_by.username %}"
-                       style="color:var(--blue);" onclick="event.stopPropagation();">
-                        {{ event.submitted_by.username }}
-                    </a>
+                    <span style="color:var(--blue);font-weight:500;">{{ event.submitted_by.username }}</span>
                 </div>
             {% endif %}
         </div>

@@ -2,6 +2,29 @@
 
 import pytest
 
+from config import settings as app_settings
+
+
+class TestStorageSettingsModule:
+    def test_default_storage_key_always_defined(self):
+        """STORAGES must always include 'default' so media uploads work locally.
+
+        The conftest autouse fixture overrides django.conf.settings.STORAGES for
+        tests, which masks a missing 'default' key in the actual settings module.
+        This test reads config.settings directly to catch that misconfiguration.
+        """
+        assert "default" in app_settings.STORAGES, (
+            "STORAGES is missing the 'default' key — file uploads raise "
+            "InvalidStorageError at runtime"
+        )
+
+    def test_default_storage_backend_is_filesystem_without_r2(self):
+        """Without AWS_STORAGE_BUCKET_NAME, default storage must be FileSystemStorage."""
+        assert (
+            app_settings.STORAGES["default"]["BACKEND"]
+            == "django.core.files.storage.FileSystemStorage"
+        )
+
 
 @pytest.mark.django_db
 class TestStorageConfiguration:

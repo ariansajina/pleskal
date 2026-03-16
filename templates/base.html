@@ -332,7 +332,7 @@
       cursor: pointer; transition: all 0.12s; background: transparent;
     }
     .filter-chip:hover { border-color: var(--blue); color: var(--blue); }
-    .filter-chip.active { border-color: var(--blue); color: var(--cream); background: var(--blue); }
+    input[type="checkbox"]:checked + .filter-chip { border-color: var(--blue); color: var(--cream); background: var(--blue); }
 
     /* ─── FOOTER ────────────────────────────────────────── */
     .site-footer {

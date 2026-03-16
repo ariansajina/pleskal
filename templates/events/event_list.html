@@ -55,9 +55,8 @@
                         <label>
                             <input type="checkbox" name="category" value="{{ value }}"
                                    {% if value in selected_categories %}checked{% endif %}
-                                   style="display:none;"
-                                   onchange="this.closest('label').querySelector('.filter-chip').classList.toggle('active', this.checked)">
-                            <span class="filter-chip {% if value in selected_categories %}active{% endif %}">{{ label }}</span>
+                                   style="display:none;">
+                            <span class="filter-chip">{{ label }}</span>
                         </label>
                     {% endfor %}
                 </div>
@@ -73,13 +72,12 @@
                 </div>
             </div>
 
-            {# Free + Apply #}
+            {# Free only #}
             <div class="filter-panel__group" style="justify-content:flex-end;">
                 <label class="form-check">
                     <input type="checkbox" name="is_free" value="1" {% if is_free %}checked{% endif %}>
                     <span style="font-size:0.78rem;">Free only</span>
                 </label>
-                <button type="submit" class="btn btn--sm" style="margin-top:0.5rem;">Apply</button>
             </div>
 
         </div>

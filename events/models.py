@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
 class EventCategory(models.TextChoices):
     PERFORMANCE = "performance", "Performance"
+    TALK = "talk", "Talk"
     WORKSHOP = "workshop", "Workshop"
-    WORK_IN_PROGRESS = "work_in_progress", "Work in Progress"
     OPEN_PRACTICE = "open_practice", "Open Practice"
     SOCIAL = "social", "Social"
     OTHER = "other", "Other"

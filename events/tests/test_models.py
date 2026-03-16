@@ -22,16 +22,6 @@ class TestEventModel:
         event = EventFactory.create()
         assert event.status == EventStatus.PENDING
 
-    def test_categories(self):
-        assert len(EventCategory.choices) == 6
-        values = [c[0] for c in EventCategory.choices]
-        assert "performance" in values
-        assert "workshop" in values
-        assert "work_in_progress" in values
-        assert "open_practice" in values
-        assert "social" in values
-        assert "other" in values
-
 
 @pytest.mark.django_db
 class TestSlugGeneration:

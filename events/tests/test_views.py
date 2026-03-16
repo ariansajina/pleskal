@@ -117,6 +117,33 @@ class TestEventCreateView:
         assert event.image  # saved
         assert event.image_thumbnail  # thumbnail generated
 
+    def test_image_url_rendered_on_detail_page(self, client, settings, tmp_path):
+        """Uploaded event images must appear in the detail page HTML."""
+        settings.MEDIA_ROOT = tmp_path
+        user = UserFactory.create(is_approved=True)
+        client.force_login(user)
+        img = _make_image_upload()
+        client.post(
+            reverse("event_create"),
+            {
+                "title": "Image URL Test",
+                "start_datetime": (_future_dt(3)).strftime("%Y-%m-%dT%H:%M"),
+                "venue_name": "Gallery",
+                "category": "performance",
+                "is_free": True,
+                "image": img,
+            },
+        )
+        event = Event.objects.get(title="Image URL Test")
+        assert event.image
+        # The image file must exist on disk — confirms storage saved it correctly.
+        assert event.image.storage.exists(event.image.name)
+
+        # The detail page must render the <img> tag with the correct src.
+        detail_resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert detail_resp.status_code == 200
+        assert event.image.url.encode() in detail_resp.content
+
     def test_end_before_start_rejected(self, client):
         user = UserFactory.create()
         client.force_login(user)

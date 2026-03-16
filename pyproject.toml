@@ -29,7 +29,6 @@ dev = [
     "pytest-cov>=6.0",
     "factory-boy>=3.3",
     "django-debug-toolbar>=5.0",
-    "pre-commit>=4.0",
 ]
 
 [tool.ruff]
@@ -44,7 +43,7 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["tests.py", "test_*.py"]
-addopts = "--reuse-db -n 4"
+addopts = "--reuse-db -n 8"
 
 [tool.coverage.run]
 source = ["events", "accounts"]
