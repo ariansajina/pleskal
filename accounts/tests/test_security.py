@@ -47,7 +47,7 @@ class TestAxesLockout:
 
         settings.AXES_FAILURE_LIMIT = 5
         settings.AXES_RESET_ON_SUCCESS = True
-        UserFactory.create(email="good@example.com")
+        UserFactory.create(username="gooduser")
 
         login_url = reverse("login")
 
@@ -55,13 +55,13 @@ class TestAxesLockout:
         for _ in range(3):
             client.post(
                 login_url,
-                {"username": "good@example.com", "password": "wrongpassword"},
+                {"username": "gooduser", "password": "wrongpassword"},
             )
 
         # Successful login
         resp = client.post(
             login_url,
-            {"username": "good@example.com", "password": "testpass123"},
+            {"username": "gooduser", "password": "testpass123"},
         )
         assert resp.status_code == 302
 
@@ -70,11 +70,11 @@ class TestAxesLockout:
         for _ in range(3):
             client.post(
                 login_url,
-                {"username": "good@example.com", "password": "wrongpassword"},
+                {"username": "gooduser", "password": "wrongpassword"},
             )
         resp = client.post(
             login_url,
-            {"username": "good@example.com", "password": "testpass123"},
+            {"username": "gooduser", "password": "testpass123"},
         )
         assert resp.status_code == 302  # still logs in fine
 

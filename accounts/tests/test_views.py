@@ -16,14 +16,12 @@ class TestLoginView:
         response = client.get("/accounts/login/")
         assert response.status_code == 200
 
-    def test_login_with_email(self):
-        user = UserFactory.create(email="test@example.com")
-        user.set_password("testpass123")
-        user.save()
+    def test_login_with_username(self):
+        _ = UserFactory.create(username="testuser")
         client = Client()
         response = client.post(
             "/accounts/login/",
-            {"username": "test@example.com", "password": "testpass123"},
+            {"username": "testuser", "password": "testpass123"},
         )
         assert response.status_code == 302
 

@@ -443,10 +443,6 @@
       <a href="{% url 'event_rss_feed' %}">RSS</a>
       <span style="opacity:0.4;">·</span>
       <a href="{% url 'privacy' %}">Privacy</a>
-      {% if user.is_authenticated %}
-        <span style="opacity:0.4;">·</span>
-        <a href="{% url 'account_delete' %}">Delete account</a>
-      {% endif %}
     </div>
   </footer>
 

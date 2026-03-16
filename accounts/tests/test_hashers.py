@@ -175,10 +175,10 @@ class TestHasherIntegration:
         from django.urls import reverse
 
         settings.PASSWORD_PEPPER = _VALID_PEPPER
-        UserFactory.create(email="test@example.com", password="mypassword")
+        UserFactory.create(username="testuser", password="mypassword")
         # Use client.post so django-axes receives a proper request object.
         resp = client.post(
             reverse("login"),
-            {"username": "test@example.com", "password": "mypassword"},
+            {"username": "testuser", "password": "mypassword"},
         )
         assert resp.status_code == 302

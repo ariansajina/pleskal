@@ -6,7 +6,7 @@ User = get_user_model()
 
 
 class CustomAuthenticationForm(AuthenticationForm):
-    username = forms.EmailField(label="Email")
+    username = forms.CharField(label="Username")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

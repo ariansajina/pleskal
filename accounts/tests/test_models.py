@@ -24,11 +24,11 @@ class TestUserModel:
         user = UserFactory.create(username="dancer")
         assert str(user) == "dancer"
 
-    def test_username_field_is_email(self):
-        assert User.USERNAME_FIELD == "email"
+    def test_username_field_is_username(self):
+        assert User.USERNAME_FIELD == "username"
 
-    def test_required_fields_includes_username(self):
-        assert "username" in User.REQUIRED_FIELDS
+    def test_required_fields_includes_email(self):
+        assert "email" in User.REQUIRED_FIELDS
 
 
 @pytest.mark.django_db

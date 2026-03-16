@@ -14,8 +14,8 @@ class User(AbstractUser):
     website = models.URLField(blank=True)
     intro_message = models.TextField(blank=True, max_length=500)
 
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username"]
+    USERNAME_FIELD = "username"
+    REQUIRED_FIELDS = ["email"]
 
     objects = UserManager()
 
