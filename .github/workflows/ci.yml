@@ -67,6 +67,6 @@ jobs:
         run: uv run pytest --cov --cov-report=term-missing --cov-report=xml --cov-fail-under=90 --create-db
 
       - name: SonarCloud scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: sonarsource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
