@@ -19,6 +19,9 @@ dependencies = [
     "icalendar>=6.0",
     "pytest-xdist>=3.8.0",
     "zxcvbn>=4.4",
+    "requests>=2.32.5",
+    "beautifulsoup4>=4.14.3",
+    "lxml>=6.0.2",
 ]
 
 [dependency-groups]
