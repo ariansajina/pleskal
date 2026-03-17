@@ -1,5 +1,8 @@
 # Pleskal — Copenhagen Dance Calendar
 
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ariansajina_pleskal&metric=coverage)](https://sonarcloud.io/summary/new_code?id=ariansajina_pleskal)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ariansajina_pleskal&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ariansajina_pleskal)
+
 A local-first, crowd-sourced web application for discovering and sharing dance events in Copenhagen. Anyone can submit an event; approved users can post freely. Community-maintained and editorially neutral.
 
 Inspired by [dukop.dk](https://dukop.dk/en/).
