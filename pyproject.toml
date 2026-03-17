@@ -37,8 +37,11 @@ line-length = 88
 extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+select = ["E", "F", "I", "UP", "B", "SIM", "S"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/tests/*" = ["S101", "S106", "S314"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
