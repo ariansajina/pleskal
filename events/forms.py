@@ -4,6 +4,8 @@ from markdownx.widgets import MarkdownxWidget
 
 from .models import Event
 
+DATETIME_LOCAL_FORMAT = "%Y-%m-%dT%H:%M"
+
 
 class EventForm(forms.ModelForm):
     """Form for creating and editing events."""
@@ -27,11 +29,11 @@ class EventForm(forms.ModelForm):
         widgets = {
             "start_datetime": forms.DateTimeInput(
                 attrs={"type": "datetime-local", "class": "form-input"},
-                format="%Y-%m-%dT%H:%M",
+                format=DATETIME_LOCAL_FORMAT,
             ),
             "end_datetime": forms.DateTimeInput(
                 attrs={"type": "datetime-local", "class": "form-input"},
-                format="%Y-%m-%dT%H:%M",
+                format=DATETIME_LOCAL_FORMAT,
             ),
             "description": MarkdownxWidget(attrs={"rows": 8}),
         }
@@ -53,8 +55,8 @@ class EventForm(forms.ModelForm):
         if "category" in self.fields:
             self.fields["category"].widget.attrs.setdefault("class", "form-select")
         # Make datetime fields input_formats aware of the local format
-        self.fields["start_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]
-        self.fields["end_datetime"].input_formats = ["%Y-%m-%dT%H:%M"]
+        self.fields["start_datetime"].input_formats = [DATETIME_LOCAL_FORMAT]
+        self.fields["end_datetime"].input_formats = [DATETIME_LOCAL_FORMAT]
         self.fields["end_datetime"].required = False
         self.fields["image"].required = False
         self.fields["description"].required = False
