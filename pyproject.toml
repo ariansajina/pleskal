@@ -29,6 +29,7 @@ dev = [
     "pytest-cov>=6.0",
     "factory-boy>=3.3",
     "django-debug-toolbar>=5.0",
+    "ty>=0.0.23",
 ]
 
 [tool.ruff]
