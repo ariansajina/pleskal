@@ -51,7 +51,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"*/tests/*" = ["S101", "S106", "S314"]
+"*/tests/*" = [
+    "S101", # assert: assert statements are idiomatic and expected in tests
+    "S106", # hardcoded-password-func-arg: literal passwords are routine in test fixtures
+    "S314", # suspicious-xml-element-tree-usage: parsing trusted test response data, not user input
+]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
