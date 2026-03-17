@@ -254,7 +254,9 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
             end_ts = btn.get("data-end")
             if not start_ts:
                 continue
-            start_dt = datetime.datetime.fromtimestamp(int(str(start_ts)), tz=datetime.UTC)
+            start_dt = datetime.datetime.fromtimestamp(
+                int(str(start_ts)), tz=datetime.UTC
+            )
             end_dt = (
                 datetime.datetime.fromtimestamp(int(str(end_ts)), tz=datetime.UTC)
                 if end_ts

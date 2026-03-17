@@ -64,7 +64,7 @@ ignore = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["tests.py", "test_*.py"]
-addopts = "--reuse-db -n 8 --cov-fail-under=90"
+addopts = "--reuse-db -n 8"
 
 [tool.coverage.run]
 source = ["events", "accounts"]

@@ -64,7 +64,7 @@ jobs:
         run: uv run ty check .
 
       - name: Run tests with coverage
-        run: uv run pytest --cov --cov-report=term-missing --cov-report=xml --create-db
+        run: uv run pytest --cov --cov-report=term-missing --cov-report=xml --cov-fail-under=90 --create-db
 
       - name: SonarCloud scan
         uses: SonarSource/sonarqube-scan-action@v5
