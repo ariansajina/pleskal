@@ -123,6 +123,7 @@ class TestZxcvbnPasswordValidator:
         with pytest.raises(ValidationError) as exc_info:
             v.validate("password")
         params = exc_info.value.params
+        assert params is not None
         assert "score" in params
         assert isinstance(params["score"], int)
 
@@ -131,6 +132,7 @@ class TestZxcvbnPasswordValidator:
         with pytest.raises(ValidationError) as exc_info:
             v.validate("password")
         params = exc_info.value.params
+        assert params is not None
         assert "label" in params
 
     # ------------------------------------------------------------------

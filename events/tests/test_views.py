@@ -236,45 +236,45 @@ class TestEventListView:
         match = EventFactory(title="Tango Evening Special")
         no_match = EventFactory(title="Ballet Workshop")
         resp = client.get(reverse("event_list") + "?q=Tango")
-        assert match.title.encode() in resp.content
-        assert no_match.title.encode() not in resp.content
+        assert str(match.title).encode() in resp.content
+        assert str(no_match.title).encode() not in resp.content
 
     def test_search_matches_venue(self, client):
         match = EventFactory(venue_name="Vega Concert Hall")
         no_match = EventFactory(venue_name="City Dance Studio")
         resp = client.get(reverse("event_list") + "?q=Vega")
-        assert match.title.encode() in resp.content
-        assert no_match.title.encode() not in resp.content
+        assert str(match.title).encode() in resp.content
+        assert str(no_match.title).encode() not in resp.content
 
     def test_search_matches_description(self, client):
         match = EventFactory(description="An evening of flamenco dance.")
         no_match = EventFactory(description="Hip-hop jam session.")
         resp = client.get(reverse("event_list") + "?q=flamenco")
-        assert match.title.encode() in resp.content
-        assert no_match.title.encode() not in resp.content
+        assert str(match.title).encode() in resp.content
+        assert str(no_match.title).encode() not in resp.content
 
     def test_search_matches_publisher_username(self, client):
         user = UserFactory.create(username="salsaking")
         match = EventFactory(submitted_by=user)
         no_match = EventFactory()
         resp = client.get(reverse("event_list") + "?q=salsaking")
-        assert match.title.encode() in resp.content
-        assert no_match.title.encode() not in resp.content
+        assert str(match.title).encode() in resp.content
+        assert str(no_match.title).encode() not in resp.content
 
     def test_search_matches_publisher_display_name(self, client):
         user = UserFactory.create(display_name="DJ Mambo")
         match = EventFactory(submitted_by=user)
         no_match = EventFactory()
         resp = client.get(reverse("event_list") + "?q=mambo")
-        assert match.title.encode() in resp.content
-        assert no_match.title.encode() not in resp.content
+        assert str(match.title).encode() in resp.content
+        assert str(no_match.title).encode() not in resp.content
 
     def test_empty_search_returns_all(self, client):
         e1 = EventFactory()
         e2 = EventFactory()
         resp = client.get(reverse("event_list") + "?q=")
-        assert e1.title.encode() in resp.content
-        assert e2.title.encode() in resp.content
+        assert str(e1.title).encode() in resp.content
+        assert str(e2.title).encode() in resp.content
 
 
 # ---------------------------------------------------------------------------
