@@ -37,8 +37,18 @@ line-length = 88
 extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "S"]
-ignore = ["E501"]
+select = [
+    "E",   # pycodestyle errors: style and syntax violations
+    "F",   # Pyflakes: undefined names, unused imports, and other logical errors
+    "I",   # isort: enforce consistent import ordering
+    "UP",  # pyupgrade: modernize Python syntax for newer language versions
+    "B",   # flake8-bugbear: catch likely bugs and opinionated design problems
+    "SIM", # flake8-simplify: suggest simplifications to existing code constructs
+    "S",   # flake8-bandit: detect common security vulnerabilities
+]
+ignore = [
+    "E501", # line too long: not enforced, handled by the formatter
+]
 
 [tool.ruff.lint.per-file-ignores]
 "*/tests/*" = ["S101", "S106", "S314"]
