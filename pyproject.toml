@@ -19,6 +19,11 @@ dependencies = [
     "icalendar>=6.0",
     "pytest-xdist>=3.8.0",
     "zxcvbn>=4.4",
+    # Transactional email: swap in the provider extra once decided, e.g.:
+    #   django-anymail[mailgun]  or  django-anymail[resend]
+    "django-anymail>=10.0",
+    # Email confirmation flow (signup + email OTP is a future option, see signals.py)
+    "django-allauth>=65.0",
 ]
 
 [dependency-groups]

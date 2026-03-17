@@ -5,7 +5,11 @@ from django.views.generic import TemplateView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Custom views take priority (login, logout, password-reset have rate limiting).
     path("accounts/", include("accounts.urls")),
+    # allauth provides signup and email-confirmation; its login/logout/password-reset
+    # are shadowed by the custom views above.
+    path("accounts/", include("allauth.urls")),
     path("markdownx/", include("markdownx.urls")),
     path(
         "privacy/",

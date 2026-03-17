@@ -20,9 +20,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",
     # Third-party
     "axes",
     "markdownx",
+    "allauth",
+    "allauth.account",
     # Local
     "accounts",
     "events",
@@ -38,6 +41,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
     "config.middleware.ContentSecurityPolicyMiddleware",
 ]
 
@@ -71,11 +75,15 @@ AUTH_USER_MODEL = "accounts.User"
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",
     "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
+
+# django.contrib.sites (required by allauth)
+SITE_ID = 1
 
 PASSWORD_PEPPER = env("PASSWORD_PEPPER", default="")
 
@@ -160,14 +168,43 @@ if env("AWS_STORAGE_BUCKET_NAME", default=None):
 
 # Email
 
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Pleskal <noreply@pleskal.dk>")
+SERVER_EMAIL = env("SERVER_EMAIL", default="Pleskal <noreply@pleskal.dk>")
+
+# ADMINS receives server error emails and new-user signup notifications.
+# Format: comma-separated email addresses, e.g.:
+#   ADMINS=admin1@example.com,admin2@example.com
+_admins_raw = env("ADMINS", default="")
+ADMINS = [addr.strip() for addr in _admins_raw.split(",") if addr.strip()]
+
 if DEBUG:
+    # Emails print to the terminal — no external service needed.
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
-    EMAIL_HOST = env("EMAIL_HOST", default="")
-    EMAIL_PORT = env.int("EMAIL_PORT", default=587)
-    EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
-    EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
-    EMAIL_USE_TLS = True
+    # Production: use django-anymail.
+    # Once a provider is chosen, swap in the provider-specific extra, e.g.:
+    #   pip install django-anymail[mailgun]   → ANYMAIL_EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
+    #   pip install django-anymail[resend]    → ANYMAIL_EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+    EMAIL_BACKEND = env(
+        "ANYMAIL_EMAIL_BACKEND",
+        default="anymail.backends.mailgun.EmailBackend",
+    )
+    ANYMAIL = {
+        # Set the provider API key via environment variable; never hard-code it.
+        # e.g. for Mailgun:  ANYMAIL_MAILGUN_API_KEY=<your-key>
+        #      for Resend:   ANYMAIL_RESEND_API_KEY=<your-key>
+        # django-anymail reads ANYMAIL_<PROVIDER>_API_KEY automatically;
+        # additional per-provider settings can be added here as needed.
+    }
+
+# django-allauth — email confirmation & signup
+# Future: enable passwordless / OTP login with allauth's "headless" or
+# allauth.mfa once the provider email integration is confirmed working.
+ACCOUNT_LOGIN_METHODS = {"email"}  # log in with email, not username
+ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
 
 # django-axes (brute-force protection)
 

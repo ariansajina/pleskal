@@ -1,0 +1,10 @@
+Hello from {{ site.name }}!
+
+You're almost there. Click the link below to confirm your email address and
+activate your account:
+
+{{ activate_url }}
+
+If you didn't sign up for {{ site.name }}, you can safely ignore this email.
+
+— The {{ site.name }} team
