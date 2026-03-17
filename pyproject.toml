@@ -68,3 +68,4 @@ addopts = "--reuse-db -n 8"
 
 [tool.coverage.run]
 source = ["events", "accounts"]
+relative_files = true
