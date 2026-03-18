@@ -63,6 +63,115 @@ class TestPasswordResetView:
 
 
 @pytest.mark.django_db
+class TestAccountProfileView:
+    def test_redirects_to_publisher_profile(self):
+        user = UserFactory.create(username="profileuser")
+        client = Client()
+        client.force_login(user)
+        response = client.get("/accounts/profile/")
+        assert response.status_code == 302
+        assert "profileuser" in response.url
+
+    def test_requires_login(self):
+        client = Client()
+        response = client.get("/accounts/profile/")
+        assert response.status_code == 302
+        assert "/accounts/login/" in response.url
+
+
+@pytest.mark.django_db
+class TestPublisherProfileView:
+    def test_show_upcoming_events(self):
+        user = UserFactory.create(username="publisher1")
+        client = Client()
+        response = client.get(f"/accounts/publishers/{user.username}/")
+        assert response.status_code == 200
+
+    def test_show_past_events(self):
+        user = UserFactory.create(username="publisher2")
+        client = Client()
+        response = client.get(f"/accounts/publishers/{user.username}/?past=1")
+        assert response.status_code == 200
+        assert response.context["show_past"] is True
+
+    def test_404_for_unknown_publisher(self):
+        client = Client()
+        response = client.get("/accounts/publishers/nobody/")
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestEditProfileView:
+    def test_get_edit_profile(self):
+        user = UserFactory.create()
+        client = Client()
+        client.force_login(user)
+        response = client.get("/accounts/profile/edit/")
+        assert response.status_code == 200
+
+    def test_post_valid_updates_profile(self):
+        user = UserFactory.create(username="editme")
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/profile/edit/",
+            {"username": "editme", "display_name": "New Name"},
+        )
+        assert response.status_code == 302
+        user.refresh_from_db()
+        assert user.display_name == "New Name"
+
+    def test_post_invalid_rerenders_form(self):
+        UserFactory.create(username="taken")
+        user = UserFactory.create(username="myuser")
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/profile/edit/",
+            {"username": "taken"},
+        )
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestChangePasswordView:
+    def test_get_change_password_page(self):
+        user = UserFactory.create()
+        client = Client()
+        client.force_login(user)
+        response = client.get("/accounts/change-password/")
+        assert response.status_code == 200
+
+    def test_post_valid_changes_password(self):
+        user = UserFactory.create()
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/change-password/",
+            {
+                "old_password": "testpass123",
+                "new_password1": "CorrectHorse99!",
+                "new_password2": "CorrectHorse99!",
+            },
+        )
+        assert response.status_code == 302
+
+    def test_post_wrong_old_password_rerenders(self):
+        user = UserFactory.create()
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/change-password/",
+            {
+                "old_password": "wrongpassword",
+                "new_password1": "CorrectHorse99!",
+                "new_password2": "CorrectHorse99!",
+            },
+        )
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
 class TestAccountDeleteView:
     def test_delete_requires_login(self):
         client = Client()
