@@ -4,6 +4,7 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DeleteView, UpdateView, View
 from django.views.generic.detail import DetailView
 
@@ -14,6 +15,7 @@ from .image_utils import process_event_image
 from .models import Event, EventCategory
 
 EVENTS_PER_PAGE = 20
+EVENT_FORM_TEMPLATE = "events/event_form.html"
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +48,7 @@ class EventCreateView(UserRateLimitMixin, LoginRequiredMixin, CreateView):
 
     model = Event
     form_class = EventForm
-    template_name = "events/event_form.html"
+    template_name = EVENT_FORM_TEMPLATE
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -80,17 +82,20 @@ class EventCreateView(UserRateLimitMixin, LoginRequiredMixin, CreateView):
 # ---------------------------------------------------------------------------
 
 
+def _parse_date_safe(value):
+    """Parse a date string, returning None on failure."""
+    try:
+        return parse_date(value)
+    except (ValueError, TypeError):
+        return None
+
+
 class EventListView(View):
     template_name = "events/event_list.html"
     partial_template_name = "events/partials/event_list_results.html"
 
-    def get(self, request):
-        from django.shortcuts import render
-
-        expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
-        qs = Event.objects.filter(start_datetime__gte=expiry_cutoff).select_related(
-            "submitted_by"
-        )
+    def _apply_filters(self, qs, request):
+        from django.db.models import Q
 
         # --- Filter: category (multi-value) ---
         categories = request.GET.getlist("category")
@@ -103,37 +108,23 @@ class EventListView(View):
         date_from = request.GET.get("date_from")
         date_to = request.GET.get("date_to")
         if date_from:
-            try:
-                from django.utils.dateparse import parse_date
-
-                d = parse_date(date_from)
-                if d:
-                    qs = qs.filter(start_datetime__date__gte=d)
-            except (ValueError, TypeError):
-                pass
+            d = _parse_date_safe(date_from)
+            if d:
+                qs = qs.filter(start_datetime__date__gte=d)
         if date_to:
-            try:
-                from django.utils.dateparse import parse_date
+            d = _parse_date_safe(date_to)
+            if d:
+                qs = qs.filter(start_datetime__date__lte=d)
 
-                d = parse_date(date_to)
-                if d:
-                    qs = qs.filter(start_datetime__date__lte=d)
-            except (ValueError, TypeError):
-                pass
-
-        # --- Filter: free events ---
+        # --- Filter: free / wheelchair accessible ---
         if request.GET.get("is_free") == "1":
             qs = qs.filter(is_free=True)
-
-        # --- Filter: wheelchair accessible events ---
         if request.GET.get("is_wheelchair_accessible") == "1":
             qs = qs.filter(is_wheelchair_accessible=True)
 
         # --- Filter: search ---
         search_query = request.GET.get("q", "").strip()
         if search_query:
-            from django.db.models import Q
-
             qs = qs.filter(
                 Q(title__icontains=search_query)
                 | Q(venue_name__icontains=search_query)
@@ -141,6 +132,20 @@ class EventListView(View):
                 | Q(submitted_by__display_name__icontains=search_query)
                 | Q(submitted_by__username__icontains=search_query)
             )
+
+        return qs, categories, date_from, date_to, search_query
+
+    def get(self, request):
+        from django.shortcuts import render
+
+        expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
+        qs = Event.objects.filter(start_datetime__gte=expiry_cutoff).select_related(
+            "submitted_by"
+        )
+
+        qs, categories, date_from, date_to, search_query = self._apply_filters(
+            qs, request
+        )
 
         # --- Counts for upcoming/past toggle (computed after other filters) ---
         now = timezone.now()
@@ -210,7 +215,7 @@ class MyEventsView(LoginRequiredMixin, View):
 class EventUpdateView(LoginRequiredMixin, EventOwnerMixin, UpdateView):
     model = Event
     form_class = EventForm
-    template_name = "events/event_form.html"
+    template_name = EVENT_FORM_TEMPLATE
     slug_field = "slug"
     slug_url_kwarg = "slug"
 
@@ -279,7 +284,7 @@ class EventDuplicateView(LoginRequiredMixin, View):
         )
         return render(
             request,
-            "events/event_form.html",
+            EVENT_FORM_TEMPLATE,
             {"form": form, "page_title": "Duplicate Event"},
         )
 
@@ -302,6 +307,6 @@ class EventDuplicateView(LoginRequiredMixin, View):
             return redirect("event_detail", slug=event.slug)
         return render(
             request,
-            "events/event_form.html",
+            EVENT_FORM_TEMPLATE,
             {"form": form, "page_title": "Duplicate Event"},
         )

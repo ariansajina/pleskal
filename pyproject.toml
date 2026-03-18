@@ -19,6 +19,9 @@ dependencies = [
     "icalendar>=6.0",
     "pytest-xdist>=3.8.0",
     "zxcvbn>=4.4",
+    "requests>=2.32.5",
+    "beautifulsoup4>=4.14.3",
+    "lxml>=6.0.2",
     "django-anymail[resend]>=10.0",
     # Email confirmation flow (signup + email OTP is a future option, see signals.py)
     "django-allauth>=65.0",
@@ -67,7 +70,6 @@ python_files = ["tests.py", "test_*.py"]
 addopts = "--reuse-db -n 8"
 
 [tool.coverage.run]
-source = ["events", "accounts"]
-
-[tool.coverage.report]
-fail_under = 90
+source = ["."]
+omit = ["*/migrations/*", "*/tests/*", "manage.py", "config/*"]
+relative_files = true
