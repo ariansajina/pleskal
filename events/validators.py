@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from PIL import Image
 
 ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}
-MAX_IMAGE_SIZE = 4 * 1024 * 1024  # 4 MB
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 def validate_image_file(image):
@@ -12,7 +12,7 @@ def validate_image_file(image):
     if image.size > MAX_IMAGE_SIZE:
         size_mb = image.size / (1024 * 1024)
         raise ValidationError(
-            f"Image file size must be at most 4 MB. Got {size_mb:.1f} MB."
+            f"Image file size must be at most 10 MB. Got {size_mb:.1f} MB."
         )
 
     try:

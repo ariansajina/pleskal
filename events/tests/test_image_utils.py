@@ -9,10 +9,9 @@ from events.image_utils import THUMBNAIL_WIDTH, process_event_image
 
 
 def _make_image_file(width=800, height=600, fmt="JPEG", name="test.jpg"):
-    """Return a file-like object containing an image with a fake EXIF comment."""
+    """Return a file-like object containing an image."""
     buf = io.BytesIO()
     img = Image.new("RGB", (width, height), color=(100, 150, 200))
-    # Add an EXIF-like blob (not real EXIF, but exercises the strip path)
     img.save(buf, format=fmt)
     buf.seek(0)
     buf.name = name
@@ -52,24 +51,23 @@ class TestProcessEventImage:
         img = Image.open(io.BytesIO(thumb.read()))
         assert img.width == 200
 
-    def test_png_preserved(self):
-        f = _make_image_file(fmt="PNG", name="test.png")
-        main, thumb = process_event_image(f)
-        assert main.name.endswith(".png")  # type: ignore[union-attr]
-        assert thumb.name.endswith(".png")  # type: ignore[union-attr]
-
-    def test_jpeg_preserved(self):
+    def test_output_is_webp(self):
         f = _make_image_file(fmt="JPEG", name="photo.jpg")
         main, thumb = process_event_image(f)
-        assert main.name.endswith(".jpg")  # type: ignore[union-attr]
-        assert thumb.name.endswith(".jpg")  # type: ignore[union-attr]
+        assert main.name.endswith(".webp")  # type: ignore[union-attr]
+        assert thumb.name.endswith(".webp")  # type: ignore[union-attr]
+
+    def test_png_input_produces_webp(self):
+        f = _make_image_file(fmt="PNG", name="test.png")
+        main, thumb = process_event_image(f)
+        assert main.name.endswith(".webp")  # type: ignore[union-attr]
+        assert thumb.name.endswith(".webp")  # type: ignore[union-attr]
 
     def test_exif_stripped(self):
         """Re-opened image should have no EXIF data."""
         f = _make_image_file(fmt="JPEG")
         main, _ = process_event_image(f)
         img = Image.open(io.BytesIO(main.read()))
-        # Pillow stores EXIF in _getexif() for JPEG — stripped image has None or empty
         exif = img.getexif()
         assert not exif  # empty dict / None
 
@@ -80,3 +78,13 @@ class TestProcessEventImage:
         Image.open(io.BytesIO(main.read())).verify()
         thumb.seek(0)
         Image.open(io.BytesIO(thumb.read())).verify()
+
+    def test_output_format_is_webp(self):
+        """Verify the actual image data is WebP, not just the filename."""
+        f = _make_image_file(fmt="JPEG")
+        main, thumb = process_event_image(f)
+        main_img = Image.open(io.BytesIO(main.read()))
+        assert main_img.format == "WEBP"
+        thumb.seek(0)
+        thumb_img = Image.open(io.BytesIO(thumb.read()))
+        assert thumb_img.format == "WEBP"

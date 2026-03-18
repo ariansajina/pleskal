@@ -38,10 +38,10 @@ class TestValidateImageFile:
             validate_image_file(f)
 
     def test_oversized_file_rejected(self):
-        # Create a file that reports size > 4MB
+        # Create a file that reports size > 10MB
         f = self._make_image("JPEG")
-        f.size = 5 * 1024 * 1024
-        with pytest.raises(ValidationError, match="4 MB"):
+        f.size = 11 * 1024 * 1024
+        with pytest.raises(ValidationError, match="10 MB"):
             validate_image_file(f)
 
     def test_invalid_file_rejected(self):
