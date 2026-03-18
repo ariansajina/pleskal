@@ -181,20 +181,13 @@ if DEBUG:
     # Emails print to the terminal — no external service needed.
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
-    # Production: use django-anymail.
-    # Once a provider is chosen, swap in the provider-specific extra, e.g.:
-    #   pip install django-anymail[mailgun]   → ANYMAIL_EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
-    #   pip install django-anymail[resend]    → ANYMAIL_EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
-    EMAIL_BACKEND = env(
-        "ANYMAIL_EMAIL_BACKEND",
-        default="anymail.backends.mailgun.EmailBackend",
-    )
+    # Production: use django-anymail with Resend.
+    # Set RESEND_API_KEY in the environment; never hard-code it.
+    EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
     ANYMAIL = {
-        # Set the provider API key via environment variable; never hard-code it.
-        # e.g. for Mailgun:  ANYMAIL_MAILGUN_API_KEY=<your-key>
-        #      for Resend:   ANYMAIL_RESEND_API_KEY=<your-key>
-        # django-anymail reads ANYMAIL_<PROVIDER>_API_KEY automatically;
-        # additional per-provider settings can be added here as needed.
+        # django-anymail reads RESEND_API_KEY from the environment automatically.
+        # Additional Resend settings can be added here as needed, e.g.:
+        #   "RESEND_API_URL": "https://api.resend.com/",
     }
 
 # django-allauth — email confirmation & signup
