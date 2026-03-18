@@ -52,6 +52,10 @@
                                 </div>
                                 <div class="event-meta" style="margin-top:0.25rem;">
                                     <span>{{ event.start_datetime|date:"j M Y · H:i" }}</span>
+                                    {% if event.end_datetime %}
+                                        <span>–</span>
+                                        <span>{{ event.end_datetime|date:"H:i" }}</span>
+                                    {% endif %}
                                     <span style="opacity:0.4;">·</span>
                                     <span class="event-meta--venue">{{ event.venue_name }}</span>
                                 </div>
