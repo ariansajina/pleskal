@@ -98,7 +98,6 @@ class TestEventCreateView:
         assert resp.status_code == 302
         event = Event.objects.get(title="Event With Image")
         assert event.image  # saved
-        assert event.image_thumbnail  # thumbnail generated
 
     def test_image_url_rendered_on_detail_page(self, client, settings, tmp_path):
         """Uploaded event images must appear in the detail page HTML."""

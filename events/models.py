@@ -7,7 +7,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
-from .validators import validate_image_file, validate_url_scheme
+from .validators import validate_url_scheme
 
 
 class EventCategory(models.TextChoices):
@@ -27,14 +27,9 @@ class Event(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     image = models.ImageField(
-        upload_to="events/images/",
+        upload_to="events/",
         blank=True,
-        validators=[validate_image_file],
-    )
-    image_thumbnail = models.ImageField(
-        upload_to="events/thumbnails/",
-        blank=True,
-        editable=False,
+        null=True,
     )
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField(blank=True, null=True)

@@ -11,7 +11,7 @@ from django.views.generic.detail import DetailView
 from config.ratelimit import UserRateLimitMixin
 
 from .forms import EventForm
-from .image_utils import process_event_image
+from .images import validate_and_process
 from .models import Event, EventCategory
 
 EVENTS_PER_PAGE = 20
@@ -83,9 +83,8 @@ class EventCreateView(UserRateLimitMixin, LoginRequiredMixin, CreateView):
         # Process uploaded image
         image_file = form.cleaned_data.get("image")
         if image_file:
-            processed, thumbnail = process_event_image(image_file)
-            event.image = processed
-            event.image_thumbnail = thumbnail
+            processed = validate_and_process(image_file)
+            event.image.save(processed.name, processed, save=False)
 
         event.save()
 
@@ -251,9 +250,8 @@ class EventUpdateView(LoginRequiredMixin, EventOwnerMixin, UpdateView):
         # Process newly uploaded image
         image_file = form.cleaned_data.get("image")
         if image_file and hasattr(image_file, "read"):
-            processed, thumbnail = process_event_image(image_file)
-            event.image = processed
-            event.image_thumbnail = thumbnail
+            processed = validate_and_process(image_file)
+            event.image.save(processed.name, processed, save=False)
 
         event.save()
         messages.success(self.request, "Event updated.")
@@ -341,9 +339,8 @@ class EventDuplicateView(LoginRequiredMixin, View):
             event.submitted_by = request.user
             image_file = form.cleaned_data.get("image")
             if image_file:
-                processed, thumbnail = process_event_image(image_file)
-                event.image = processed
-                event.image_thumbnail = thumbnail
+                processed = validate_and_process(image_file)
+                event.image.save(processed.name, processed, save=False)
             event.save()
             messages.success(request, "Event duplicated.")
             return redirect("event_detail", slug=event.slug)
