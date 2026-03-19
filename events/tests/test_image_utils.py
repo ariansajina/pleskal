@@ -4,20 +4,21 @@ import io
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 
 from events.images import validate_and_process
 
 
-def _make_upload(width=800, height=600, fmt="JPEG", name="test.jpg"):
-    """Return a file-like object containing an image."""
+def _make_upload(
+    width=800, height=600, fmt="JPEG", name="test.jpg"
+) -> SimpleUploadedFile:
+    """Return a SimpleUploadedFile containing an image."""
     buf = io.BytesIO()
     img = Image.new("RGB", (width, height), color=(100, 150, 200))
     img.save(buf, format=fmt)
-    buf.seek(0)
-    buf.name = name
-    buf.size = buf.getbuffer().nbytes
-    return buf
+    content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[fmt]
+    return SimpleUploadedFile(name, buf.getvalue(), content_type=content_type)
 
 
 @pytest.mark.django_db
@@ -26,24 +27,21 @@ class TestValidateAndProcess:
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_JPEG_QUALITY = 85
-        f = _make_upload()
-        result = validate_and_process(f)
+        result = validate_and_process(_make_upload())
         assert result is not None
 
     def test_output_named_photo_jpg(self, settings):
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_JPEG_QUALITY = 85
-        f = _make_upload()
-        result = validate_and_process(f)
+        result = validate_and_process(_make_upload())
         assert result.name == "photo.jpg"
 
     def test_output_is_jpeg(self, settings):
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_JPEG_QUALITY = 85
-        f = _make_upload(fmt="PNG", name="test.png")
-        result = validate_and_process(f)
+        result = validate_and_process(_make_upload(fmt="PNG", name="test.png"))
         img = Image.open(io.BytesIO(result.read()))
         assert img.format == "JPEG"
 
@@ -51,8 +49,7 @@ class TestValidateAndProcess:
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_JPEG_QUALITY = 85
-        f = _make_upload(width=2400, height=1800)
-        result = validate_and_process(f)
+        result = validate_and_process(_make_upload(width=2400, height=1800))
         img = Image.open(io.BytesIO(result.read()))
         assert img.width <= 1200
         assert img.height <= 1200
@@ -61,8 +58,7 @@ class TestValidateAndProcess:
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_JPEG_QUALITY = 85
-        f = _make_upload(width=400, height=300)
-        result = validate_and_process(f)
+        result = validate_and_process(_make_upload(width=400, height=300))
         img = Image.open(io.BytesIO(result.read()))
         assert img.width == 400
 
@@ -70,30 +66,28 @@ class TestValidateAndProcess:
         settings.MAX_IMAGE_SIZE_BYTES = 100  # tiny limit
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_JPEG_QUALITY = 85
-        f = _make_upload()
         with pytest.raises(ValidationError, match="10 MB"):
-            validate_and_process(f)
+            validate_and_process(_make_upload())
 
     def test_invalid_file_raises_validation_error(self, settings):
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_JPEG_QUALITY = 85
-        buf = io.BytesIO(b"not an image at all")
-        buf.name = "bad.jpg"
-        buf.size = len(b"not an image at all")
+        bad = SimpleUploadedFile(
+            "bad.jpg", b"not an image at all", content_type="image/jpeg"
+        )
         with pytest.raises(ValidationError, match="valid image"):
-            validate_and_process(buf)
+            validate_and_process(bad)
 
     def test_rgba_converted_to_rgb(self, settings):
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_JPEG_QUALITY = 85
         buf = io.BytesIO()
-        img = Image.new("RGBA", (100, 100), color=(255, 0, 0, 128))
-        img.save(buf, format="PNG")
-        buf.seek(0)
-        buf.name = "rgba.png"
-        buf.size = buf.getbuffer().nbytes
-        result = validate_and_process(buf)
+        Image.new("RGBA", (100, 100), color=(255, 0, 0, 128)).save(buf, format="PNG")
+        upload = SimpleUploadedFile(
+            "rgba.png", buf.getvalue(), content_type="image/png"
+        )
+        result = validate_and_process(upload)
         out = Image.open(io.BytesIO(result.read()))
         assert out.mode == "RGB"

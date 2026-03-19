@@ -21,15 +21,15 @@ def validate_and_process(upload) -> ContentFile:
         img.verify()
         upload.seek(0)
         img = Image.open(upload)
-    except Exception:
-        raise ValidationError("Upload a valid image file.")
+    except Exception as exc:
+        raise ValidationError("Upload a valid image file.") from exc
 
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
 
     img.thumbnail(
         (settings.MAX_IMAGE_DIMENSION, settings.MAX_IMAGE_DIMENSION),
-        Image.LANCZOS,
+        Image.Resampling.LANCZOS,
     )
 
     buffer = io.BytesIO()
