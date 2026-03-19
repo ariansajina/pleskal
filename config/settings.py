@@ -11,6 +11,17 @@ SECRET_KEY = env("SECRET_KEY", default="django-insecure-dev-key-change-in-produc
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 
+# Railway: automatically trust the Railway-assigned public domain
+_railway_domain = env("RAILWAY_PUBLIC_DOMAIN", default=None)
+if _railway_domain and _railway_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_railway_domain)
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+if _railway_domain:
+    _railway_origin = f"https://{_railway_domain}"
+    if _railway_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_railway_origin)
+
 # Application definition
 
 INSTALLED_APPS = [
