@@ -31,21 +31,26 @@ def check_rate_limit(key, limit, window):
 
 class RateLimitMixin:
     """
-    Mixin for class-based views that adds IP-based rate limiting.
+    Mixin for class-based views that adds rate limiting.
 
     Attributes:
-        rate_limit_key     Unique string identifying this endpoint (e.g. "register").
-        rate_limit_limit   Maximum number of requests allowed in the window.
-        rate_limit_window  Time window in seconds (default: 3600 = 1 hour).
-        rate_limit_methods HTTP methods to rate limit (default: POST only).
+        rate_limit_key      Unique string identifying this endpoint (e.g. "login").
+        rate_limit_limit    Maximum number of requests allowed in the window.
+        rate_limit_window   Time window in seconds (default: 3600 = 1 hour).
+        rate_limit_methods  HTTP methods to rate limit (default: POST only).
+        rate_limit_by_user  Key by authenticated user ID instead of IP.
+                            Falls back to IP for unauthenticated requests.
     """
 
     rate_limit_key: str = ""
     rate_limit_limit: int = 10
     rate_limit_window: int = 3600
     rate_limit_methods: list[str] = ["POST"]
+    rate_limit_by_user: bool = False
 
     def get_rate_limit_cache_key(self, request):
+        if self.rate_limit_by_user and request.user.is_authenticated:
+            return f"rl:{self.rate_limit_key}:user:{request.user.pk}"
         ip = get_client_ip(request)
         return f"rl:{self.rate_limit_key}:{ip}"
 
@@ -57,16 +62,3 @@ class RateLimitMixin:
                     "Too many requests. Please try again later.", status=429
                 )
         return super().dispatch(request, *args, **kwargs)  # type: ignore[unresolved-attribute]
-
-
-class UserRateLimitMixin(RateLimitMixin):
-    """
-    Rate limit by authenticated user ID instead of IP address.
-
-    Falls back to IP-based limiting for unauthenticated requests.
-    """
-
-    def get_rate_limit_cache_key(self, request):
-        if request.user.is_authenticated:
-            return f"rl:{self.rate_limit_key}:user:{request.user.pk}"
-        return super().get_rate_limit_cache_key(request)

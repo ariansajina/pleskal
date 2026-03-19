@@ -8,7 +8,7 @@ from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DeleteView, UpdateView, View
 from django.views.generic.detail import DetailView
 
-from config.ratelimit import RateLimitMixin, UserRateLimitMixin
+from config.ratelimit import RateLimitMixin
 
 from .forms import EventForm
 from .images import validate_and_process
@@ -42,10 +42,11 @@ class EventOwnerMixin:
 # ---------------------------------------------------------------------------
 
 
-class EventCreateView(UserRateLimitMixin, LoginRequiredMixin, CreateView):
+class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
     rate_limit_key = "event_create"
     rate_limit_limit = 20
     rate_limit_window = 3600
+    rate_limit_by_user = True
 
     model = Event
     form_class = EventForm
@@ -237,12 +238,11 @@ class MyEventsView(LoginRequiredMixin, View):
         return redirect("publisher_profile", username=request.user.username)
 
 
-class EventUpdateView(
-    UserRateLimitMixin, LoginRequiredMixin, EventOwnerMixin, UpdateView
-):
+class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, UpdateView):
     rate_limit_key = "event_update"
     rate_limit_limit = 20
     rate_limit_window = 60  # 20 requests per minute per user
+    rate_limit_by_user = True
     model = Event
     form_class = EventForm
     template_name = EVENT_FORM_TEMPLATE
@@ -285,10 +285,11 @@ class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
         return super().form_valid(form)
 
 
-class EventDuplicateView(UserRateLimitMixin, LoginRequiredMixin, View):
+class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
     rate_limit_key = "event_duplicate"
     rate_limit_limit = 20
     rate_limit_window = 60  # 20 requests per minute per user
+    rate_limit_by_user = True
 
     def _check_owner(self, request, source):
         if source.submitted_by != request.user:

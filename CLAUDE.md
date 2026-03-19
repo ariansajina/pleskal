@@ -90,7 +90,7 @@ npm run css:watch                          # Watch mode
 
 - **Class-based views** (CBV) with mixins: `DetailView`, `ListView`, `CreateView`, `UpdateView`, `DeleteView`
 - **HTMX integration:** Views return full page or partial template based on `HX-Request` header
-- **Custom mixins:** `RateLimitMixin`, `UserRateLimitMixin`, `EventOwnerOrModeratorMixin`
+- **Custom mixins:** `RateLimitMixin` (IP or user-based keying via `rate_limit_by_user`), `EventOwnerOrModeratorMixin`
 - **Custom User model:** UUID primary key, email-based authentication
 - **Event status workflow:** pending → approved/rejected (admin moderation)
 
