@@ -69,7 +69,8 @@ class EventForm(forms.ModelForm):
         if dt and self._is_creation:
             if dt <= timezone.now():
                 raise forms.ValidationError(
-                    "Start date and time must be in the future."
+                    "Events cannot be created in the past. "
+                    "Please choose a future start date and time."
                 )
             one_year = timezone.now() + timezone.timedelta(days=365)
             if dt > one_year:
