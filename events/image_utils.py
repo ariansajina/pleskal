@@ -7,7 +7,7 @@ from PIL import Image
 
 MAX_WIDTH = 1600
 THUMBNAIL_WIDTH = 400
-WEBP_QUALITY = 82
+WEBP_QUALITY = 70
 
 
 def _resize_to_width(img: Image.Image, width: int) -> Image.Image:
