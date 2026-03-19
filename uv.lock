@@ -696,7 +696,7 @@ requires-dist = [
     { name = "icalendar", specifier = ">=6.0" },
     { name = "lxml", specifier = ">=6.0.2" },
     { name = "nh3", specifier = ">=0.2" },
-    { name = "pillow", specifier = ">=11.0" },
+    { name = "pillow", specifier = ">=12.1.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "requests", specifier = ">=2.32.5" },
