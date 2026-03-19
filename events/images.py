@@ -9,7 +9,7 @@ from PIL import Image
 def validate_and_process(upload) -> ContentFile:
     """
     Validates that the upload is a real image within the size limit,
-    converts it to a compressed JPEG, and resizes it to fit within
+    converts it to a compressed WebP, and resizes it to fit within
     MAX_IMAGE_DIMENSION on both axes. Returns a ContentFile ready
     for assignment to an ImageField.
     """
@@ -33,7 +33,7 @@ def validate_and_process(upload) -> ContentFile:
     )
 
     buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=settings.IMAGE_JPEG_QUALITY, optimize=True)
+    img.save(buffer, format="WEBP", quality=settings.IMAGE_WEBP_QUALITY)
     buffer.seek(0)
 
-    return ContentFile(buffer.read(), name="photo.jpg")
+    return ContentFile(buffer.read(), name="photo.webp")

@@ -166,7 +166,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 MAX_IMAGE_DIMENSION = 1200  # px, applied to both axes
-IMAGE_JPEG_QUALITY = 85
+IMAGE_WEBP_QUALITY = 70
 
 # Cloudflare R2 storage (production)
 if env("R2_BUCKET_NAME", default=None):
