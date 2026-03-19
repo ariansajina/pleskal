@@ -31,24 +31,26 @@ def check_rate_limit(key, limit, window):
 
 class RateLimitMixin:
     """
-    Mixin for class-based views that adds IP-based rate limiting on POST requests.
+    Mixin for class-based views that adds IP-based rate limiting.
 
     Attributes:
-        rate_limit_key    Unique string identifying this endpoint (e.g. "register").
-        rate_limit_limit  Maximum number of POST requests allowed in the window.
-        rate_limit_window Time window in seconds (default: 3600 = 1 hour).
+        rate_limit_key     Unique string identifying this endpoint (e.g. "register").
+        rate_limit_limit   Maximum number of requests allowed in the window.
+        rate_limit_window  Time window in seconds (default: 3600 = 1 hour).
+        rate_limit_methods HTTP methods to rate limit (default: POST only).
     """
 
     rate_limit_key: str = ""
     rate_limit_limit: int = 10
     rate_limit_window: int = 3600
+    rate_limit_methods: list[str] = ["POST"]
 
     def get_rate_limit_cache_key(self, request):
         ip = get_client_ip(request)
         return f"rl:{self.rate_limit_key}:{ip}"
 
     def dispatch(self, request, *args, **kwargs):
-        if request.method == "POST":
+        if request.method in self.rate_limit_methods:
             key = self.get_rate_limit_cache_key(request)
             if check_rate_limit(key, self.rate_limit_limit, self.rate_limit_window):
                 return HttpResponse(

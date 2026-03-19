@@ -228,3 +228,135 @@ class TestEventSubmitRateLimit:
         # Unauthenticated requests are redirected to login, not 429
         assert resp.status_code == 302
         assert "/accounts/login/" in resp.url
+
+
+# ---------------------------------------------------------------------------
+# Event list / search rate limiting
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestEventListRateLimit:
+    def test_event_list_blocked_after_limit(self, client):
+        from config.ratelimit import check_rate_limit
+        from events.views import EventListView
+
+        limit = EventListView.rate_limit_limit
+        window = EventListView.rate_limit_window
+        key = "rl:event_list:127.0.0.1"
+        for _ in range(limit):
+            check_rate_limit(key, limit, window)
+
+        resp = client.get(reverse("event_list"))
+        assert resp.status_code == 429
+
+    def test_event_list_within_limit_allowed(self, client):
+        resp = client.get(reverse("event_list"))
+        assert resp.status_code != 429
+
+    def test_event_list_post_not_rate_limited_by_get_limit(self, client):
+        """GET rate limit does not bleed into other HTTP methods."""
+        from config.ratelimit import check_rate_limit
+        from events.views import EventListView
+
+        limit = EventListView.rate_limit_limit
+        window = EventListView.rate_limit_window
+        key = "rl:event_list:127.0.0.1"
+        for _ in range(limit):
+            check_rate_limit(key, limit, window)
+
+        # POST to the same URL is not a real action but should not return 429
+        # (the view has no post handler so Django returns 405)
+        resp = client.post(reverse("event_list"))
+        assert resp.status_code != 429
+
+
+# ---------------------------------------------------------------------------
+# Event update rate limiting (image processing endpoint)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestEventUpdateRateLimit:
+    def test_event_update_blocked_after_limit(self, client):
+        from config.ratelimit import check_rate_limit
+        from events.tests.factories import EventFactory
+        from events.views import EventUpdateView
+
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        client.force_login(user)
+
+        limit = EventUpdateView.rate_limit_limit
+        window = EventUpdateView.rate_limit_window
+        key = f"rl:event_update:user:{user.pk}"
+        for _ in range(limit):
+            check_rate_limit(key, limit, window)
+
+        resp = client.post(reverse("event_edit", kwargs={"slug": event.slug}), {})
+        assert resp.status_code == 429
+
+    def test_event_update_within_limit_allowed(self, client):
+        from events.tests.factories import EventFactory
+
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        client.force_login(user)
+
+        resp = client.post(reverse("event_edit", kwargs={"slug": event.slug}), {})
+        assert resp.status_code != 429
+
+    def test_event_update_different_users_independent(self, client):
+        from config.ratelimit import check_rate_limit
+        from events.tests.factories import EventFactory
+        from events.views import EventUpdateView
+
+        user_a = UserFactory.create()
+        user_b = UserFactory.create()
+        event_b = EventFactory.create(submitted_by=user_b)
+
+        limit = EventUpdateView.rate_limit_limit
+        window = EventUpdateView.rate_limit_window
+        key_a = f"rl:event_update:user:{user_a.pk}"
+        for _ in range(limit):
+            check_rate_limit(key_a, limit, window)
+
+        client.force_login(user_b)
+        resp = client.post(reverse("event_edit", kwargs={"slug": event_b.slug}), {})
+        assert resp.status_code != 429
+
+
+# ---------------------------------------------------------------------------
+# Event duplicate rate limiting (image processing endpoint)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestEventDuplicateRateLimit:
+    def test_event_duplicate_blocked_after_limit(self, client):
+        from config.ratelimit import check_rate_limit
+        from events.tests.factories import EventFactory
+        from events.views import EventDuplicateView
+
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        client.force_login(user)
+
+        limit = EventDuplicateView.rate_limit_limit
+        window = EventDuplicateView.rate_limit_window
+        key = f"rl:event_duplicate:user:{user.pk}"
+        for _ in range(limit):
+            check_rate_limit(key, limit, window)
+
+        resp = client.post(reverse("event_duplicate", kwargs={"slug": event.slug}), {})
+        assert resp.status_code == 429
+
+    def test_event_duplicate_within_limit_allowed(self, client):
+        from events.tests.factories import EventFactory
+
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        client.force_login(user)
+
+        resp = client.post(reverse("event_duplicate", kwargs={"slug": event.slug}), {})
+        assert resp.status_code != 429
