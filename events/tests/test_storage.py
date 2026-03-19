@@ -58,11 +58,11 @@ class TestStorageConfiguration:
         """R2-specific settings are correctly configured."""
         settings.AWS_S3_FILE_OVERWRITE = False
         settings.AWS_QUERYSTRING_AUTH = False
-        settings.AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+        settings.AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=31536000"}
 
         assert settings.AWS_S3_FILE_OVERWRITE is False
         assert settings.AWS_QUERYSTRING_AUTH is False
-        assert settings.AWS_S3_OBJECT_PARAMETERS["CacheControl"] == "max-age=86400"
+        assert settings.AWS_S3_OBJECT_PARAMETERS["CacheControl"] == "max-age=31536000"
 
     def test_staticfiles_backend_in_tests(self, settings):
         """Static files use simple storage in tests (no manifest required)."""
