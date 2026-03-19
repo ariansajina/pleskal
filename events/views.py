@@ -16,6 +16,7 @@ from .models import Event, EventCategory
 
 EVENTS_PER_PAGE = 20
 EVENT_FORM_TEMPLATE = "events/event_form.html"
+MAX_UPCOMING_EVENTS_PER_USER = 50
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +50,26 @@ class EventCreateView(UserRateLimitMixin, LoginRequiredMixin, CreateView):
     model = Event
     form_class = EventForm
     template_name = EVENT_FORM_TEMPLATE
+
+    def _upcoming_events_count(self):
+        return Event.objects.filter(
+            submitted_by=self.request.user,
+            start_datetime__gte=timezone.now(),
+        ).count()
+
+    def dispatch(self, request, *args, **kwargs):
+        if (
+            request.user.is_authenticated
+            and self._upcoming_events_count() >= MAX_UPCOMING_EVENTS_PER_USER
+        ):
+            messages.error(
+                request,
+                f"You have reached the limit of {MAX_UPCOMING_EVENTS_PER_USER} "
+                "upcoming events. Please delete or wait for some events to pass "
+                "before submitting new ones.",
+            )
+            return redirect("my_events")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -263,11 +284,30 @@ class EventDuplicateView(LoginRequiredMixin, View):
 
             raise PermissionDenied
 
+    def _upcoming_events_count(self, request):
+        return Event.objects.filter(
+            submitted_by=request.user,
+            start_datetime__gte=timezone.now(),
+        ).count()
+
+    def _check_event_limit(self, request):
+        if self._upcoming_events_count(request) >= MAX_UPCOMING_EVENTS_PER_USER:
+            messages.error(
+                request,
+                f"You have reached the limit of {MAX_UPCOMING_EVENTS_PER_USER} "
+                "upcoming events. Please delete or wait for some events to pass "
+                "before submitting new ones.",
+            )
+            return True
+        return False
+
     def get(self, request, slug):
         from django.shortcuts import render
 
         source = get_object_or_404(Event, slug=slug)
         self._check_owner(request, source)
+        if self._check_event_limit(request):
+            return redirect("my_events")
         form = EventForm(
             creation=True,
             initial={
@@ -293,6 +333,8 @@ class EventDuplicateView(LoginRequiredMixin, View):
 
         source = get_object_or_404(Event, slug=slug)
         self._check_owner(request, source)
+        if self._check_event_limit(request):
+            return redirect("my_events")
         form = EventForm(request.POST, request.FILES, creation=True)
         if form.is_valid():
             event = form.save(commit=False)

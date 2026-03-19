@@ -145,6 +145,99 @@ class TestEventCreateView:
         assert resp.status_code == 200
         assert not Event.objects.filter(title="Bad Dates").exists()
 
+    def test_past_event_error_message(self, client):
+        user = UserFactory.create()
+        client.force_login(user)
+        past = timezone.now() - timezone.timedelta(days=1)
+        resp = client.post(
+            reverse("event_create"),
+            {
+                "title": "Past Event Message",
+                "start_datetime": past.strftime("%Y-%m-%dT%H:%M"),
+                "venue_name": "Nowhere",
+                "category": "other",
+            },
+        )
+        assert resp.status_code == 200
+        assert b"cannot be created in the past" in resp.content
+
+    def test_upcoming_events_limit_blocks_get(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create()
+        client.force_login(user)
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER,
+            submitted_by=user,
+            start_datetime=_future_dt(10),
+        )
+        resp = client.get(reverse("event_create"))
+        assert resp.status_code == 302
+        assert resp["Location"].endswith(reverse("my_events"))
+
+    def test_upcoming_events_limit_blocks_post(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create()
+        client.force_login(user)
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER,
+            submitted_by=user,
+            start_datetime=_future_dt(10),
+        )
+        resp = client.post(
+            reverse("event_create"),
+            {
+                "title": "One Too Many",
+                "start_datetime": _future_dt(5).strftime("%Y-%m-%dT%H:%M"),
+                "venue_name": "Club",
+                "category": "social",
+            },
+        )
+        assert resp.status_code == 302
+        assert not Event.objects.filter(title="One Too Many").exists()
+
+    def test_upcoming_events_limit_message_shown(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create()
+        client.force_login(user)
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER,
+            submitted_by=user,
+            start_datetime=_future_dt(10),
+        )
+        resp = client.get(reverse("event_create"), follow=True)
+        messages_list = list(resp.context["messages"])
+        assert any("limit" in str(m).lower() for m in messages_list)
+
+    def test_past_events_not_counted_toward_limit(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create()
+        client.force_login(user)
+        # Create MAX past events — should NOT trigger the limit
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER,
+            submitted_by=user,
+            start_datetime=timezone.now() - timezone.timedelta(days=1),
+        )
+        resp = client.get(reverse("event_create"))
+        assert resp.status_code == 200
+
+    def test_below_limit_allows_creation(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create()
+        client.force_login(user)
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER - 1,
+            submitted_by=user,
+            start_datetime=_future_dt(10),
+        )
+        resp = client.get(reverse("event_create"))
+        assert resp.status_code == 200
+
 
 # ---------------------------------------------------------------------------
 # Feature 8: Public event listings
@@ -433,3 +526,41 @@ class TestEventDuplicateView:
         assert resp.status_code == 302
         assert Event.objects.filter(title="Tango Night II").exists()
         assert Event.objects.filter(title="Tango Night").exists()  # original unchanged
+
+    def test_duplicate_blocked_when_at_limit(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create()
+        source = EventFactory.create(submitted_by=user)
+        client.force_login(user)
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER,
+            submitted_by=user,
+            start_datetime=_future_dt(10),
+        )
+        resp = client.get(reverse("event_duplicate", kwargs={"slug": source.slug}))
+        assert resp.status_code == 302
+        assert resp["Location"].endswith(reverse("my_events"))
+
+    def test_duplicate_post_blocked_when_at_limit(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create()
+        source = EventFactory.create(submitted_by=user, title="Original")
+        client.force_login(user)
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER,
+            submitted_by=user,
+            start_datetime=_future_dt(10),
+        )
+        resp = client.post(
+            reverse("event_duplicate", kwargs={"slug": source.slug}),
+            {
+                "title": "Blocked Duplicate",
+                "start_datetime": _future_dt(5).strftime("%Y-%m-%dT%H:%M"),
+                "venue_name": "Club",
+                "category": "social",
+            },
+        )
+        assert resp.status_code == 302
+        assert not Event.objects.filter(title="Blocked Duplicate").exists()
