@@ -14,27 +14,22 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import datetime
-import json
 import logging
 import re
-import time
 import zoneinfo
 from urllib.parse import urljoin
 
+import markdownify
 import requests
 from bs4 import BeautifulSoup
+
+from scrapers.base import build_arg_parser, get_soup, scrape_url_list, write_output
 
 BASE_URL = "https://dansehallerne.dk"
 PROGRAM_URL = f"{BASE_URL}/en/public-program/"
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
-
-HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (compatible; PleskalScraper/1.0; +https://pleskal.dk)"),
-    "Accept-Language": "en-US,en;q=0.9",
-}
 
 # Map dansehallerne type strings → Pleskal EventCategory values
 CATEGORY_MAP = {
@@ -50,15 +45,6 @@ CATEGORY_MAP = {
 }
 
 log = logging.getLogger(__name__)
-
-
-# ── HTTP helpers ──────────────────────────────────────────────────────────────
-
-
-def get_soup(url: str, session: requests.Session) -> BeautifulSoup:
-    resp = session.get(url, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
-    return BeautifulSoup(resp.text, "lxml")
 
 
 # ── Listing page ──────────────────────────────────────────────────────────────
@@ -82,6 +68,77 @@ def collect_event_urls(session: requests.Session) -> list[str]:
     return urls
 
 
+# ── Date string parser ────────────────────────────────────────────────────────
+
+
+def parse_date_string(
+    date_str: str,
+) -> list[tuple[datetime.datetime, datetime.datetime | None]]:
+    """
+    Parse a dansehallerne date string into a list of (start_dt, end_dt) pairs.
+
+    Handles:
+      - Single date:      "1.5.2026, 18:00"
+      - Day range:        "1.–3.5.2026, 18:00"        → 1,2,3 May
+      - Multiple ranges:  "1.–3.5 + 8.–10.5.2026, 18:00" → 1,2,3,8,9,10 May
+
+    The time applies to every generated date.  End time is derived from the
+    Duration meta field (handled by the caller), so end_dt is always None here.
+    """
+    # Normalise unicode dashes and whitespace
+    date_str = date_str.replace("\u2013", "-").replace("\u2014", "-").strip()
+
+    # Extract trailing year and time: "..., HH:MM" or "....YYYY, HH:MM"
+    time_m = re.search(r",\s*(\d{2}):(\d{2})\s*$", date_str)
+    if not time_m:
+        return []
+    hour, minute = int(time_m.group(1)), int(time_m.group(2))
+    date_str = date_str[: time_m.start()].strip()
+
+    # Extract year — may appear only in the last segment after a '+'
+    year_m = re.search(r"\.(\d{4})$", date_str)
+    if not year_m:
+        return []
+    year = int(year_m.group(1))
+    date_str = date_str[: year_m.start()].strip()
+
+    results: list[tuple[datetime.datetime, datetime.datetime | None]] = []
+
+    # Split into range segments on ' + '
+    for segment in re.split(r"\s*\+\s*", date_str):
+        segment = segment.strip()
+
+        # Each segment may end with an explicit month: "1.-3.5" or "8.-10.5"
+        # or just days if month was already consumed: shouldn't happen here
+        seg_month_m = re.search(r"\.(\d{1,2})$", segment)
+        if not seg_month_m:
+            return []
+        month = int(seg_month_m.group(1))
+        seg_days = segment[: seg_month_m.start()].strip()
+
+        # Parse day or day range
+        range_m = re.match(r"^(\d{1,2})\.-(\d{1,2})$", seg_days)
+        single_m = re.match(r"^(\d{1,2})$", seg_days)
+
+        if range_m:
+            day_start, day_end = int(range_m.group(1)), int(range_m.group(2))
+        elif single_m:
+            day_start = day_end = int(single_m.group(1))
+        else:
+            return []
+
+        for day in range(day_start, day_end + 1):
+            try:
+                dt = datetime.datetime(
+                    year, month, day, hour, minute, tzinfo=CPH_TZ
+                ).astimezone(datetime.UTC)
+            except ValueError:
+                continue
+            results.append((dt, None))
+
+    return results
+
+
 # ── Detail page ───────────────────────────────────────────────────────────────
 
 
@@ -103,18 +160,11 @@ def parse_meta_table(soup: BeautifulSoup) -> dict[str, str]:
 
 
 def parse_description(soup: BeautifulSoup) -> str:
-    """Extract plain-text description from #event-entry-content."""
+    """Extract markdown description from #event-entry-content."""
     content_div = soup.select_one("#event-entry-content")
     if not content_div:
         return ""
-    for br in content_div.find_all("br"):
-        br.replace_with("\n")
-    paragraphs = []
-    for el in content_div.find_all(["p", "h2", "h3", "h4"]):
-        text = el.get_text("\n", strip=True)
-        if text:
-            paragraphs.append(text)
-    return "\n\n".join(paragraphs).strip()
+    return markdownify.markdownify(str(content_div), heading_style="ATX").strip()
 
 
 def parse_image_url(soup: BeautifulSoup) -> str:
@@ -226,43 +276,43 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
         )
         is_free = not has_ticket_btn
 
-    # Each ICS download button = one date/time slot
-    ics_buttons = soup.select("button.js-download[data-start]")
+    # Build entries from ICS buttons where timestamps are present, then
+    # fill any remaining dates from the meta table date string.  This handles
+    # the case where the site only populates data-start on a subset of buttons.
+    ics_entries: list[tuple[datetime.datetime, datetime.datetime | None]] = []
+    for btn in soup.select("button.js-download[data-start]"):
+        start_ts = btn.get("data-start")
+        end_ts = btn.get("data-end")
+        if not start_ts:
+            continue
+        start_dt = datetime.datetime.fromtimestamp(int(str(start_ts)), tz=datetime.UTC)
+        end_dt = (
+            datetime.datetime.fromtimestamp(int(str(end_ts)), tz=datetime.UTC)
+            if end_ts
+            else None
+        )
+        ics_entries.append((start_dt, end_dt))
 
-    if not ics_buttons:
-        # Fallback: parse date from meta table
-        date_str = meta.get("date", "")
-        m = re.match(r"(\d{1,2})\.(\d{1,2})\.(\d{4}),\s*(\d{2}):(\d{2})", date_str)
-        if not m:
-            log.warning("Cannot parse date %r at %s", date_str, url)
-            return []
-        day, month, year, hour, minute = (int(x) for x in m.groups())
-        start_dt = datetime.datetime(
-            year, month, day, hour, minute, tzinfo=CPH_TZ
-        ).astimezone(datetime.UTC)
-        # Try to derive end from Duration
-        end_dt: datetime.datetime | None = None
+    # Parse all dates from the meta table and use any not already covered
+    date_str = meta.get("date", "")
+    meta_entries = parse_date_string(date_str)
+    if meta_entries:
+        # Try to derive end from Duration for meta-derived entries
         duration_str = meta.get("duration", "")
         dur_m = re.match(r"(\d+)\s*hour", duration_str, re.IGNORECASE)
-        if dur_m:
-            end_dt = start_dt + datetime.timedelta(hours=int(dur_m.group(1)))
-        ics_entries = [(start_dt, end_dt)]
-    else:
-        ics_entries = []
-        for btn in ics_buttons:
-            start_ts = btn.get("data-start")
-            end_ts = btn.get("data-end")
-            if not start_ts:
-                continue
-            start_dt = datetime.datetime.fromtimestamp(
-                int(str(start_ts)), tz=datetime.UTC
-            )
-            end_dt = (
-                datetime.datetime.fromtimestamp(int(str(end_ts)), tz=datetime.UTC)
-                if end_ts
-                else None
-            )
-            ics_entries.append((start_dt, end_dt))
+        delta = datetime.timedelta(hours=int(dur_m.group(1))) if dur_m else None
+
+        ics_dates = {e[0].date() for e in ics_entries}
+        for start_dt, _ in meta_entries:
+            if start_dt.date() not in ics_dates:
+                end_dt = start_dt + delta if delta else None
+                ics_entries.append((start_dt, end_dt))
+
+        ics_entries.sort(key=lambda e: e[0])
+
+    if not ics_entries:
+        log.warning("Cannot parse date %r at %s", date_str, url)
+        return []
 
     results = []
     for start_dt, end_dt in ics_entries:
@@ -294,47 +344,14 @@ def scrape(delay: float = 0.5) -> list[dict]:
     """Scrape the full programme and return a list of event dicts."""
     session = requests.Session()
     urls = collect_event_urls(session)
-
-    events: list[dict] = []
-    for i, url in enumerate(urls, 1):
-        log.info("[%d/%d] Scraping %s", i, len(urls), url)
-        records = scrape_detail(url, session)
-        events.extend(records)
-        if i < len(urls):
-            time.sleep(delay)
-
-    log.info("Scraped %d event records from %d pages", len(events), len(urls))
-    return events
+    return scrape_url_list(urls, session, scrape_detail, delay)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Scrape dansehallerne.dk public programme"
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        default="dansehallerne_events.json",
-        help="Output JSON file path (default: dansehallerne_events.json)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print JSON to stdout instead of writing a file",
-    )
-    parser.add_argument(
-        "--delay",
-        type=float,
-        default=0.5,
-        help="Delay in seconds between detail page requests (default: 0.5)",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose logging",
-    )
-    args = parser.parse_args()
+    args = build_arg_parser(
+        "Scrape dansehallerne.dk public programme",
+        "dansehallerne_events.json",
+    ).parse_args()
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
@@ -342,15 +359,7 @@ def main() -> None:
     )
 
     events = scrape(delay=args.delay)
-
-    output = json.dumps(events, indent=2, ensure_ascii=False)
-
-    if args.dry_run:
-        print(output)
-    else:
-        with open(args.output, "w", encoding="utf-8") as f:
-            f.write(output)
-        print(f"Wrote {len(events)} events to {args.output}")
+    write_output(events, args.output, args.dry_run)
 
 
 if __name__ == "__main__":

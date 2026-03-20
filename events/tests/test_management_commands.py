@@ -1,4 +1,4 @@
-"""Tests for the import_dansehallerne management command."""
+"""Tests for the import_dansehallerne, import_hautscene, and import_sydhavnteater management commands."""
 
 import json
 from pathlib import Path
@@ -8,10 +8,7 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from events.management.commands.import_dansehallerne import (
-    _download_image,
-    _parse_dt,
-)
+from events.management.commands.base_import import _download_image, _parse_dt
 from events.models import Event
 
 SAMPLE_EVENT = {
@@ -35,7 +32,7 @@ def _write_json(data, path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Standalone helpers
+# Standalone helpers (shared across all import commands)
 # ---------------------------------------------------------------------------
 
 
@@ -227,8 +224,386 @@ class TestImportDansehallerneImages:
         f = tmp_path / "events.json"
         _write_json([event_rec], f)
         with patch(
-            "events.management.commands.import_dansehallerne._download_image",
+            "events.management.commands.base_import._download_image",
             return_value=None,
         ):
             call_command("import_dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
+
+
+# ===========================================================================
+# import_hautscene tests
+# ===========================================================================
+
+HAUTSCENE_SAMPLE_EVENT = {
+    "source_url": "https://www.hautscene.dk/en/events/test-event",
+    "start_datetime": "2030-06-01T15:00:00+02:00",
+    "end_datetime": "2030-06-01T18:00:00+02:00",
+    "title": "Test Haut Scene Event",
+    "description": "A test hautscene event",
+    "venue_name": "Haut Scene",
+    "venue_address": "Test Street 1",
+    "category": "other",
+    "is_free": False,
+    "is_wheelchair_accessible": False,
+    "price_note": "",
+    "image_url": "",
+}
+
+
+# ---------------------------------------------------------------------------
+# Command: error cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImportHautsceneErrors:
+    def test_missing_file_raises(self, tmp_path):
+        with pytest.raises(CommandError, match="File not found"):
+            call_command("import_hautscene", str(tmp_path / "missing.json"))
+
+    def test_invalid_json_raises(self, tmp_path):
+        f = tmp_path / "bad.json"
+        f.write_text("not valid json", encoding="utf-8")
+        with pytest.raises(CommandError, match="Invalid JSON"):
+            call_command("import_hautscene", str(f))
+
+    def test_non_list_json_raises(self, tmp_path):
+        f = tmp_path / "bad.json"
+        f.write_text('{"key": "val"}', encoding="utf-8")
+        with pytest.raises(CommandError, match="top-level list"):
+            call_command("import_hautscene", str(f))
+
+
+# ---------------------------------------------------------------------------
+# Command: create / update / delete / skip
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImportHautsceneCRUD:
+    def test_creates_new_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([HAUTSCENE_SAMPLE_EVENT], f)
+        call_command("import_hautscene", str(f))
+        assert Event.objects.filter(external_source="hautscene").count() == 1
+        event = Event.objects.get(external_source="hautscene")
+        assert event.title == "Test Haut Scene Event"
+        assert event.venue_name == "Haut Scene"
+
+    def test_updates_changed_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([HAUTSCENE_SAMPLE_EVENT], f)
+        call_command("import_hautscene", str(f))
+
+        updated = {**HAUTSCENE_SAMPLE_EVENT, "title": "Updated Haut Scene Event"}
+        _write_json([updated], f)
+        call_command("import_hautscene", str(f))
+
+        assert Event.objects.filter(external_source="hautscene").count() == 1
+        assert (
+            Event.objects.get(external_source="hautscene").title
+            == "Updated Haut Scene Event"
+        )
+
+    def test_unchanged_event_is_skipped(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([HAUTSCENE_SAMPLE_EVENT], f)
+        call_command("import_hautscene", str(f))
+        call_command("import_hautscene", str(f))
+        assert Event.objects.filter(external_source="hautscene").count() == 1
+
+    def test_deletes_stale_events(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([HAUTSCENE_SAMPLE_EVENT], f)
+        call_command("import_hautscene", str(f))
+        assert Event.objects.filter(external_source="hautscene").count() == 1
+
+        _write_json([], f)
+        call_command("import_hautscene", str(f))
+        assert Event.objects.filter(external_source="hautscene").count() == 0
+
+    def test_no_delete_preserves_stale_events(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([HAUTSCENE_SAMPLE_EVENT], f)
+        call_command("import_hautscene", str(f))
+
+        _write_json([], f)
+        call_command("import_hautscene", str(f), no_delete=True)
+        assert Event.objects.filter(external_source="hautscene").count() == 1
+
+    def test_skips_record_with_bad_datetime(self, tmp_path):
+        f = tmp_path / "events.json"
+        bad = {**HAUTSCENE_SAMPLE_EVENT, "start_datetime": "not-a-date"}
+        _write_json([bad], f)
+        call_command("import_hautscene", str(f))
+        assert Event.objects.filter(external_source="hautscene").count() == 0
+
+    def test_category_mapping(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([{**HAUTSCENE_SAMPLE_EVENT, "category": "talk"}], f)
+        call_command("import_hautscene", str(f))
+        event = Event.objects.get(external_source="hautscene")
+        assert event.category == "talk"
+
+    def test_unknown_category_defaults_to_other(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([{**HAUTSCENE_SAMPLE_EVENT, "category": "unknown_type"}], f)
+        call_command("import_hautscene", str(f))
+        event = Event.objects.get(external_source="hautscene")
+        assert event.category == "other"
+
+
+# ---------------------------------------------------------------------------
+# Command: dry-run
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImportHautsceneDryRun:
+    def test_dry_run_does_not_create(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([HAUTSCENE_SAMPLE_EVENT], f)
+        call_command("import_hautscene", str(f), dry_run=True)
+        assert Event.objects.filter(external_source="hautscene").count() == 0
+
+    def test_dry_run_does_not_update(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([HAUTSCENE_SAMPLE_EVENT], f)
+        call_command("import_hautscene", str(f))
+
+        updated = {**HAUTSCENE_SAMPLE_EVENT, "title": "Dry Run Title"}
+        _write_json([updated], f)
+        call_command("import_hautscene", str(f), dry_run=True)
+        assert (
+            Event.objects.get(external_source="hautscene").title
+            == "Test Haut Scene Event"
+        )
+
+    def test_dry_run_does_not_delete(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([HAUTSCENE_SAMPLE_EVENT], f)
+        call_command("import_hautscene", str(f))
+
+        _write_json([], f)
+        call_command("import_hautscene", str(f), dry_run=True)
+        assert Event.objects.filter(external_source="hautscene").count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Command: image handling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImportHautsceneImages:
+    def test_skip_images_creates_event_without_image(self, tmp_path):
+        event_rec = {
+            **HAUTSCENE_SAMPLE_EVENT,
+            "image_url": "https://example.com/img.jpg",
+        }
+        f = tmp_path / "events.json"
+        _write_json([event_rec], f)
+        call_command("import_hautscene", str(f), skip_images=True)
+        event = Event.objects.get(external_source="hautscene")
+        assert not event.image.name
+
+    def test_image_download_failure_is_handled(self, tmp_path):
+        event_rec = {
+            **HAUTSCENE_SAMPLE_EVENT,
+            "image_url": "https://example.com/img.jpg",
+        }
+        f = tmp_path / "events.json"
+        _write_json([event_rec], f)
+        with patch(
+            "events.management.commands.base_import._download_image",
+            return_value=None,
+        ):
+            call_command("import_hautscene", str(f))
+        assert Event.objects.filter(external_source="hautscene").count() == 1
+
+
+# ===========================================================================
+# import_sydhavnteater tests
+# ===========================================================================
+
+SYDHAVN_SAMPLE_EVENT = {
+    "source_url": "https://sydhavnteater.dk/event/test-event",
+    "start_datetime": "2030-06-01T00:00:00+02:00",
+    "end_datetime": None,
+    "title": "Test Sydhavn Event",
+    "description": "A test sydhavnteater event",
+    "venue_name": "Kapelscenen",
+    "venue_address": "",
+    "category": "performance",
+    "is_free": True,
+    "is_wheelchair_accessible": False,
+    "price_note": "",
+    "image_url": "",
+}
+
+
+# ---------------------------------------------------------------------------
+# Command: error cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImportSydhavnteaterErrors:
+    def test_missing_file_raises(self, tmp_path):
+        with pytest.raises(CommandError, match="File not found"):
+            call_command("import_sydhavnteater", str(tmp_path / "missing.json"))
+
+    def test_invalid_json_raises(self, tmp_path):
+        f = tmp_path / "bad.json"
+        f.write_text("not valid json", encoding="utf-8")
+        with pytest.raises(CommandError, match="Invalid JSON"):
+            call_command("import_sydhavnteater", str(f))
+
+    def test_non_list_json_raises(self, tmp_path):
+        f = tmp_path / "bad.json"
+        f.write_text('{"key": "val"}', encoding="utf-8")
+        with pytest.raises(CommandError, match="top-level list"):
+            call_command("import_sydhavnteater", str(f))
+
+
+# ---------------------------------------------------------------------------
+# Command: create / update / delete / skip
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImportSydhavnteaterCRUD:
+    def test_creates_new_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SYDHAVN_SAMPLE_EVENT], f)
+        call_command("import_sydhavnteater", str(f))
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 1
+        event = Event.objects.get(external_source="sydhavnteater")
+        assert event.title == "Test Sydhavn Event"
+        assert event.venue_name == "Kapelscenen"
+
+    def test_updates_changed_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SYDHAVN_SAMPLE_EVENT], f)
+        call_command("import_sydhavnteater", str(f))
+
+        updated = {**SYDHAVN_SAMPLE_EVENT, "title": "Updated Sydhavn Event"}
+        _write_json([updated], f)
+        call_command("import_sydhavnteater", str(f))
+
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 1
+        assert (
+            Event.objects.get(external_source="sydhavnteater").title
+            == "Updated Sydhavn Event"
+        )
+
+    def test_unchanged_event_is_skipped(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SYDHAVN_SAMPLE_EVENT], f)
+        call_command("import_sydhavnteater", str(f))
+        call_command("import_sydhavnteater", str(f))
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 1
+
+    def test_deletes_stale_events(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SYDHAVN_SAMPLE_EVENT], f)
+        call_command("import_sydhavnteater", str(f))
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 1
+
+        _write_json([], f)
+        call_command("import_sydhavnteater", str(f))
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 0
+
+    def test_no_delete_preserves_stale_events(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SYDHAVN_SAMPLE_EVENT], f)
+        call_command("import_sydhavnteater", str(f))
+
+        _write_json([], f)
+        call_command("import_sydhavnteater", str(f), no_delete=True)
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 1
+
+    def test_skips_record_with_bad_datetime(self, tmp_path):
+        f = tmp_path / "events.json"
+        bad = {**SYDHAVN_SAMPLE_EVENT, "start_datetime": "not-a-date"}
+        _write_json([bad], f)
+        call_command("import_sydhavnteater", str(f))
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 0
+
+    def test_category_mapping(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([{**SYDHAVN_SAMPLE_EVENT, "category": "workshop"}], f)
+        call_command("import_sydhavnteater", str(f))
+        event = Event.objects.get(external_source="sydhavnteater")
+        assert event.category == "workshop"
+
+    def test_unknown_category_defaults_to_other(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([{**SYDHAVN_SAMPLE_EVENT, "category": "unknown_type"}], f)
+        call_command("import_sydhavnteater", str(f))
+        event = Event.objects.get(external_source="sydhavnteater")
+        assert event.category == "other"
+
+
+# ---------------------------------------------------------------------------
+# Command: dry-run
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImportSydhavnteaterDryRun:
+    def test_dry_run_does_not_create(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SYDHAVN_SAMPLE_EVENT], f)
+        call_command("import_sydhavnteater", str(f), dry_run=True)
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 0
+
+    def test_dry_run_does_not_update(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SYDHAVN_SAMPLE_EVENT], f)
+        call_command("import_sydhavnteater", str(f))
+
+        updated = {**SYDHAVN_SAMPLE_EVENT, "title": "Dry Run Title"}
+        _write_json([updated], f)
+        call_command("import_sydhavnteater", str(f), dry_run=True)
+        assert (
+            Event.objects.get(external_source="sydhavnteater").title
+            == "Test Sydhavn Event"
+        )
+
+    def test_dry_run_does_not_delete(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SYDHAVN_SAMPLE_EVENT], f)
+        call_command("import_sydhavnteater", str(f))
+
+        _write_json([], f)
+        call_command("import_sydhavnteater", str(f), dry_run=True)
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Command: image handling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImportSydhavnteaterImages:
+    def test_skip_images_creates_event_without_image(self, tmp_path):
+        event_rec = {**SYDHAVN_SAMPLE_EVENT, "image_url": "https://example.com/img.jpg"}
+        f = tmp_path / "events.json"
+        _write_json([event_rec], f)
+        call_command("import_sydhavnteater", str(f), skip_images=True)
+        event = Event.objects.get(external_source="sydhavnteater")
+        assert not event.image.name
+
+    def test_image_download_failure_is_handled(self, tmp_path):
+        event_rec = {**SYDHAVN_SAMPLE_EVENT, "image_url": "https://example.com/img.jpg"}
+        f = tmp_path / "events.json"
+        _write_json([event_rec], f)
+        with patch(
+            "events.management.commands.base_import._download_image",
+            return_value=None,
+        ):
+            call_command("import_sydhavnteater", str(f))
+        assert Event.objects.filter(external_source="sydhavnteater").count() == 1
