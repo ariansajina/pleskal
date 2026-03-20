@@ -26,6 +26,7 @@ dependencies = [
     # Email confirmation flow (signup + email OTP is a future option, see signals.py)
     "django-allauth>=65.0",
     "markdownify>=1.2.2",
+    "cryptography>=46.0.5",
 ]
 
 [dependency-groups]

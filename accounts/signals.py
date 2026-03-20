@@ -34,11 +34,12 @@ def notify_admins_on_new_user(sender, instance, created, **kwargs):
         return
 
     subject = f"New user signup: {instance.username}"
+    admin_url = f"/admin/accounts/user/{instance.id}/change/"
     message = (
         f"A new user has signed up on Pleskal.\n\n"
         f"Username:  {instance.username}\n"
-        f"Email:     {instance.email}\n"
-        f"Joined:    {instance.date_joined:%Y-%m-%d %H:%M UTC}\n"
+        f"Joined:    {instance.date_joined:%Y-%m-%d %H:%M UTC}\n\n"
+        f"Admin:     {admin_url}\n"
     )
     send_mail(
         subject=subject,

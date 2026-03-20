@@ -32,7 +32,10 @@ class TestAdminSignupNotification:
         assert len(mailoutbox) == 1
         msg = mailoutbox[0]
         assert "newuser" in msg.subject
-        assert "newuser@example.com" in msg.body
+        # Email address is intentionally omitted from the notification body
+        # to avoid leaking PII in transit; admins follow the admin URL instead.
+        assert "newuser@example.com" not in msg.body
+        assert "/admin/accounts/user/" in msg.body
         assert msg.to == ["admin@example.com"]
 
     def test_notification_not_sent_on_update(self, mailoutbox, settings):
@@ -48,13 +51,14 @@ class TestAdminSignupNotification:
         UserFactory.create()
         assert len(mailoutbox) == 0
 
-    def test_notification_includes_username_and_email(self, mailoutbox, settings):
+    def test_notification_includes_username_not_email(self, mailoutbox, settings):
         settings.ADMINS = ["admin@example.com"]
         UserFactory.create(username="dancer42", email="dancer42@example.com")
         assert len(mailoutbox) == 1
         body = mailoutbox[0].body
         assert "dancer42" in body
-        assert "dancer42@example.com" in body
+        # Email is not included in notification to avoid PII in transit
+        assert "dancer42@example.com" not in body
 
 
 # ---------------------------------------------------------------------------
