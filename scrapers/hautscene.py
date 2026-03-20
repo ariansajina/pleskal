@@ -33,7 +33,7 @@ CATEGORY_MAP = {
     "talk": "talk",
     "talks": "talk",
     "workshop": "workshop",
-    "worksharing": "workshop",
+    "worksharing": "worksharing",
     "residencies": "other",
     "residency": "other",
     "other events": "other",
