@@ -29,7 +29,8 @@ CATEGORY_MAP = {
     "performance": EventCategory.PERFORMANCE,
     "talk": EventCategory.TALK,
     "workshop": EventCategory.WORKSHOP,
-    "open_practice": EventCategory.OPEN_PRACTICE,
+    "worksharing": EventCategory.WORKSHARING,
+    "openpractice": EventCategory.OPENPRACTICE,
     "social": EventCategory.SOCIAL,
     "other": EventCategory.OTHER,
 }

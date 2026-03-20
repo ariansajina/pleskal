@@ -210,7 +210,7 @@ def test_parse_image_url_invalid_srcset_falls_back_to_src():
 def test_map_category_known():
     assert map_category("Performance") == "performance"
     assert map_category("WORKSHOP") == "workshop"
-    assert map_category("open practice") == "open_practice"
+    assert map_category("open practice") == "openpractice"
     assert map_category("ipaf performance") == "performance"
 
 

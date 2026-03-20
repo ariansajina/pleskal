@@ -12,9 +12,10 @@ from .validators import validate_url_scheme
 
 class EventCategory(models.TextChoices):
     PERFORMANCE = "performance", "Performance"
-    TALK = "talk", "Talk"
+    WORKSHARING = "worksharing", "Worksharing"
     WORKSHOP = "workshop", "Workshop"
-    OPEN_PRACTICE = "open_practice", "Open Practice"
+    OPENPRACTICE = "openpractice", "Open Practice"
+    TALK = "talk", "Talk"
     SOCIAL = "social", "Social"
     OTHER = "other", "Other"
 

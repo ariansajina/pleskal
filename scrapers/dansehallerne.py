@@ -37,7 +37,7 @@ CATEGORY_MAP = {
     "ipaf performance": "performance",
     "talk": "talk",
     "workshop": "workshop",
-    "open practice": "open_practice",
+    "open practice": "openpractice",
     "social": "social",
     "children": "other",
     "children & family": "other",
