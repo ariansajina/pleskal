@@ -1,4 +1,4 @@
-{% if request.htmx %}
+{% if request.META.HTTP_HX_REQUEST %}
 {% include "events/partials/when_filter_group.html" with oob=True %}
 {% endif %}
 
