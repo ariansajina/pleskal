@@ -133,14 +133,17 @@ class EventListView(RateLimitMixin, View):
         # --- Filter: date range ---
         date_from = request.GET.get("date_from")
         date_to = request.GET.get("date_to")
+        date_range_active = False
         if date_from:
             d = _parse_date_safe(date_from)
             if d:
                 qs = qs.filter(start_datetime__date__gte=d)
+                date_range_active = True
         if date_to:
             d = _parse_date_safe(date_to)
             if d:
                 qs = qs.filter(start_datetime__date__lte=d)
+                date_range_active = True
 
         # --- Filter: free / wheelchair accessible ---
         if request.GET.get("is_free") == "1":
@@ -159,7 +162,7 @@ class EventListView(RateLimitMixin, View):
                 | Q(submitted_by__username__icontains=search_query)
             )
 
-        return qs, categories, date_from, date_to, search_query
+        return qs, categories, date_from, date_to, search_query, date_range_active
 
     def get(self, request):
         from django.shortcuts import render
@@ -169,8 +172,8 @@ class EventListView(RateLimitMixin, View):
             "submitted_by"
         )
 
-        qs, categories, date_from, date_to, search_query = self._apply_filters(
-            qs, request
+        qs, categories, date_from, date_to, search_query, date_range_active = (
+            self._apply_filters(qs, request)
         )
 
         # --- Counts for upcoming/past toggle (computed after other filters) ---
@@ -179,8 +182,13 @@ class EventListView(RateLimitMixin, View):
         past_count = qs.filter(start_datetime__lt=now).count()
 
         # --- Filter: upcoming vs past ---
+        # When a date range is explicitly set, bypass the toggle — the user has
+        # already specified the time window and applying past/upcoming on top would
+        # silently discard half the results with no visible explanation.
         show_past = request.GET.get("past") == "1"
-        if show_past:
+        if date_range_active:
+            qs = qs.order_by("start_datetime")
+        elif show_past:
             qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime")
         else:
             qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
@@ -198,6 +206,7 @@ class EventListView(RateLimitMixin, View):
             "show_past": show_past,
             "date_from": date_from or "",
             "date_to": date_to or "",
+            "date_range_active": date_range_active,
             "is_free": request.GET.get("is_free") == "1",
             "is_wheelchair_accessible": request.GET.get("is_wheelchair_accessible")
             == "1",

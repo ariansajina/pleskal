@@ -33,19 +33,7 @@
             </div>
 
             {# When #}
-            <div class="filter-panel__group">
-                <span class="filter-panel__group-label">When</span>
-                <div style="display:flex;gap:0.75rem;">
-                    <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;cursor:pointer;">
-                        <input type="radio" name="past" value="0" {% if not show_past %}checked{% endif %}>
-                        <span id="upcoming-count">Upcoming ({{ upcoming_count }})</span>
-                    </label>
-                    <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;cursor:pointer;">
-                        <input type="radio" name="past" value="1" {% if show_past %}checked{% endif %}>
-                        <span id="past-count">Past ({{ past_count }})</span>
-                    </label>
-                </div>
-            </div>
+            {% include "events/partials/when_filter_group.html" %}
 
             {# Category #}
             <div class="filter-panel__group">
