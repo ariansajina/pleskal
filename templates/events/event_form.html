@@ -122,11 +122,12 @@
                 </label>
             </div>
 
-            <div>
+            <div id="price-note-wrapper">
                 <label for="{{ form.price_note.id_for_label }}" class="form-label">
                     Price note
                 </label>
                 {{ form.price_note }}
+                <p class="form-help" style="margin-top:0.3rem;">Only shown for paid events</p>
             </div>
 
             {# Source URL #}
@@ -152,4 +153,24 @@
         </form>
     </div>
 </div>
+
+<script>
+    // Toggle price note field visibility based on is_free checkbox
+    const isFreeCheckbox = document.getElementById('{{ form.is_free.id_for_label }}');
+    const priceNoteWrapper = document.getElementById('price-note-wrapper');
+
+    function updatePriceNoteVisibility() {
+        if (isFreeCheckbox.checked) {
+            priceNoteWrapper.style.display = 'none';
+        } else {
+            priceNoteWrapper.style.display = 'block';
+        }
+    }
+
+    // Set initial state
+    updatePriceNoteVisibility();
+
+    // Update on checkbox change
+    isFreeCheckbox.addEventListener('change', updatePriceNoteVisibility);
+</script>
 {% endblock %}
