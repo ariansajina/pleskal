@@ -324,6 +324,32 @@ class TestEventListView:
         assert str(near.title).encode() in resp.content
         assert str(far.title).encode() not in resp.content
 
+    def test_date_range_overrides_past_toggle(self, client):
+        """When a date range is set, past=1 is ignored — all events in the
+        range are shown regardless of whether they are upcoming or past."""
+        from events.models import Event as EventModel
+
+        past_event = EventModel(
+            title="Past Event In Range",
+            start_datetime=timezone.now() - timezone.timedelta(days=3),
+            end_datetime=None,
+            venue_name="Venue",
+            category="social",
+        )
+        past_event.save()
+        future_event = EventFactory.create(
+            start_datetime=timezone.now() + timezone.timedelta(days=3),
+        )
+        date_from = (timezone.now() - timezone.timedelta(days=5)).strftime("%Y-%m-%d")
+        date_to = (timezone.now() + timezone.timedelta(days=5)).strftime("%Y-%m-%d")
+        # past=0 (upcoming) with a date range that includes past events — past
+        # events should still appear because the date range takes priority.
+        resp = client.get(
+            reverse("event_list") + f"?date_from={date_from}&date_to={date_to}&past=0"
+        )
+        assert b"Past Event In Range" in resp.content
+        assert str(future_event.title).encode() in resp.content
+
     def test_search_matches_title(self, client):
         match = EventFactory(title="Tango Evening Special")
         no_match = EventFactory(title="Ballet Workshop")

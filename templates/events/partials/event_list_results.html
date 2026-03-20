@@ -1,6 +1,5 @@
 {% if request.htmx %}
-<span id="upcoming-count" hx-swap-oob="true">Upcoming ({{ upcoming_count }})</span>
-<span id="past-count" hx-swap-oob="true">Past ({{ past_count }})</span>
+{% include "events/partials/when_filter_group.html" with oob=True %}
 {% endif %}
 
 {% if events %}
