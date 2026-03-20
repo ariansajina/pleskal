@@ -1,15 +1,15 @@
-# Pleskal — Copenhagen Dance Calendar
+# pleskal
 
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ariansajina_pleskal&metric=coverage)](https://sonarcloud.io/summary/new_code?id=ariansajina_pleskal)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ariansajina_pleskal&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ariansajina_pleskal)
 
-A local-first, crowd-sourced web application for discovering and sharing dance events in Copenhagen. Anyone can submit an event; approved users can post freely. Community-maintained and editorially neutral.
+A hyperlocal community-maintained calendar for dance and performance arts events in Copenhagen.
 
 Inspired by [dukop.dk](https://dukop.dk/en/).
 
-## Why Pleskal?
+## Why pleskal?
 
-Copenhagen has a vibrant dance scene spread across many venues, studios, and organizers — but no single place to find it all. Pleskal brings upcoming dance events together in one calendar that anyone can contribute to, with machine-readable feeds (iCal, RSS) for easy calendar integration.
+Copenhagen has a vibrant dance scene spread across many venues, studios, and organizers — but no single place to find it all. _pleskal_ brings upcoming dance events together in one calendar that anyone can contribute to, with machine-readable feeds (iCal, RSS) for easy calendar integration.
 
 ## Tech Stack
 
@@ -36,8 +36,7 @@ Copy `.env.example` to `.env` for local configuration.
 ## Running Tests
 
 ```bash
-uv run pytest            # Run all tests
-uv run pytest --cov      # With coverage report
+uv run pytest
 ```
 
 ## License
