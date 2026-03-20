@@ -174,10 +174,7 @@ def _get_info_row_value(info_div: Tag, label: str) -> str:
         title_el = row.select_one("div.row-title")
         if title_el and label.lower() in title_el.get_text(strip=True).lower():
             value_el = row.find(
-                lambda tag: (
-                    tag.name == "div"
-                    and "size-medium" in tag.get("class", [])
-                )
+                lambda tag: tag.name == "div" and "size-medium" in tag.get("class", [])
             )
             if value_el:
                 return value_el.get_text(" ", strip=True)
