@@ -59,11 +59,16 @@
         {% endif %}
 
         {# Description #}
-        {% if event.description %}
+        {% if event.description or event.external_source %}
             <hr class="rule">
-            <div class="prose-content" style="margin-bottom:1.5rem;">
-                {{ event.description|render_markdown }}
-            </div>
+            {% if event.external_source %}
+                {% include "events/partials/scraped_event_disclaimer.html" %}
+            {% endif %}
+            {% if event.description %}
+                <div class="prose-content" style="margin-bottom:1.5rem;">
+                    {{ event.description|render_markdown }}
+                </div>
+            {% endif %}
         {% endif %}
 
         {# Source link #}
