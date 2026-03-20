@@ -1,8 +1,22 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 
 User = get_user_model()
+
+
+class EmailHashPasswordResetForm(PasswordResetForm):
+    """Password reset form that looks up users via the HMAC email_hash blind
+    index rather than filtering on the encrypted email column directly."""
+
+    def get_users(self, email):
+        from .crypto import hash_email
+
+        email_hash = hash_email(email)
+        return User._default_manager.filter(
+            email_hash=email_hash,
+            is_active=True,
+        )
 
 
 class CustomAuthenticationForm(AuthenticationForm):

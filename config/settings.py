@@ -98,6 +98,14 @@ SITE_ID = 1
 
 PASSWORD_PEPPER = env("PASSWORD_PEPPER", default="")
 
+# Email encryption at rest
+# EMAIL_ENCRYPTION_KEY: Fernet key for encrypting the email field.
+#   Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# EMAIL_BLIND_INDEX_PEPPER: HMAC pepper for the email_hash blind index.
+#   Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+EMAIL_ENCRYPTION_KEY = env("EMAIL_ENCRYPTION_KEY", default="")
+EMAIL_BLIND_INDEX_PEPPER = env("EMAIL_BLIND_INDEX_PEPPER", default="")
+
 PASSWORD_HASHERS = [
     # Primary: PBKDF2-SHA256 with an HMAC-SHA256 server-side pepper.
     # Existing plain PBKDF2 hashes are verified via the fallback below and
@@ -223,6 +231,12 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
+# Don't let allauth query User.email directly (it's encrypted and not
+# filterable by value). Allauth uses its own EmailAddress table for all
+# email-based lookups (login, password reset). Uniqueness is enforced via
+# email_hash by our custom AccountAdapter.
+ACCOUNT_USER_MODEL_EMAIL_FIELD = None
+ACCOUNT_ADAPTER = "accounts.adapters.AccountAdapter"
 
 # django-axes (brute-force protection)
 
@@ -237,7 +251,7 @@ SENTRY_DSN = env("SENTRY_DSN", default="")
 if SENTRY_DSN:
     import sentry_sdk
 
-    sentry_sdk.init(dsn=SENTRY_DSN, traces_sample_rate=0.1)
+    sentry_sdk.init(dsn=SENTRY_DSN, traces_sample_rate=0.1, send_default_pii=False)
 
 # Security (production only)
 

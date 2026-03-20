@@ -11,6 +11,7 @@ from config.ratelimit import RateLimitMixin
 
 from .forms import (
     CustomAuthenticationForm,
+    EmailHashPasswordResetForm,
     ProfileForm,
 )
 
@@ -92,6 +93,7 @@ class RateLimitedPasswordResetView(RateLimitMixin, auth_views.PasswordResetView)
 
     template_name = "accounts/password_reset.html"
     success_url = "/accounts/password-reset/done/"
+    form_class = EmailHashPasswordResetForm
 
 
 class PublisherProfileView(View):
