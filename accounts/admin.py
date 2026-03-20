@@ -8,6 +8,7 @@ from .models import User
 class UserAdmin(BaseUserAdmin):
     list_display = (
         "username",
+        "email",
         "date_joined",
     )
     list_filter = ("is_staff", "is_active")
