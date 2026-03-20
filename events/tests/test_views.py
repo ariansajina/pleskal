@@ -126,6 +126,26 @@ class TestEventCreateView:
         assert detail_resp.status_code == 200
         assert event.image.url.encode() in detail_resp.content
 
+    def test_oversized_image_rejected(self, client, settings):
+        settings.MAX_IMAGE_SIZE_BYTES = 100  # tiny limit
+        user = UserFactory.create()
+        client.force_login(user)
+        img = _make_image_upload()
+        resp = client.post(
+            reverse("event_create"),
+            {
+                "title": "Oversized Image Event",
+                "start_datetime": (_future_dt(3)).strftime("%Y-%m-%dT%H:%M"),
+                "venue_name": "Gallery",
+                "category": "performance",
+                "is_free": True,
+                "image": img,
+            },
+        )
+        assert resp.status_code == 200  # form re-rendered with error
+        assert b"10 MB" in resp.content
+        assert not Event.objects.filter(title="Oversized Image Event").exists()
+
     def test_end_before_start_rejected(self, client):
         user = UserFactory.create()
         client.force_login(user)

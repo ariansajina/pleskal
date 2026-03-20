@@ -62,13 +62,6 @@ class TestValidateAndProcess:
         img = Image.open(io.BytesIO(result.read()))
         assert img.width == 400
 
-    def test_oversized_file_raises_validation_error(self, settings):
-        settings.MAX_IMAGE_SIZE_BYTES = 100  # tiny limit
-        settings.MAX_IMAGE_DIMENSION = 1200
-        settings.IMAGE_WEBP_QUALITY = 70
-        with pytest.raises(ValidationError, match="10 MB"):
-            validate_and_process(_make_upload())
-
     def test_invalid_file_raises_validation_error(self, settings):
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
