@@ -16,7 +16,7 @@
 
     {# Pagination #}
     {% if page_obj.has_other_pages %}
-        <nav class="mt-6" style="display:flex;align-items:center;gap:0.75rem;" aria-label="Pagination">
+        <nav class="mt-10" style="display:flex;align-items:center;gap:0.75rem;" aria-label="Pagination">
             {% if page_obj.has_previous %}
                 <a href="?page={{ page_obj.previous_page_number }}"
                    class="btn btn--ghost btn--sm"

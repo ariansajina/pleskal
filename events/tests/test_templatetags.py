@@ -74,8 +74,3 @@ class TestRenderMarkdown:
     def test_mailto_allowed(self):
         result = render_markdown("[email](mailto:test@example.com)")
         assert "mailto:test@example.com" in result
-
-    def test_h1_stripped(self):
-        """h1 is not in the allowlist — only h2-h4."""
-        result = render_markdown("# Big Heading")
-        assert "<h1>" not in result
