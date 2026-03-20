@@ -67,7 +67,11 @@ class EventForm(forms.ModelForm):
 
     def clean_image(self):
         image = self.cleaned_data.get("image")
-        if image and hasattr(image, "size") and image.size > settings.MAX_IMAGE_SIZE_BYTES:
+        if (
+            image
+            and hasattr(image, "size")
+            and image.size > settings.MAX_IMAGE_SIZE_BYTES
+        ):
             raise forms.ValidationError("Image must be under 10 MB.")
         return image
 
