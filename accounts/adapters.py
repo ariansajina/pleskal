@@ -1,6 +1,5 @@
-from django import forms
-
 from allauth.account.adapter import DefaultAccountAdapter
+from django import forms
 
 
 class AccountAdapter(DefaultAccountAdapter):

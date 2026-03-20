@@ -48,7 +48,7 @@ class EncryptedEmailField(models.BinaryField):
             return decrypt_email(bytes(value))
         return value or ""
 
-    def formfield(self, **kwargs):
+    def formfield(self, form_class=None, choices_form_class=None, **kwargs):
         return django_forms.EmailField(**kwargs)
 
 
@@ -75,8 +75,9 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         from .crypto import hash_email
 
-        if self.email:
-            self.email_hash = hash_email(self.email)
+        email = str(self.email)
+        if email:
+            self.email_hash = hash_email(email)
         super().save(*args, **kwargs)
 
     @property
