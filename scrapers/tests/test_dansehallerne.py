@@ -273,7 +273,9 @@ def _mock_session(html: str) -> MagicMock:
 
 def test_scrape_detail_returns_records():
     session = _mock_session(_MINIMAL_META_HTML)
-    results = scrape_detail("https://dansehallerne.dk/en/public-program/performance/1/", session)
+    results = scrape_detail(
+        "https://dansehallerne.dk/en/public-program/performance/1/", session
+    )
     assert len(results) == 1
     assert results[0]["title"] == "Dance Show"
     assert results[0]["external_source"] == "dansehallerne"
@@ -283,12 +285,16 @@ def test_scrape_detail_returns_records():
 def test_scrape_detail_http_error_returns_empty():
     session = MagicMock()
     session.get.return_value.raise_for_status.side_effect = requests.HTTPError("404")
-    assert scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session) == []
+    assert (
+        scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session) == []
+    )
 
 
 def test_scrape_detail_no_meta_returns_empty():
     session = _mock_session("<html><body><p>No meta here</p></body></html>")
-    assert scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session) == []
+    assert (
+        scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session) == []
+    )
 
 
 def test_scrape_detail_no_title_returns_empty():
@@ -302,7 +308,9 @@ def test_scrape_detail_no_title_returns_empty():
     </body></html>
     """
     session = _mock_session(html)
-    assert scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session) == []
+    assert (
+        scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session) == []
+    )
 
 
 def test_scrape_detail_no_date_returns_empty():
@@ -316,7 +324,9 @@ def test_scrape_detail_no_date_returns_empty():
     </body></html>
     """
     session = _mock_session(html)
-    assert scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session) == []
+    assert (
+        scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session) == []
+    )
 
 
 def test_scrape_detail_free_admission_in_description():

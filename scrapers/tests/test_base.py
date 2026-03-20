@@ -21,7 +21,9 @@ def test_get_soup_returns_parsed_html():
 
     soup = get_soup("https://example.com", session)
 
-    assert soup.find("p").get_text() == "Hello"
+    p = soup.find("p")
+    assert p is not None
+    assert p.get_text() == "Hello"
     resp.raise_for_status.assert_called_once()
 
 
@@ -47,7 +49,9 @@ def test_build_arg_parser_defaults():
 
 def test_build_arg_parser_flags():
     parser = build_arg_parser("Test scraper", "out.json")
-    args = parser.parse_args(["--output", "custom.json", "--dry-run", "--verbose", "--delay", "1.5"])
+    args = parser.parse_args(
+        ["--output", "custom.json", "--dry-run", "--verbose", "--delay", "1.5"]
+    )
     assert args.output == "custom.json"
     assert args.dry_run is True
     assert args.verbose is True
@@ -67,7 +71,9 @@ def test_scrape_url_list_single_dict_result():
     session = MagicMock()
     scrape_detail = MagicMock(return_value={"title": "Event A"})
 
-    results = scrape_url_list(["https://example.com/1"], session, scrape_detail, delay=0)
+    results = scrape_url_list(
+        ["https://example.com/1"], session, scrape_detail, delay=0
+    )
 
     assert results == [{"title": "Event A"}]
     scrape_detail.assert_called_once_with("https://example.com/1", session)
@@ -77,7 +83,9 @@ def test_scrape_url_list_list_result():
     session = MagicMock()
     scrape_detail = MagicMock(return_value=[{"title": "A"}, {"title": "B"}])
 
-    results = scrape_url_list(["https://example.com/1"], session, scrape_detail, delay=0)
+    results = scrape_url_list(
+        ["https://example.com/1"], session, scrape_detail, delay=0
+    )
 
     assert results == [{"title": "A"}, {"title": "B"}]
 
@@ -86,7 +94,9 @@ def test_scrape_url_list_none_result_skipped():
     session = MagicMock()
     scrape_detail = MagicMock(return_value=None)
 
-    results = scrape_url_list(["https://example.com/1"], session, scrape_detail, delay=0)
+    results = scrape_url_list(
+        ["https://example.com/1"], session, scrape_detail, delay=0
+    )
 
     assert results == []
 
@@ -95,7 +105,9 @@ def test_scrape_url_list_empty_list_result_skipped():
     session = MagicMock()
     scrape_detail = MagicMock(return_value=[])
 
-    results = scrape_url_list(["https://example.com/1"], session, scrape_detail, delay=0)
+    results = scrape_url_list(
+        ["https://example.com/1"], session, scrape_detail, delay=0
+    )
 
     assert results == []
 

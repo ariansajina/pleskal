@@ -139,7 +139,9 @@ def test_next_page_url_no_links_returns_none():
 def test_next_page_url_already_on_last_page_returns_none():
     # Current page is 3; only links to page 2 (lower) — should return None
     html = '<html><body><a href="/en/calendar?events_page=2">Page 2</a></body></html>'
-    result = _next_page_url(_soup(html), "https://www.hautscene.dk/en/calendar?events_page=3")
+    result = _next_page_url(
+        _soup(html), "https://www.hautscene.dk/en/calendar?events_page=3"
+    )
     assert result is None
 
 
@@ -156,6 +158,7 @@ def test_get_info_row_value_found():
     </div>
     """
     info_div = _soup(html).select_one("div.event-info")
+    assert info_div is not None
     assert _get_info_row_value(info_div, "time") == "15:00 - 18:00"
 
 
@@ -169,12 +172,14 @@ def test_get_info_row_value_case_insensitive():
     </div>
     """
     info_div = _soup(html).select_one("div.event-info")
+    assert info_div is not None
     assert _get_info_row_value(info_div, "PLACE") == "Copenhagen"
 
 
 def test_get_info_row_value_not_found_returns_empty():
     html = '<div class="event-info"></div>'
     info_div = _soup(html).select_one("div.event-info")
+    assert info_div is not None
     assert _get_info_row_value(info_div, "time") == ""
 
 
@@ -359,6 +364,7 @@ def test_scrape_detail_free_event():
     """
     session = _mock_session(html)
     result = scrape_detail("https://www.hautscene.dk/en/events/free", session)
+    assert result is not None
     assert result["is_free"] is True
 
 
@@ -376,6 +382,7 @@ def test_scrape_detail_paid_event():
     """
     session = _mock_session(html)
     result = scrape_detail("https://www.hautscene.dk/en/events/paid", session)
+    assert result is not None
     assert result["is_free"] is False
     assert "150 DKK" in result["price_note"]
 
@@ -394,6 +401,7 @@ def test_scrape_detail_category_from_tag():
     """
     session = _mock_session(html)
     result = scrape_detail("https://www.hautscene.dk/en/events/ws", session)
+    assert result is not None
     assert result["category"] == "workshop"
 
 
@@ -409,6 +417,7 @@ def test_scrape_detail_image_from_hero():
     """
     session = _mock_session(html)
     result = scrape_detail("https://www.hautscene.dk/en/events/show", session)
+    assert result is not None
     assert result["image_url"] == "https://example.com/hero.jpg"
 
 
