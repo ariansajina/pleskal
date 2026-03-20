@@ -13,9 +13,6 @@ def validate_and_process(upload) -> ContentFile:
     MAX_IMAGE_DIMENSION on both axes. Returns a ContentFile ready
     for assignment to an ImageField.
     """
-    if upload.size > settings.MAX_IMAGE_SIZE_BYTES:
-        raise ValidationError("Image must be under 10 MB.")
-
     try:
         img = Image.open(upload)
         img.verify()

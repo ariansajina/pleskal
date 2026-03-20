@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.utils import timezone
 from markdownx.widgets import MarkdownxWidget
 
@@ -63,6 +64,12 @@ class EventForm(forms.ModelForm):
         self.fields["venue_address"].required = False
         self.fields["price_note"].required = False
         self.fields["source_url"].required = False
+
+    def clean_image(self):
+        image = self.cleaned_data.get("image")
+        if image and hasattr(image, "size") and image.size > settings.MAX_IMAGE_SIZE_BYTES:
+            raise forms.ValidationError("Image must be under 10 MB.")
+        return image
 
     def clean_start_datetime(self):
         dt = self.cleaned_data.get("start_datetime")
