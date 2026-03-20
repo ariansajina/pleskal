@@ -59,10 +59,10 @@
         {% endif %}
 
         {# Description #}
-        {% if event.description %}
+        {% if event.get_display_description %}
             <hr class="rule">
             <div class="prose-content" style="margin-bottom:1.5rem;">
-                {{ event.description|render_markdown }}
+                {{ event.get_display_description|render_markdown }}
             </div>
         {% endif %}
 

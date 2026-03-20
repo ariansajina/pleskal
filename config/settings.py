@@ -168,6 +168,14 @@ MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 MAX_IMAGE_DIMENSION = 1200  # px, applied to both axes
 IMAGE_WEBP_QUALITY = 70
 
+# Event settings
+
+SCRAPED_EVENT_DISCLAIMER = (
+    "> ℹ️ This event was scraped from the source page on a best effort basis. "
+    "Some information may be inaccurate. Please check the event source page when "
+    "planning your visit or participation."
+)
+
 # Cloudflare R2 storage (production)
 if env("R2_BUCKET_NAME", default=None):
     STORAGES["default"] = {

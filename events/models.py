@@ -107,6 +107,17 @@ class Event(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    def get_display_description(self):
+        """Return description with scraped event disclaimer prepended."""
+        from django.conf import settings
+
+        if not self.external_source or not settings.SCRAPED_EVENT_DISCLAIMER:
+            return self.description
+        disclaimer = settings.SCRAPED_EVENT_DISCLAIMER
+        if self.description:
+            return f"{disclaimer}\n\n{self.description}"
+        return disclaimer
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = self._generate_unique_slug()
