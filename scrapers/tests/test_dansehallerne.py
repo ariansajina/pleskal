@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import datetime
 import zoneinfo
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 import requests
 from bs4 import BeautifulSoup
 

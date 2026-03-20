@@ -10,7 +10,6 @@ import requests
 
 from scrapers.base import build_arg_parser, get_soup, scrape_url_list, write_output
 
-
 # ── get_soup ──────────────────────────────────────────────────────────────────
 
 
