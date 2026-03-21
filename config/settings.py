@@ -220,8 +220,9 @@ elif DEBUG:
     # Emails print to the terminal — no external service needed.
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
-    EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
-    ANYMAIL = {"RESEND_API_KEY": env("RESEND_API_KEY")}
+    # Production fallback: use console backend if RESEND_API_KEY not set
+    # (e.g. during collectstatic in CI). Actual email sending requires the key.
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # django-allauth — email confirmation & signup
 # Future: enable passwordless / OTP login with allauth's "headless" or
