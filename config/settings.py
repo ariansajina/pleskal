@@ -180,9 +180,9 @@ IMAGE_WEBP_QUALITY = 70
 # Event settings
 
 SCRAPED_EVENT_DISCLAIMER = (
-    "> ℹ️ This event was scraped from the source page on a best effort basis. "
+    "> This event was scraped from the source page. "
     "Some information may be inaccurate. Please check the event source page when "
-    "planning your visit or participation."
+    "planning your visit/participation."
 )
 
 # Cloudflare R2 storage (production)

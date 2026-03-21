@@ -1,14 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Log In — pleskal{% endblock %}
+{% block title %}Log in — pleskal{% endblock %}
 
 {% block content %}
 <div class="content-wrap">
     <div style="max-width:420px;margin:0 auto;">
         <div class="page-hero" style="padding-top:2rem;">
             <div class="page-hero__ornrow">✦ · ✦</div>
-            <h1 class="page-hero__title" style="font-size:2rem;">Log In</h1>
+            <h1 class="page-hero__title" style="font-size:2rem;">Log in</h1>
         </div>
+
+        <p style="margin:1.5rem 0;color:var(--ink-muted);font-size:0.95rem;">By logging in you can publish new events.</p>
 
         <form method="post" style="display:flex;flex-direction:column;gap:1.25rem;">
             {% csrf_token %}
@@ -26,7 +28,7 @@
                 {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
             </div>
             {% endif %}
-            <button type="submit" class="btn btn--primary" style="width:100%;justify-content:center;">Log In</button>
+            <button type="submit" class="btn btn--primary" style="width:100%;justify-content:center;">Log in</button>
         </form>
 
         <div style="margin-top:1.5rem;text-align:center;font-size:0.78rem;color:var(--ink-muted);">

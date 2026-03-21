@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from django.views.generic import CreateView, DeleteView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, TemplateView, UpdateView, View
 from django.views.generic.detail import DetailView
 
 from config.ratelimit import RateLimitMixin
@@ -373,3 +373,7 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
             EVENT_FORM_TEMPLATE,
             {"form": form, "page_title": "Duplicate Event"},
         )
+
+
+class SubscribeView(TemplateView):
+    template_name = "events/subscribe.html"

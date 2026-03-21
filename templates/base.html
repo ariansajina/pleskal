@@ -332,20 +332,7 @@
     .filter-chip:hover { border-color: var(--blue); color: var(--blue); }
     input[type="checkbox"]:checked + .filter-chip { border-color: var(--blue); color: var(--cream); background: var(--blue); }
 
-    /* ─── FOOTER ────────────────────────────────────────── */
-    .site-footer {
-      border-top: 2px solid var(--blue); background: var(--blue);
-      color: var(--cream-dim); padding: 1.25rem 1.5rem;
-      font-size: 0.68rem; letter-spacing: 0.04em;
-    }
-    .site-footer__inner {
-      max-width: 1100px; margin: 0 auto;
-      display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem 2rem;
-    }
-    .site-footer a { color: var(--cream-dim); }
-    .site-footer a:hover { color: var(--cream); }
-
-    /* ─── Page transition ───────────────────────────────── */
+/* ─── Page transition ───────────────────────────────── */
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(8px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -393,6 +380,10 @@
            class="nav-link {% if request.resolver_match.url_name == 'event_list' %}nav-link--active{% endif %}">
           Events
         </a>
+        <a href="{% url 'subscribe' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'subscribe' %}nav-link--active{% endif %}">
+          Subscribe
+        </a>
 
         <span class="nav-divider"></span>
         <span id="htmx-indicator">loading…</span>
@@ -430,18 +421,6 @@
     {% block content %}{% endblock %}
   </main>
 
-  {# ── SITE FOOTER ──────────────────────────────────────── #}
-  <footer class="site-footer">
-    <div class="site-footer__inner">
-      <span style="color:var(--star);">✦</span>
-      <span>© {% now "Y" %} pleskal</span>
-      <span style="opacity:0.4;">·</span>
-      <a href="{% url 'event_ical_feed' %}">iCal</a>
-      <span style="opacity:0.4;">·</span>
-      <a href="{% url 'event_rss_feed' %}">RSS</a>
-    </div>
-  </footer>
-
-  {% block extra_scripts %}{% endblock %}
+{% block extra_scripts %}{% endblock %}
 </body>
 </html>

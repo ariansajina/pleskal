@@ -9,6 +9,7 @@ from .views import (
     EventListView,
     EventUpdateView,
     MyEventsView,
+    SubscribeView,
 )
 
 urlpatterns = [
@@ -30,4 +31,6 @@ urlpatterns = [
     # Feeds
     path("feed/events.ics", EventICalFeed.as_view(), name="event_ical_feed"),
     path("feed/events.rss", EventRSSFeed(), name="event_rss_feed"),
+    # Subscribe page
+    path("subscribe/", SubscribeView.as_view(), name="subscribe"),
 ]
