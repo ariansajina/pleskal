@@ -1,4 +1,4 @@
-"""Tests for Feature 12: iCal and RSS feeds."""
+"""Tests for iCal and RSS feeds."""
 
 import pytest
 from django.urls import reverse

@@ -37,11 +37,6 @@ class EventOwnerMixin:
         return obj
 
 
-# ---------------------------------------------------------------------------
-# Feature 6: Event Submission
-# ---------------------------------------------------------------------------
-
-
 class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
     rate_limit_key = "event_create"
     rate_limit_limit = 20
@@ -96,11 +91,6 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
         ctx = super().get_context_data(**kwargs)
         ctx["page_title"] = "Submit an Event"
         return ctx
-
-
-# ---------------------------------------------------------------------------
-# Feature 8: Public Event Listings with HTMX filtering
-# ---------------------------------------------------------------------------
 
 
 def _parse_date_safe(value):
@@ -221,11 +211,6 @@ class EventListView(RateLimitMixin, View):
         return render(request, self.template_name, ctx)
 
 
-# ---------------------------------------------------------------------------
-# Feature 9: Event Detail
-# ---------------------------------------------------------------------------
-
-
 class EventDetailView(DetailView):
     model = Event
     template_name = "events/event_detail.html"
@@ -234,11 +219,6 @@ class EventDetailView(DetailView):
 
     def get_object(self, queryset=None):
         return get_object_or_404(Event, slug=self.kwargs["slug"])
-
-
-# ---------------------------------------------------------------------------
-# Feature 10: Event Management (My Events, Edit, Delete)
-# ---------------------------------------------------------------------------
 
 
 class MyEventsView(LoginRequiredMixin, View):

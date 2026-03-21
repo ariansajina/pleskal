@@ -1,4 +1,4 @@
-"""Tests for event views: submission (F6), listing (F8), detail (F9), management (F10)."""  # noqa: E501
+"""Tests for event views."""
 
 import io
 
@@ -25,11 +25,6 @@ def _make_image_upload(width=100, height=100, fmt="JPEG", name="test.jpg"):
 
 def _future_dt(days=7):
     return timezone.now() + timezone.timedelta(days=days)
-
-
-# ---------------------------------------------------------------------------
-# Feature 6: Event submission
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
@@ -258,11 +253,6 @@ class TestEventCreateView:
         assert resp.status_code == 200
 
 
-# ---------------------------------------------------------------------------
-# Feature 8: Public event listings
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 class TestEventListView:
     def test_events_shown(self, client):
@@ -407,11 +397,6 @@ class TestEventListView:
         assert str(e2.title).encode() in resp.content
 
 
-# ---------------------------------------------------------------------------
-# Feature 9: Event detail
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.django_db
 class TestEventDetailView:
     def test_event_accessible_by_anyone(self, client):
@@ -423,11 +408,6 @@ class TestEventDetailView:
     def test_nonexistent_slug_returns_404(self, client):
         resp = client.get(reverse("event_detail", kwargs={"slug": "does-not-exist"}))
         assert resp.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Feature 10: Event management (edit, delete, my-events)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
@@ -512,11 +492,6 @@ class TestEventDeleteView:
         resp = client.post(reverse("event_delete", kwargs={"slug": event.slug}))
         assert resp.status_code == 403
         assert Event.objects.filter(pk=event.pk).exists()
-
-
-# ---------------------------------------------------------------------------
-# Feature 10: Event Duplicate
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db

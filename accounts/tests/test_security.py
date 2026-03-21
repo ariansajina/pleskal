@@ -1,4 +1,4 @@
-"""Feature 13: Security hardening tests — axes lockout and CSP header."""
+"""Tests for security hardening — axes lockout and CSP header."""
 
 import pytest
 from django.urls import reverse

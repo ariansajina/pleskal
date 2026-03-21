@@ -1,4 +1,4 @@
-"""Feature 16: Storage backend configuration tests."""
+"""Tests for storage backend configuration."""
 
 import pytest
 
