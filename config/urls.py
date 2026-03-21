@@ -11,11 +11,6 @@ urlpatterns = [
     # are shadowed by the custom views above.
     path("accounts/", include("allauth.urls")),
     path("markdownx/", include("markdownx.urls")),
-    path(
-        "privacy/",
-        TemplateView.as_view(template_name="pages/privacy.html"),
-        name="privacy",
-    ),
     path("", include("events.urls")),
 ]
 
