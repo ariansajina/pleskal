@@ -51,7 +51,7 @@ def _download_image(url: str) -> tuple[str, bytes] | None:
     try:
         req = urllib.request.Request(  # noqa: S310
             url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; PleskalScraper/1.0)"},
+            headers={"User-Agent": "Mozilla/5.0 (compatible; pleskalScraper/1.0)"},
         )
         with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
             data = resp.read()

@@ -1,4 +1,4 @@
-"""Shared utilities for Pleskal scrapers.
+"""Shared utilities for pleskal scrapers.
 
 Provides common HTTP helpers and CLI utilities reused across scrapers.
 """
@@ -15,7 +15,7 @@ import requests
 from bs4 import BeautifulSoup
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; PleskalScraper/1.0)",
+    "User-Agent": "Mozilla/5.0 (compatible; pleskalScraper/1.0)",
     "Accept-Language": "en-US,en;q=0.9",
 }
 

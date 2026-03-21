@@ -2,7 +2,7 @@
 
 Uses the Craft CMS GraphQL API at https://cms.sydhavnteater.dk/api to fetch
 all events, filters to upcoming only, and outputs a JSON array of event dicts
-ready for ingestion into the Pleskal database.
+ready for ingestion into the pleskal database.
 
 Date ranges are expanded into individual daily events.  The "When" field from
 the event's dataTable section is parsed to determine which days in the run
@@ -32,7 +32,7 @@ EXTERNAL_SOURCE = "sydhavnteater"
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; PleskalScraper/1.0)",
+    "User-Agent": "Mozilla/5.0 (compatible; pleskalScraper/1.0)",
     "Content-Type": "application/json",
 }
 
@@ -67,7 +67,7 @@ GRAPHQL_QUERY = """
 }
 """
 
-# Map Craft CMS category titles → Pleskal EventCategory values
+# Map Craft CMS category titles → pleskal EventCategory values
 CATEGORY_MAP = {
     "forestillinger": "performance",
     "forestilling": "performance",
@@ -380,7 +380,7 @@ def _dt_at_time(date: datetime.date, t: datetime.time) -> datetime.datetime:
 
 def build_records(event: dict) -> list[dict]:
     """
-    Map a raw API event dict to a list of Pleskal event record dicts — one per
+    Map a raw API event dict to a list of pleskal event record dicts — one per
     performance day.  Returns an empty list if essential fields are missing.
 
     Date ranges (dateFrom→dateTo) are expanded day by day.  The "When" field

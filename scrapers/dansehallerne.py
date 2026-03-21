@@ -1,7 +1,7 @@
 """Scraper for https://dansehallerne.dk/en/public-program/
 
 Fetches all event listing URLs, visits each detail page, and outputs a JSON
-array of event dicts ready for ingestion into the Pleskal database.
+array of event dicts ready for ingestion into the pleskal database.
 
 Each detail page may have multiple dates (one ICS button per date), so a
 single page can produce multiple output records.
@@ -31,7 +31,7 @@ BASE_URL = "https://dansehallerne.dk"
 PROGRAM_URL = f"{BASE_URL}/en/public-program/"
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 
-# Map dansehallerne type strings → Pleskal EventCategory values
+# Map dansehallerne type strings → pleskal EventCategory values
 CATEGORY_MAP = {
     "performance": "performance",
     "ipaf performance": "performance",

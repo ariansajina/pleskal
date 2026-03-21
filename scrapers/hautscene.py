@@ -1,7 +1,7 @@
 """Scraper for https://www.hautscene.dk/en/calendar
 
 Fetches all event listing URLs, visits each detail page, and outputs a JSON
-array of event dicts ready for ingestion into the Pleskal database.
+array of event dicts ready for ingestion into the pleskal database.
 
 Usage:
     uv run python scrapers/hautscene.py
@@ -28,7 +28,7 @@ CALENDAR_URL = f"{BASE_URL}/en/calendar"
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 EXTERNAL_SOURCE = "hautscene"
 
-# Map hautscene format strings → Pleskal EventCategory values
+# Map hautscene format strings → pleskal EventCategory values
 CATEGORY_MAP = {
     "talk": "talk",
     "talks": "talk",

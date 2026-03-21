@@ -202,8 +202,8 @@ if env("R2_BUCKET_NAME", default=None):
 
 # Email
 
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Pleskal <noreply@pleskal.dk>")
-SERVER_EMAIL = env("SERVER_EMAIL", default="Pleskal <noreply@pleskal.dk>")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="pleskal <noreply@pleskal.dk>")
+SERVER_EMAIL = env("SERVER_EMAIL", default="pleskal <noreply@pleskal.dk>")
 
 # ADMINS receives server error emails and new-user signup notifications.
 # Format: comma-separated email addresses, e.g.:

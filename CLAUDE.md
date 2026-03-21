@@ -1,8 +1,8 @@
-# CLAUDE.md — Pleskal (Copenhagen Dance Calendar)
+# CLAUDE.md — pleskal (Copenhagen Dance Calendar)
 
 ## Project Overview
 
-Pleskal is a local-first, crowd-sourced Django web application for discovering and sharing dance events in Copenhagen. Anyone can submit events. Community-maintained, editorially neutral.
+pleskal is a local-first, crowd-sourced Django web application for discovering and sharing dance events in Copenhagen. Anyone can submit events. Community-maintained, editorially neutral.
 
 Inspired by [dukop.dk](https://dukop.dk). Designed for low operational cost and complexity.
 
