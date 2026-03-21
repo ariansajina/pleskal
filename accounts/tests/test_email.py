@@ -66,6 +66,7 @@ class TestAdminSignupNotification:
 class TestEmailConfirmationOnSignup:
     def test_confirmation_email_sent_on_signup(self, mailoutbox, settings):
         settings.ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+        settings.ADMINS = []  # suppress admin signup notification
         client = Client()
         response = client.post(
             "/accounts/signup/",
@@ -92,7 +93,8 @@ class TestEmailConfirmationOnSignup:
 
 @pytest.mark.django_db
 class TestPasswordResetEmail:
-    def test_reset_email_sent_for_existing_user(self, mailoutbox):
+    def test_reset_email_sent_for_existing_user(self, mailoutbox, settings):
+        settings.ADMINS = []  # suppress admin signup notification
         user = UserFactory.create(email="resetme@example.com")
         client = Client()
         response = client.post(

@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.sites",
     # Third-party
+    "anymail",
     "axes",
     "markdownx",
     "allauth",
@@ -210,18 +211,17 @@ SERVER_EMAIL = env("SERVER_EMAIL", default="Pleskal <noreply@pleskal.dk>")
 _admins_raw = env("ADMINS", default="")
 ADMINS = [addr.strip() for addr in _admins_raw.split(",") if addr.strip()]
 
-if DEBUG:
+_resend_api_key = env("RESEND_API_KEY", default=None)
+if _resend_api_key:
+    # Use Resend via django-anymail whenever an API key is present (dev or prod).
+    EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+    ANYMAIL = {"RESEND_API_KEY": _resend_api_key}
+elif DEBUG:
     # Emails print to the terminal — no external service needed.
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 else:
-    # Production: use django-anymail with Resend.
-    # Set RESEND_API_KEY in the environment; never hard-code it.
     EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
-    ANYMAIL = {
-        # django-anymail reads RESEND_API_KEY from the environment automatically.
-        # Additional Resend settings can be added here as needed, e.g.:
-        #   "RESEND_API_URL": "https://api.resend.com/",
-    }
+    ANYMAIL = {"RESEND_API_KEY": env("RESEND_API_KEY")}
 
 # django-allauth — email confirmation & signup
 # Future: enable passwordless / OTP login with allauth's "headless" or
