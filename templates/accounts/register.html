@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Create your account — pleskal{% endblock %}
+
+{% block content %}
+<div class="content-wrap">
+    <div style="max-width:420px;margin:0 auto;">
+        <div class="page-hero" style="padding-top:2rem;">
+            <div class="page-hero__ornrow">✦ · ✦</div>
+            <h1 class="page-hero__title" style="font-size:2rem;">Create your account</h1>
+        </div>
+
+        <p style="margin:1.5rem 0;color:var(--ink-muted);font-size:0.95rem;">
+            Almost there! Fill in the details below to finish setting up your account.
+        </p>
+
+        <form method="post" style="display:flex;flex-direction:column;gap:1.25rem;">
+            {% csrf_token %}
+            {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                <p class="form-help">{{ field.help_text }}</p>
+                {% endif %}
+                {% for error in field.errors %}
+                <p class="form-field-error">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endfor %}
+            {% if form.non_field_errors %}
+            <div class="alert alert--error">
+                {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+            </div>
+            {% endif %}
+            <button type="submit" class="btn btn--primary" style="width:100%;justify-content:center;">Create account</button>
+        </form>
+
+        <div style="margin-top:1.5rem;text-align:center;font-size:0.78rem;color:var(--ink-muted);">
+            Already have an account? <a href="{% url 'login' %}" class="link-accent">Log in</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

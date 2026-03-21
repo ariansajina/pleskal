@@ -1,5 +1,5 @@
 from django import forms
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 
 User = get_user_model()
@@ -20,7 +20,7 @@ class EmailHashPasswordResetForm(PasswordResetForm):
 
 
 class CustomAuthenticationForm(AuthenticationForm):
-    username = forms.CharField(label="Username")
+    username = forms.CharField(label="Email")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -29,15 +29,9 @@ class CustomAuthenticationForm(AuthenticationForm):
 
 
 class ProfileForm(forms.ModelForm):
-    username = forms.CharField(
-        max_length=150,
-        label="Username",
-        help_text="System username — letters, digits and @/./+/-/_ only (no whitespace).",
-    )
-
     class Meta:
         model = User
-        fields = ("username", "display_name", "email", "bio", "website")
+        fields = ("display_name", "email", "bio", "website")
         widgets = {
             "display_name": forms.TextInput(
                 attrs={"class": "form-input", "maxlength": 100}
@@ -57,7 +51,7 @@ class ProfileForm(forms.ModelForm):
             "email": "Email address",
         }
         help_texts = {
-            "display_name": "Optional. Shown instead of your username on events. Can include spaces and special characters.",
+            "display_name": "Shown next to your submitted events. Can include spaces and special characters.",
             "bio": "Up to 500 characters. Markdown supported. Displayed on your public profile.",
             "website": "Optional link displayed on your public profile.",
             "email": "Used for password resets.",
@@ -65,17 +59,7 @@ class ProfileForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["username"].widget.attrs.setdefault("class", "form-input")
         self.fields["email"].required = False
-
-    def clean_username(self):
-        username = self.cleaned_data["username"]
-        qs = User.objects.filter(username=username)
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise forms.ValidationError("This username is already taken.")
-        return username
 
     def clean_email(self):
         email = self.cleaned_data.get("email", "")
@@ -92,5 +76,69 @@ class ProfileForm(forms.ModelForm):
         return email
 
 
-# Keep old name as alias so existing imports don't break
-PublisherProfileForm = ProfileForm
+class ClaimCodeForm(forms.Form):
+    code = forms.CharField(
+        max_length=8,
+        label="Claim code",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-input",
+                "placeholder": "e.g. K7XM4HRN",
+                "autocomplete": "off",
+                "style": "font-family:monospace;letter-spacing:0.15em;font-size:1.1rem;text-transform:uppercase;",
+            }
+        ),
+    )
+
+    def clean_code(self):
+        return self.cleaned_data["code"].strip().upper()
+
+
+class ClaimRegisterForm(forms.Form):
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={"class": "form-input"}),
+    )
+    display_name = forms.CharField(
+        max_length=100,
+        widget=forms.TextInput(attrs={"class": "form-input"}),
+        help_text="This is what other users see. Can include spaces and special characters.",
+    )
+    password1 = forms.CharField(
+        label="Password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": "form-input"}),
+    )
+    password2 = forms.CharField(
+        label="Confirm password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": "form-input"}),
+    )
+
+    def clean_email(self):
+        email = self.cleaned_data["email"]
+        from .crypto import hash_email
+
+        if User.objects.filter(email_hash=hash_email(email)).exists():
+            raise forms.ValidationError("This email address is already in use.")
+        return email
+
+    def clean_display_name(self):
+        display_name = self.cleaned_data["display_name"]
+        if len(display_name) < 1:
+            raise forms.ValidationError("Display name is required.")
+        return display_name
+
+    def clean_password2(self):
+        password1 = self.cleaned_data.get("password1")
+        password2 = self.cleaned_data.get("password2")
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError("Passwords don't match.")
+        return password2
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get("password1")
+        if password1:
+            temp_user = User(email=cleaned_data.get("email", ""))
+            password_validation.validate_password(password1, user=temp_user)
+        return cleaned_data

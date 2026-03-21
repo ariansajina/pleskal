@@ -32,7 +32,7 @@ class ZxcvbnPasswordValidator:
     def validate(self, password: str, user=None) -> None:
         user_inputs = []
         if user is not None:
-            for attr in ("username", "email", "first_name", "last_name"):
+            for attr in ("email", "display_name"):
                 value = getattr(user, attr, None)
                 if value:
                     user_inputs.append(value)
@@ -60,6 +60,6 @@ class ZxcvbnPasswordValidator:
 
     def get_help_text(self) -> str:
         return _(
-            "Your password must achieve a strength score of at least "
-            "%(min_score)d out of 4."
-        ) % {"min_score": self.min_score}
+            "Choose a strong, memorable password — avoid names, dates, and common words. "
+            "I recommend using a password manager to generate and store a unique password."
+        )

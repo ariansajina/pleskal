@@ -1,0 +1,36 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Generate claim codes{% endblock %}
+
+{% block content %}
+<h1>Generate claim codes</h1>
+
+<form method="post">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+        {% for field in form %}
+        <div class="form-row">
+            <label for="{{ field.id_for_label }}">{{ field.label }}:</label>
+            {{ field }}
+            {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+            {% for error in field.errors %}<p class="errornote">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+        <input type="submit" value="Generate" class="default">
+    </div>
+</form>
+
+{% if generated_codes %}
+<h2>Generated codes</h2>
+<p>Copy these codes to write on cards:</p>
+<pre style="background:#f8f8f8;padding:1em;border:1px solid #ddd;font-size:1.1em;line-height:1.8;">{% for code in generated_codes %}{{ code }}
+{% endfor %}</pre>
+{% endif %}
+
+<p style="margin-top:1em;">
+    <a href="{% url 'admin:accounts_claimcode_changelist' %}">&laquo; Back to claim codes</a>
+</p>
+{% endblock %}

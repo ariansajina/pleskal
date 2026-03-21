@@ -99,12 +99,12 @@ class TestZxcvbnPasswordValidator:
     # ------------------------------------------------------------------
 
     @pytest.mark.django_db
-    def test_rejects_password_based_on_username(self):
+    def test_rejects_password_based_on_display_name(self):
         from accounts.tests.factories import UserFactory
 
-        user = UserFactory.build(username="johndoe", email="johndoe@example.com")
+        user = UserFactory.build(display_name="johndoe", email="johndoe@example.com")
         v = self._validator()
-        # A password that is just the username is very weak
+        # A password that is just the display name is very weak
         with pytest.raises(ValidationError):
             v.validate("johndoe", user=user)
 
@@ -138,11 +138,6 @@ class TestZxcvbnPasswordValidator:
     # ------------------------------------------------------------------
     # Help text
     # ------------------------------------------------------------------
-
-    def test_get_help_text_contains_min_score(self):
-        v = ZxcvbnPasswordValidator(min_score=3)
-        help_text = v.get_help_text()
-        assert "3" in help_text
 
     def test_get_help_text_returns_string(self):
         v = self._validator()

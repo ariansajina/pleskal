@@ -20,36 +20,34 @@ class TestUserModel:
         with pytest.raises(IntegrityError):
             UserFactory.create(email="dupe@example.com")
 
-    def test_str_returns_username(self):
-        user = UserFactory.create(username="dancer")
-        assert str(user) == "dancer"
+    def test_str_returns_email(self):
+        user = UserFactory.create(email="dancer@example.com")
+        assert "dancer" in str(user)
 
-    def test_username_field_is_username(self):
-        assert User.USERNAME_FIELD == "username"
+    def test_username_field_is_email_hash(self):
+        assert User.USERNAME_FIELD == "email_hash"
 
-    def test_required_fields_includes_email(self):
-        assert "email" in User.REQUIRED_FIELDS
+    def test_required_fields_is_empty(self):
+        assert User.REQUIRED_FIELDS == []
 
 
 @pytest.mark.django_db
 class TestUserManager:
     def test_create_user_requires_email(self):
         with pytest.raises(ValueError, match="Email is required"):
-            User.objects.create_user(username="nomail", email=None, password="pass")
+            User.objects.create_user(email=None, password="pass")
 
     def test_create_user_defaults(self):
-        user = User.objects.create_user(
-            username="newuser", email="new@example.com", password="pass123"
-        )
+        user = User.objects.create_user(email="new@example.com", password="pass123")
         assert user.is_staff is False
 
     def test_create_superuser_defaults(self):
         user = User.objects.create_superuser(
-            username="admin", email="admin@example.com", password="pass123"
+            email="admin@example.com", password="pass123"
         )
         assert user.is_staff is True
         assert user.is_superuser is True
 
     def test_create_superuser_requires_email(self):
         with pytest.raises(ValueError, match="Email is required"):
-            User.objects.create_superuser(username="admin", email=None, password="pass")
+            User.objects.create_superuser(email=None, password="pass")

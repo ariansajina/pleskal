@@ -159,7 +159,6 @@ class EventListView(RateLimitMixin, View):
                 | Q(venue_name__icontains=search_query)
                 | Q(description__icontains=search_query)
                 | Q(submitted_by__display_name__icontains=search_query)
-                | Q(submitted_by__username__icontains=search_query)
             )
 
         return qs, categories, date_from, date_to, search_query, date_range_active
@@ -244,7 +243,7 @@ class EventDetailView(DetailView):
 
 class MyEventsView(LoginRequiredMixin, View):
     def get(self, request):
-        return redirect("publisher_profile", username=request.user.username)
+        return redirect("publisher_profile", pk=request.user.pk)
 
 
 class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, UpdateView):

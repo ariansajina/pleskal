@@ -16,12 +16,12 @@ class TestLoginView:
         response = client.get("/accounts/login/")
         assert response.status_code == 200
 
-    def test_login_with_username(self):
-        _ = UserFactory.create(username="testuser")
+    def test_login_with_email(self):
+        UserFactory.create(email="testuser@example.com")
         client = Client()
         response = client.post(
             "/accounts/login/",
-            {"username": "testuser", "password": "testpass123"},
+            {"username": "testuser@example.com", "password": "testpass123"},
         )
         assert response.status_code == 302
 
@@ -65,12 +65,12 @@ class TestPasswordResetView:
 @pytest.mark.django_db
 class TestAccountProfileView:
     def test_redirects_to_publisher_profile(self):
-        user = UserFactory.create(username="profileuser")
+        user = UserFactory.create()
         client = Client()
         client.force_login(user)
         response = client.get("/accounts/profile/")
         assert response.status_code == 302
-        assert "profileuser" in response.url
+        assert str(user.pk) in response.url
 
     def test_requires_login(self):
         client = Client()
@@ -82,21 +82,23 @@ class TestAccountProfileView:
 @pytest.mark.django_db
 class TestPublisherProfileView:
     def test_show_upcoming_events(self):
-        user = UserFactory.create(username="publisher1")
+        user = UserFactory.create()
         client = Client()
-        response = client.get(f"/accounts/publishers/{user.username}/")
+        response = client.get(f"/accounts/publishers/{user.pk}/")
         assert response.status_code == 200
 
     def test_show_past_events(self):
-        user = UserFactory.create(username="publisher2")
+        user = UserFactory.create()
         client = Client()
-        response = client.get(f"/accounts/publishers/{user.username}/?past=1")
+        response = client.get(f"/accounts/publishers/{user.pk}/?past=1")
         assert response.status_code == 200
         assert response.context["show_past"] is True
 
     def test_404_for_unknown_publisher(self):
         client = Client()
-        response = client.get("/accounts/publishers/nobody/")
+        response = client.get(
+            "/accounts/publishers/00000000-0000-0000-0000-000000000000/"
+        )
         assert response.status_code == 404
 
 
@@ -110,25 +112,25 @@ class TestEditProfileView:
         assert response.status_code == 200
 
     def test_post_valid_updates_profile(self):
-        user = UserFactory.create(username="editme")
+        user = UserFactory.create()
         client = Client()
         client.force_login(user)
         response = client.post(
             "/accounts/profile/edit/",
-            {"username": "editme", "display_name": "New Name"},
+            {"display_name": "New Name"},
         )
         assert response.status_code == 302
         user.refresh_from_db()
         assert user.display_name == "New Name"
 
     def test_post_invalid_rerenders_form(self):
-        UserFactory.create(username="taken")
-        user = UserFactory.create(username="myuser")
+        UserFactory.create(email="taken@example.com")
+        user = UserFactory.create()
         client = Client()
         client.force_login(user)
         response = client.post(
             "/accounts/profile/edit/",
-            {"username": "taken"},
+            {"email": "taken@example.com"},
         )
         assert response.status_code == 200
 

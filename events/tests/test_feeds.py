@@ -49,11 +49,10 @@ class TestRSSFeed:
         assert str(social.title).encode() not in resp.content
 
     def test_rss_no_submitter_identity(self, client):
-        user = UserFactory.create(email="private@example.com", username="privateuser")
+        user = UserFactory.create(email="private@example.com")
         EventFactory.create(submitted_by=user)
         resp = client.get(reverse("event_rss_feed"))
         assert b"private@example.com" not in resp.content
-        assert b"privateuser" not in resp.content
 
     def test_rss_is_valid_xml(self, client):
         EventFactory.create()
@@ -96,11 +95,10 @@ class TestICalFeed:
         assert str(social.title).encode() not in resp.content
 
     def test_ical_no_submitter_identity(self, client):
-        user = UserFactory.create(email="secret@example.com", username="secretuser")
+        user = UserFactory.create(email="secret@example.com")
         EventFactory.create(submitted_by=user)
         resp = client.get(reverse("event_ical_feed"))
         assert b"secret@example.com" not in resp.content
-        assert b"secretuser" not in resp.content
 
     def test_ical_contains_venue(self, client):
         EventFactory.create(

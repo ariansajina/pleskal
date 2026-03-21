@@ -1,21 +1,104 @@
-from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django import forms
+from django.contrib import admin, messages
+from django.db import IntegrityError
+from django.shortcuts import render
+from django.urls import path, reverse
+from django.utils import timezone
 
-from .models import User
+from .models import ClaimCode, User, generate_claim_code
 
 
 @admin.register(User)
-class UserAdmin(BaseUserAdmin):
-    list_display = (
-        "username",
-        "email",
-        "date_joined",
-    )
+class UserAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "email", "is_staff", "is_active", "date_joined")
     list_filter = ("is_staff", "is_active")
-    fieldsets = BaseUserAdmin.fieldsets + (
+    search_fields = ("display_name", "email")
+    readonly_fields = ("id", "email_hash", "date_joined", "last_login")
+    fieldsets = (
+        (None, {"fields": ("id", "email", "email_hash", "password")}),
+        ("Profile", {"fields": ("display_name", "bio", "website")}),
         (
-            "Profile",
-            {"fields": ("display_name", "bio", "website", "intro_message")},
+            "Permissions",
+            {
+                "fields": (
+                    "is_active",
+                    "is_staff",
+                    "is_superuser",
+                    "groups",
+                    "user_permissions",
+                )
+            },
         ),
+        ("Dates", {"fields": ("date_joined", "last_login")}),
     )
-    readonly_fields = ("intro_message",)
+
+
+class GenerateCodesForm(forms.Form):
+    count = forms.IntegerField(min_value=1, max_value=100, initial=10)
+    expires_at = forms.DateTimeField(
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+        help_text="When these codes expire.",
+    )
+
+
+@admin.register(ClaimCode)
+class ClaimCodeAdmin(admin.ModelAdmin):
+    list_display = ("code", "expires_at", "is_claimed_icon", "claimed_by", "claimed_at")
+    list_filter = ("claimed_at", "expires_at")
+    readonly_fields = ("code", "created_at", "claimed_at", "claimed_by")
+    search_fields = ("code",)
+
+    @admin.display(boolean=True, description="Claimed")
+    def is_claimed_icon(self, obj):
+        return obj.is_claimed
+
+    def get_urls(self):
+        custom_urls = [
+            path(
+                "generate/",
+                self.admin_site.admin_view(self.generate_codes_view),
+                name="accounts_claimcode_generate",
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
+    def generate_codes_view(self, request):
+        generated_codes = None
+        if request.method == "POST":
+            form = GenerateCodesForm(request.POST)
+            if form.is_valid():
+                count = form.cleaned_data["count"]
+                expires_at = form.cleaned_data["expires_at"]
+                if timezone.is_naive(expires_at):
+                    expires_at = timezone.make_aware(expires_at)
+
+                codes = []
+                max_retries = count * 10
+                attempts = 0
+                while len(codes) < count and attempts < max_retries:
+                    attempts += 1
+                    code = generate_claim_code()
+                    try:
+                        ClaimCode.objects.create(code=code, expires_at=expires_at)
+                        codes.append(code)
+                    except IntegrityError:
+                        continue
+
+                generated_codes = codes
+                messages.success(request, f"Generated {len(codes)} claim codes.")
+        else:
+            form = GenerateCodesForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            "form": form,
+            "generated_codes": generated_codes,
+            "title": "Generate claim codes",
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/accounts/claimcode/generate.html", context)
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["generate_url"] = reverse("admin:accounts_claimcode_generate")
+        return super().changelist_view(request, extra_context=extra_context)

@@ -31,13 +31,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django.contrib.sites",
     # Third-party
     "anymail",
     "axes",
     "markdownx",
-    "allauth",
-    "allauth.account",
     # Local
     "accounts",
     "events",
@@ -53,7 +50,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
-    "allauth.account.middleware.AccountMiddleware",
     "config.middleware.ContentSecurityPolicyMiddleware",
 ]
 
@@ -86,16 +82,12 @@ AUTH_USER_MODEL = "accounts.User"
 
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",
-    "django.contrib.auth.backends.ModelBackend",
-    "allauth.account.auth_backends.AuthenticationBackend",
+    "accounts.backends.EmailBackend",
 ]
 
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
-
-# django.contrib.sites (required by allauth)
-SITE_ID = 1
 
 PASSWORD_PEPPER = env("PASSWORD_PEPPER", default="")
 
@@ -223,21 +215,6 @@ else:
     # Production fallback: use console backend if RESEND_API_KEY not set
     # (e.g. during collectstatic in CI). Actual email sending requires the key.
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-
-# django-allauth — email confirmation & signup
-# Future: enable passwordless / OTP login with allauth's "headless" or
-# allauth.mfa once the provider email integration is confirmed working.
-ACCOUNT_LOGIN_METHODS = {"email"}  # log in with email, not username
-ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
-ACCOUNT_EMAIL_VERIFICATION = "mandatory"
-ACCOUNT_UNIQUE_EMAIL = True
-ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
-# Don't let allauth query User.email directly (it's encrypted and not
-# filterable by value). Allauth uses its own EmailAddress table for all
-# email-based lookups (login, password reset). Uniqueness is enforced via
-# email_hash by our custom AccountAdapter.
-ACCOUNT_USER_MODEL_EMAIL_FIELD = None
-ACCOUNT_ADAPTER = "accounts.adapters.AccountAdapter"
 
 # django-axes (brute-force protection)
 

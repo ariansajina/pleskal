@@ -391,14 +391,6 @@ class TestEventListView:
         assert str(match.title).encode() in resp.content
         assert str(no_match.title).encode() not in resp.content
 
-    def test_search_matches_publisher_username(self, client):
-        user = UserFactory.create(username="salsaking")
-        match = EventFactory(submitted_by=user)
-        no_match = EventFactory()
-        resp = client.get(reverse("event_list") + "?q=salsaking")
-        assert str(match.title).encode() in resp.content
-        assert str(no_match.title).encode() not in resp.content
-
     def test_search_matches_publisher_display_name(self, client):
         user = UserFactory.create(display_name="DJ Mambo")
         match = EventFactory(submitted_by=user)
@@ -449,9 +441,7 @@ class TestMyEventsView:
         event = EventFactory.create(submitted_by=user)
         other = EventFactory.create()
         client.force_login(user)
-        resp = client.get(
-            reverse("publisher_profile", kwargs={"username": user.username})
-        )
+        resp = client.get(reverse("publisher_profile", kwargs={"pk": user.pk}))
         assert resp.status_code == 200
         assert str(event.title).encode() in resp.content
         assert str(other.title).encode() not in resp.content
