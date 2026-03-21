@@ -32,7 +32,7 @@ class ProfileForm(forms.ModelForm):
     username = forms.CharField(
         max_length=150,
         label="Username",
-        help_text="System username — letters, digits and @/./+/-/_ only.",
+        help_text="System username — letters, digits and @/./+/-/_ only (no whitespace).",
     )
 
     class Meta:
@@ -76,6 +76,20 @@ class ProfileForm(forms.ModelForm):
         if qs.exists():
             raise forms.ValidationError("This username is already taken.")
         return username
+
+    def clean_email(self):
+        email = self.cleaned_data.get("email", "")
+        if not email:
+            return email
+        from .crypto import hash_email
+
+        email_hash = hash_email(email)
+        qs = User.objects.filter(email_hash=email_hash)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("This email address is already in use.")
+        return email
 
 
 # Keep old name as alias so existing imports don't break
