@@ -255,6 +255,10 @@ if DEBUG:
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Email uniqueness is enforced via email_hash (HMAC blind index); the encrypted
+# email column cannot carry a unique constraint, so silence the spurious warning.
+SILENCED_SYSTEM_CHECKS = ["auth.W004"]
+
 # django-markdownx
 
 MARKDOWNX_MARKDOWN_EXTENSIONS = ["fenced_code"]
