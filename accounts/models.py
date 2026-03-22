@@ -100,7 +100,7 @@ class ClaimCode(models.Model):
 
     @property
     def is_claimed(self):
-        return self.claimed_by is not None
+        return self.claimed_at is not None
 
     @property
     def is_valid(self):

@@ -61,6 +61,19 @@ class TestClaimCodeModel:
         assert code.is_claimed is True
         assert code.is_valid is False
 
+    def test_is_claimed_survives_user_deletion(self):
+        user = UserFactory.create()
+        code = ClaimCode.objects.create(
+            code="DELD1234",
+            expires_at=timezone.now() + timedelta(days=7),
+            claimed_by=user,
+            claimed_at=timezone.now(),
+        )
+        user.delete()
+        code.refresh_from_db()
+        assert code.is_claimed is True
+        assert code.is_valid is False
+
     def test_str_returns_code(self):
         code = ClaimCode.objects.create(
             code="STRG1234",
