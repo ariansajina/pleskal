@@ -1,22 +1,8 @@
 from django import forms
 from django.contrib.auth import get_user_model, password_validation
-from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
+from django.contrib.auth.forms import AuthenticationForm
 
 User = get_user_model()
-
-
-class EmailHashPasswordResetForm(PasswordResetForm):
-    """Password reset form that looks up users via the HMAC email_hash blind
-    index rather than filtering on the encrypted email column directly."""
-
-    def get_users(self, email):
-        from .crypto import hash_email
-
-        email_hash = hash_email(email)
-        return User._default_manager.filter(
-            email_hash=email_hash,
-            is_active=True,
-        )
 
 
 class CustomAuthenticationForm(AuthenticationForm):
@@ -65,10 +51,7 @@ class ProfileForm(forms.ModelForm):
         email = self.cleaned_data.get("email", "")
         if not email:
             return email
-        from .crypto import hash_email
-
-        email_hash = hash_email(email)
-        qs = User.objects.filter(email_hash=email_hash)
+        qs = User.objects.filter(email=email)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
@@ -116,9 +99,7 @@ class ClaimRegisterForm(forms.Form):
 
     def clean_email(self):
         email = self.cleaned_data["email"]
-        from .crypto import hash_email
-
-        if User.objects.filter(email_hash=hash_email(email)).exists():
+        if User.objects.filter(email=email).exists():
             raise forms.ValidationError("This email address is already in use.")
         return email
 

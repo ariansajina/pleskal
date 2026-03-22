@@ -24,7 +24,8 @@ dependencies = [
     "lxml>=6.0.2",
     "django-anymail[resend]>=10.0",
     "markdownify>=1.2.2",
-    "cryptography>=46.0.5",
+    "django-allauth>=65.15.0",
+    "argon2-cffi>=25.1.0",
 ]
 
 [dependency-groups]

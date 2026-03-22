@@ -11,6 +11,9 @@ urlpatterns = [
     path("claim/register/", ClaimRegisterView.as_view(), name="claim_register"),
     # Custom views take priority (login, logout, password-reset have rate limiting).
     path("accounts/", include("accounts.urls")),
+    # allauth provides email confirmation views (/accounts/confirm-email/<key>/).
+    # Our custom views above shadow allauth's login/logout/signup routes.
+    path("accounts/", include("allauth.urls")),
     path("markdownx/", include("markdownx.urls")),
     path("", include("events.urls")),
 ]

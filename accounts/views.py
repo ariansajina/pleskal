@@ -1,7 +1,7 @@
 import logging
 
 from django.contrib import messages
-from django.contrib.auth import get_user_model, login, logout, update_session_auth_hash
+from django.contrib.auth import get_user_model, logout, update_session_auth_hash
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -16,7 +16,6 @@ from .forms import (
     ClaimCodeForm,
     ClaimRegisterForm,
     CustomAuthenticationForm,
-    EmailHashPasswordResetForm,
     ProfileForm,
 )
 from .models import ClaimCode
@@ -45,7 +44,7 @@ class AccountProfileView(LoginRequiredMixin, View):
     """Redirects to the user's public profile page."""
 
     def get(self, request):
-        return redirect("publisher_profile", pk=request.user.pk)
+        return redirect("publisher_profile", slug=request.user.display_name_slug)
 
 
 class EditProfileView(LoginRequiredMixin, View):
@@ -58,7 +57,7 @@ class EditProfileView(LoginRequiredMixin, View):
         if form.is_valid():
             form.save()
             messages.success(request, "Profile updated.")
-            return redirect("publisher_profile", pk=request.user.pk)
+            return redirect("publisher_profile", slug=request.user.display_name_slug)
         return render(request, "accounts/account_profile.html", {"form": form})
 
 
@@ -80,7 +79,7 @@ class ChangePasswordView(LoginRequiredMixin, View):
             user = form.save()
             update_session_auth_hash(request, user)
             messages.success(request, "Password changed successfully.")
-            return redirect("publisher_profile", pk=request.user.pk)
+            return redirect("publisher_profile", slug=request.user.display_name_slug)
         return render(request, "accounts/change_password.html", {"form": form})
 
 
@@ -92,6 +91,22 @@ class RateLimitedLoginView(RateLimitMixin, auth_views.LoginView):
     template_name = "accounts/login.html"
     authentication_form = CustomAuthenticationForm
 
+    def form_valid(self, form):
+        from allauth.account.models import EmailAddress
+
+        user = form.get_user()
+        # Block login if the user has an unverified EmailAddress record.
+        # Users without an EmailAddress record (e.g. created via management
+        # commands or before allauth was added) are allowed through.
+        if EmailAddress.objects.filter(user=user, verified=False).exists():
+            messages.error(
+                self.request,
+                "Please verify your email address before logging in. "
+                "Check your inbox for the verification link.",
+            )
+            return self.form_invalid(form)
+        return super().form_valid(form)
+
 
 class RateLimitedPasswordResetView(RateLimitMixin, auth_views.PasswordResetView):
     rate_limit_key = "password_reset"
@@ -100,14 +115,13 @@ class RateLimitedPasswordResetView(RateLimitMixin, auth_views.PasswordResetView)
 
     template_name = "accounts/password_reset.html"
     success_url = "/accounts/password-reset/done/"
-    form_class = EmailHashPasswordResetForm
 
 
 class PublisherProfileView(View):
-    def get(self, request, pk):
+    def get(self, request, slug):
         from events.models import Event
 
-        publisher = get_object_or_404(User, pk=pk)
+        publisher = get_object_or_404(User, display_name_slug=slug)
         is_own_profile = request.user.is_authenticated and request.user == publisher
 
         qs = Event.objects.filter(submitted_by=publisher).select_related("submitted_by")
@@ -211,9 +225,8 @@ class ClaimRegisterView(View):
                 user = User.objects.create_user(
                     email=form.cleaned_data["email"],
                     password=form.cleaned_data["password1"],
+                    display_name=form.cleaned_data["display_name"],
                 )
-                user.display_name = form.cleaned_data["display_name"]
-                user.save(update_fields=["display_name"])
 
                 claim_code.claimed_by = user
                 claim_code.claimed_at = timezone.now()
@@ -224,6 +237,21 @@ class ClaimRegisterView(View):
             return redirect("claim")
 
         request.session.pop("claim_code", None)
-        login(request, user, backend="accounts.backends.EmailBackend")
-        messages.success(request, "Welcome! Your account has been created.")
-        return redirect("/")
+
+        # Trigger allauth email verification before allowing login.
+        from allauth.account.models import EmailAddress
+
+        email_address = EmailAddress.objects.create(
+            user=user,
+            email=user.email,
+            primary=True,
+            verified=False,
+        )
+        email_address.send_confirmation(request)
+
+        messages.info(
+            request,
+            "Account created! Please check your email and click the verification "
+            "link before logging in.",
+        )
+        return redirect("login")

@@ -31,14 +31,19 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",
     # Third-party
     "anymail",
     "axes",
     "markdownx",
+    "allauth",
+    "allauth.account",
     # Local
     "accounts",
     "events",
 ]
+
+SITE_ID = 1
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -50,6 +55,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
     "config.middleware.ContentSecurityPolicyMiddleware",
 ]
 
@@ -82,7 +88,7 @@ AUTH_USER_MODEL = "accounts.User"
 
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",
-    "accounts.backends.EmailBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
 LOGIN_URL = "/accounts/login/"
@@ -91,20 +97,8 @@ LOGOUT_REDIRECT_URL = "/"
 
 PASSWORD_PEPPER = env("PASSWORD_PEPPER", default="")
 
-# Email encryption at rest
-# EMAIL_ENCRYPTION_KEY: Fernet key for encrypting the email field.
-#   Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# EMAIL_BLIND_INDEX_PEPPER: HMAC pepper for the email_hash blind index.
-#   Generate with: python -c "import secrets; print(secrets.token_hex(32))"
-EMAIL_ENCRYPTION_KEY = env("EMAIL_ENCRYPTION_KEY", default="")
-EMAIL_BLIND_INDEX_PEPPER = env("EMAIL_BLIND_INDEX_PEPPER", default="")
-
 PASSWORD_HASHERS = [
-    # Primary: PBKDF2-SHA256 with an HMAC-SHA256 server-side pepper.
-    # Existing plain PBKDF2 hashes are verified via the fallback below and
-    # automatically re-hashed with this hasher on next successful login.
-    "accounts.hashers.HmacPepperedPasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "accounts.hashers.HmacPepperedArgon2PasswordHasher",
 ]
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -194,8 +188,10 @@ if env("R2_BUCKET_NAME", default=None):
 
 # Email
 
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="pleskal <noreply@pleskal.dk>")
-SERVER_EMAIL = env("SERVER_EMAIL", default="pleskal <noreply@pleskal.dk>")
+DEFAULT_FROM_EMAIL = env(
+    "DEFAULT_FROM_EMAIL", default="pleskal <noreply@contact.pleskal.dk>"
+)
+SERVER_EMAIL = env("SERVER_EMAIL", default="pleskal <noreply@contact.pleskal.dk>")
 
 # ADMINS receives server error emails and new-user signup notifications.
 # Format: comma-separated email addresses, e.g.:
@@ -215,6 +211,17 @@ else:
     # Production fallback: use console backend if RESEND_API_KEY not set
     # (e.g. during collectstatic in CI). Actual email sending requires the key.
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# django-allauth
+
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_PREVENT_ENUMERATION = True
+# Disable allauth's own signup — registration is handled by the claim-code flow.
+ACCOUNT_ALLOW_REGISTRATION = False
 
 # django-axes (brute-force protection)
 
@@ -254,10 +261,6 @@ if DEBUG:
         pass
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# Email uniqueness is enforced via email_hash (HMAC blind index); the encrypted
-# email column cannot carry a unique constraint, so silence the spurious warning.
-SILENCED_SYSTEM_CHECKS = ["auth.W004"]
 
 # django-markdownx
 

@@ -1,4 +1,5 @@
-"""Custom Django password hasher using HMAC-SHA256 as a server-side pepper.
+"""Custom Django password hasher using HMAC-SHA256 as a server-side pepper,
+applied before Argon2id hashing.
 
 Passwords are processed in two stages before storage:
 
@@ -6,15 +7,13 @@ Passwords are processed in two stages before storage:
    server-side secret (``PASSWORD_PEPPER`` in settings).  This means that even
    a full database dump is useless to an attacker without the pepper key.
 
-2. **Hash** — the peppered value is fed into Django's standard PBKDF2-SHA256
-   hasher, providing the usual brute-force resistance.
+2. **Hash** — the peppered value is fed into Django's Argon2id hasher,
+   providing strong brute-force resistance.
 
-Migration path for existing password hashes
---------------------------------------------
-``PASSWORD_HASHERS`` lists this hasher *first* (new/updated passwords) and the
-plain ``PBKDF2PasswordHasher`` *second* (legacy hashes).  Django automatically
-re-hashes a legacy password with the primary hasher on the next successful
-login, so the transition is transparent to users.
+``PASSWORD_HASHERS`` lists this hasher first (new/updated passwords) and plain
+``PBKDF2PasswordHasher`` as a fallback for any legacy hashes.  Django
+automatically re-hashes a legacy password with the primary hasher on the next
+successful login, so the transition is transparent to users.
 """
 
 import base64
@@ -22,7 +21,7 @@ import hashlib
 import hmac
 
 from django.conf import settings
-from django.contrib.auth.hashers import PBKDF2PasswordHasher
+from django.contrib.auth.hashers import Argon2PasswordHasher
 from django.core.exceptions import ImproperlyConfigured
 
 # Insecure all-zeros pepper used in development when PASSWORD_PEPPER is unset.
@@ -64,18 +63,52 @@ def _apply_pepper(password: str) -> str:
     return base64.b64encode(peppered).decode()
 
 
-class HmacPepperedPasswordHasher(PBKDF2PasswordHasher):
-    """PBKDF2-SHA256 with an HMAC-SHA256 server-side pepper.
+class HmacPepperedArgon2PasswordHasher(Argon2PasswordHasher):
+    """Argon2id with an HMAC-SHA256 server-side pepper.
 
-    Stored hashes are prefixed with ``hmac_pbkdf2_sha256$`` so they are
-    clearly distinct from un-peppered hashes and the right hasher is always
-    selected automatically by Django.
+    The parent's ``encode`` returns ``self.algorithm + "$argon2id$..."``.
+    Setting ``algorithm = "hmac_argon2"`` makes stored hashes begin with
+    ``hmac_argon2$argon2id$…``, distinguishing them from plain Argon2 hashes
+    and ensuring Django always selects this hasher when reading them back.
+
+    ``verify`` and ``must_update`` strip the custom prefix before delegating
+    to the parent, which expects the raw ``argon2$argon2id$…`` format.
     """
 
-    algorithm = "hmac_pbkdf2_sha256"
+    algorithm = "hmac_argon2"
 
-    def encode(self, password: str, salt: str, iterations: int | None = None) -> str:
-        return super().encode(_apply_pepper(password), salt, iterations)
+    def encode(self, password: str, salt: str) -> str:
+        return super().encode(_apply_pepper(password), salt)
 
-    # verify() is intentionally NOT overridden: PBKDF2PasswordHasher.verify()
-    # calls self.encode() internally, which already applies the pepper.
+    def _argon2_rest(self, encoded: str) -> str:
+        """Return the argon2 hash string without our custom algorithm prefix."""
+        # encoded: "hmac_argon2$argon2id$..."  →  "$argon2id$..."
+        return encoded[len("hmac_argon2") :]
+
+    def verify(self, password: str, encoded: str) -> bool:
+        argon2 = self._load_library()
+        try:
+            return argon2.PasswordHasher().verify(
+                self._argon2_rest(encoded), _apply_pepper(password)
+            )
+        except argon2.exceptions.VerificationError:
+            return False
+
+    def decode(self, encoded: str) -> dict:
+        argon2 = self._load_library()
+        rest = self._argon2_rest(encoded)  # "$argon2id$..."
+        params = argon2.extract_parameters(rest)
+        variety, *_, b64salt, hash_ = rest.lstrip("$").split("$")
+        b64salt += "=" * (-len(b64salt) % 4)
+        salt = __import__("base64").b64decode(b64salt).decode("latin1")
+        return {
+            "algorithm": self.algorithm,
+            "hash": hash_,
+            "memory_cost": params.memory_cost,
+            "parallelism": params.parallelism,
+            "salt": salt,
+            "time_cost": params.time_cost,
+            "variety": variety,
+            "version": params.version,
+            "params": params,
+        }

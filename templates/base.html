@@ -391,7 +391,7 @@
         {% if user.is_authenticated %}
           <a href="{% url 'event_create' %}" class="nav-btn nav-btn--filled">✦ Submit event</a>
           <a href="{% url 'account_profile' %}"
-             class="nav-link {% if request.resolver_match.url_name == 'publisher_profile' and request.resolver_match.kwargs.pk == user.pk|stringformat:'s' %}nav-link--active{% endif %}">
+             class="nav-link {% if request.resolver_match.url_name == 'publisher_profile' and request.resolver_match.kwargs.slug == user.display_name_slug %}nav-link--active{% endif %}">
             Profile
           </a>
           <form method="post" action="{% url 'logout' %}" style="display:inline-block;">

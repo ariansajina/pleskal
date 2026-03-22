@@ -1,15 +1,16 @@
-"""Tests for accounts.hashers — HMAC-peppered PBKDF2 password hasher."""
+"""Tests for accounts.hashers — HMAC-peppered Argon2 password hasher."""
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 
-from accounts.hashers import HmacPepperedPasswordHasher, _apply_pepper, _get_pepper
+from accounts.hashers import (
+    HmacPepperedArgon2PasswordHasher,
+    _apply_pepper,
+    _get_pepper,
+)
 from accounts.tests.factories import UserFactory
-
-User = get_user_model()
 
 _VALID_PEPPER = "ab" * 32  # 32-byte pepper as 64 hex chars
 _OTHER_PEPPER = "cd" * 32
@@ -72,17 +73,17 @@ class TestApplyPepper:
         assert a != b
 
 
-class TestHmacPepperedPasswordHasher:
+class TestHmacPepperedArgon2PasswordHasher:
     def setup_method(self):
-        self.hasher = HmacPepperedPasswordHasher()
+        self.hasher = HmacPepperedArgon2PasswordHasher()
 
     def test_algorithm_identifier(self):
-        assert self.hasher.algorithm == "hmac_pbkdf2_sha256"
+        assert self.hasher.algorithm == "hmac_argon2"
 
     def test_encode_produces_algorithm_prefix(self):
         with override_settings(PASSWORD_PEPPER=_VALID_PEPPER, DEBUG=False):
             encoded = self.hasher.encode("password", self.hasher.salt())
-        assert encoded.startswith("hmac_pbkdf2_sha256$")
+        assert encoded.startswith("hmac_argon2$")
 
     def test_verify_correct_password(self):
         with override_settings(PASSWORD_PEPPER=_VALID_PEPPER, DEBUG=False):
@@ -103,9 +104,8 @@ class TestHmacPepperedPasswordHasher:
     def test_peppered_differs_from_unpeppered(self):
         """A peppered hash carries a distinct algorithm prefix."""
         with override_settings(PASSWORD_PEPPER=_VALID_PEPPER, DEBUG=False):
-            peppered_encoded = self.hasher.encode("password", self.hasher.salt())
-        # Plain PBKDF2 hashes start with "pbkdf2_sha256$"; ours must not.
-        assert not peppered_encoded.startswith("pbkdf2_sha256$")
+            encoded = self.hasher.encode("password", self.hasher.salt())
+        assert not encoded.startswith("argon2$")
 
     def test_wrong_pepper_fails_verification(self):
         with override_settings(PASSWORD_PEPPER=_VALID_PEPPER, DEBUG=False):
@@ -117,26 +117,20 @@ class TestHmacPepperedPasswordHasher:
 class TestHasherIntegration:
     """End-to-end tests via Django's auth layer."""
 
-    def test_make_password_uses_peppered_hasher(self):
+    def test_make_password_uses_peppered_argon2(self):
         with override_settings(
             PASSWORD_PEPPER=_VALID_PEPPER,
             DEBUG=False,
-            PASSWORD_HASHERS=[
-                "accounts.hashers.HmacPepperedPasswordHasher",
-                "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-            ],
+            PASSWORD_HASHERS=["accounts.hashers.HmacPepperedArgon2PasswordHasher"],
         ):
             encoded = make_password("mysecret")
-        assert encoded.startswith("hmac_pbkdf2_sha256$")
+        assert encoded.startswith("hmac_argon2$")
 
     def test_check_password_roundtrip(self):
         with override_settings(
             PASSWORD_PEPPER=_VALID_PEPPER,
             DEBUG=False,
-            PASSWORD_HASHERS=[
-                "accounts.hashers.HmacPepperedPasswordHasher",
-                "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-            ],
+            PASSWORD_HASHERS=["accounts.hashers.HmacPepperedArgon2PasswordHasher"],
         ):
             encoded = make_password("correct")
             assert check_password("correct", encoded) is True
@@ -144,39 +138,31 @@ class TestHasherIntegration:
 
     @pytest.mark.django_db
     def test_hasher_is_configured_in_settings(self, settings):
-        """PASSWORD_HASHERS must list HmacPepperedPasswordHasher first."""
+        """PASSWORD_HASHERS must list HmacPepperedArgon2PasswordHasher first."""
         assert (
             settings.PASSWORD_HASHERS[0]
-            == "accounts.hashers.HmacPepperedPasswordHasher"
+            == "accounts.hashers.HmacPepperedArgon2PasswordHasher"
         )
 
     @pytest.mark.django_db
-    def test_new_user_password_stored_with_pepper_prefix(self, settings):
+    def test_new_user_password_stored_with_hmac_argon2_prefix(self, settings):
         settings.PASSWORD_PEPPER = _VALID_PEPPER
         user = UserFactory.create(password="testpass123")
         user.refresh_from_db()
-        assert user.password.startswith("hmac_pbkdf2_sha256$")
-
-    @pytest.mark.django_db
-    def test_legacy_pbkdf2_hash_still_verifies(self, settings):
-        """Existing plain PBKDF2 hashes continue to work (fallback hasher)."""
-        from django.contrib.auth.hashers import PBKDF2PasswordHasher
-
-        settings.PASSWORD_PEPPER = _VALID_PEPPER
-        plain_encoded = PBKDF2PasswordHasher().encode("oldpassword", "somesalt")
-        user = UserFactory.create()
-        user.password = plain_encoded
-        user.save(update_fields=["password"])
-
-        assert check_password("oldpassword", user.password) is True
+        assert user.password.startswith("hmac_argon2$")
 
     @pytest.mark.django_db
     def test_authenticate_works_with_peppered_hash(self, client, settings):
         from django.urls import reverse
 
         settings.PASSWORD_PEPPER = _VALID_PEPPER
-        UserFactory.create(email="testuser@example.com", password="mypassword")
-        # Use client.post so django-axes receives a proper request object.
+        user = UserFactory.create(email="testuser@example.com", password="mypassword")
+        # Create verified EmailAddress so allauth allows login.
+        from allauth.account.models import EmailAddress
+
+        EmailAddress.objects.create(
+            user=user, email=user.email, primary=True, verified=True
+        )
         resp = client.post(
             reverse("login"),
             {"username": "testuser@example.com", "password": "mypassword"},

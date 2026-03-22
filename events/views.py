@@ -223,7 +223,7 @@ class EventDetailView(DetailView):
 
 class MyEventsView(LoginRequiredMixin, View):
     def get(self, request):
-        return redirect("publisher_profile", pk=request.user.pk)
+        return redirect("publisher_profile", slug=request.user.display_name_slug)
 
 
 class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, UpdateView):

@@ -421,7 +421,9 @@ class TestMyEventsView:
         event = EventFactory.create(submitted_by=user)
         other = EventFactory.create()
         client.force_login(user)
-        resp = client.get(reverse("publisher_profile", kwargs={"pk": user.pk}))
+        resp = client.get(
+            reverse("publisher_profile", kwargs={"slug": user.display_name_slug})
+        )
         assert resp.status_code == 200
         assert str(event.title).encode() in resp.content
         assert str(other.title).encode() not in resp.content

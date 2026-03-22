@@ -86,7 +86,7 @@
             <hr class="rule">
             <div style="font-size:0.78rem;color:var(--ink-muted);margin-bottom:1rem;">
                 Published by
-                <a href="{% url 'publisher_profile' event.submitted_by.pk %}" class="link-accent" style="font-weight:600;">
+                <a href="{% url 'publisher_profile' event.submitted_by.display_name_slug %}" class="link-accent" style="font-weight:600;">
                     {{ event.submitted_by.public_name }}
                 </a>
             </div>

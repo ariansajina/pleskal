@@ -70,8 +70,7 @@ urlpatterns = [
         name="edit_profile",
     ),
     path(
-        # TODO: add slug-based URL for better UX, e.g. publishers/<slug:display_name>/
-        "publishers/<uuid:pk>/",
+        "publishers/<slug:slug>/",
         PublisherProfileView.as_view(),
         name="publisher_profile",
     ),

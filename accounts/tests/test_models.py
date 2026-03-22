@@ -24,11 +24,24 @@ class TestUserModel:
         user = UserFactory.create(email="dancer@example.com")
         assert "dancer" in str(user)
 
-    def test_username_field_is_email_hash(self):
-        assert User.USERNAME_FIELD == "email_hash"
+    def test_username_field_is_email(self):
+        assert User.USERNAME_FIELD == "email"
 
     def test_required_fields_is_empty(self):
         assert User.REQUIRED_FIELDS == []
+
+    def test_display_name_slug_auto_generated(self):
+        user = UserFactory.create(display_name="Anna Møller")
+        assert user.display_name_slug != ""
+
+    def test_display_name_slug_unique(self):
+        user1 = UserFactory.create(display_name="Same Name")
+        user2 = UserFactory.create(display_name="Same Name")
+        assert user1.display_name_slug != user2.display_name_slug
+
+    def test_display_name_slug_falls_back_to_email_prefix(self):
+        user = UserFactory.create(email="beatrice@example.com", display_name="")
+        assert "beatrice" in user.display_name_slug
 
 
 @pytest.mark.django_db

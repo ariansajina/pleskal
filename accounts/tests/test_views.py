@@ -9,6 +9,17 @@ from .factories import UserFactory
 User = get_user_model()
 
 
+def _make_verified(user):
+    """Create a verified allauth EmailAddress for the given user."""
+    from allauth.account.models import EmailAddress
+
+    EmailAddress.objects.get_or_create(
+        user=user,
+        email=user.email,
+        defaults={"primary": True, "verified": True},
+    )
+
+
 @pytest.mark.django_db
 class TestLoginView:
     def test_get_login_page(self):
@@ -17,13 +28,29 @@ class TestLoginView:
         assert response.status_code == 200
 
     def test_login_with_email(self):
-        UserFactory.create(email="testuser@example.com")
+        user = UserFactory.create(email="testuser@example.com")
+        _make_verified(user)
         client = Client()
         response = client.post(
             "/accounts/login/",
             {"username": "testuser@example.com", "password": "testpass123"},
         )
         assert response.status_code == 302
+
+    def test_login_blocked_for_unverified_email(self):
+        from allauth.account.models import EmailAddress
+
+        user = UserFactory.create(email="unverified@example.com")
+        EmailAddress.objects.create(
+            user=user, email=user.email, primary=True, verified=False
+        )
+        client = Client()
+        response = client.post(
+            "/accounts/login/",
+            {"username": "unverified@example.com", "password": "testpass123"},
+        )
+        # Should not redirect to success — stays on login page (200 or re-render)
+        assert response.status_code != 302 or "/accounts/login/" in response.url
 
 
 @pytest.mark.django_db
@@ -65,12 +92,12 @@ class TestPasswordResetView:
 @pytest.mark.django_db
 class TestAccountProfileView:
     def test_redirects_to_publisher_profile(self):
-        user = UserFactory.create()
+        user = UserFactory.create(display_name="Test User")
         client = Client()
         client.force_login(user)
         response = client.get("/accounts/profile/")
         assert response.status_code == 302
-        assert str(user.pk) in response.url
+        assert user.display_name_slug in response.url
 
     def test_requires_login(self):
         client = Client()
@@ -82,23 +109,21 @@ class TestAccountProfileView:
 @pytest.mark.django_db
 class TestPublisherProfileView:
     def test_show_upcoming_events(self):
-        user = UserFactory.create()
+        user = UserFactory.create(display_name="Profile User")
         client = Client()
-        response = client.get(f"/accounts/publishers/{user.pk}/")
+        response = client.get(f"/accounts/publishers/{user.display_name_slug}/")
         assert response.status_code == 200
 
     def test_show_past_events(self):
-        user = UserFactory.create()
+        user = UserFactory.create(display_name="Past Events User")
         client = Client()
-        response = client.get(f"/accounts/publishers/{user.pk}/?past=1")
+        response = client.get(f"/accounts/publishers/{user.display_name_slug}/?past=1")
         assert response.status_code == 200
         assert response.context["show_past"] is True
 
     def test_404_for_unknown_publisher(self):
         client = Client()
-        response = client.get(
-            "/accounts/publishers/00000000-0000-0000-0000-000000000000/"
-        )
+        response = client.get("/accounts/publishers/no-such-user/")
         assert response.status_code == 404
 
 
@@ -220,7 +245,6 @@ class TestAccountDeleteView:
         client = Client()
         client.force_login(user)
         client.post("/accounts/delete/")
-        # After deletion, accessing a protected page should redirect to login
         response = client.get("/accounts/delete/")
         assert response.status_code == 302
         assert "/accounts/login/" in response.url

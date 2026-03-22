@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib import admin, messages
 from django.db import IntegrityError
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
 
@@ -13,9 +13,9 @@ class UserAdmin(admin.ModelAdmin):
     list_display = ("display_name", "email", "is_staff", "is_active", "date_joined")
     list_filter = ("is_staff", "is_active")
     search_fields = ("display_name", "email")
-    readonly_fields = ("id", "email_hash", "date_joined", "last_login")
+    readonly_fields = ("id", "date_joined", "last_login")
     fieldsets = (
-        (None, {"fields": ("id", "email", "email_hash", "password")}),
+        (None, {"fields": ("id", "email", "password")}),
         ("Profile", {"fields": ("display_name", "bio", "website")}),
         (
             "Permissions",
@@ -84,11 +84,13 @@ class ClaimCodeAdmin(admin.ModelAdmin):
                     except IntegrityError:
                         continue
 
-                generated_codes = codes
+                request.session["generated_claim_codes"] = codes
                 messages.success(request, f"Generated {len(codes)} claim codes.")
+                return redirect(reverse("admin:accounts_claimcode_generate"))
         else:
             form = GenerateCodesForm()
 
+        generated_codes = request.session.pop("generated_claim_codes", None)
         context = {
             **self.admin_site.each_context(request),
             "form": form,

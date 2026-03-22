@@ -193,17 +193,18 @@ class TestClaimRegisterView:
                 "password2": "CorrectHorse99!",
             },
         )
+        # Redirects to login (email verification required before logging in)
         assert response.status_code == 302
-        assert response.url == "/"
+        assert "/accounts/login/" in response.url
         # User created
-        user = User.objects.get_by_email("newuser@example.com")
+        user = User.objects.get(email="newuser@example.com")
         assert user.display_name == "New User"
         # Code marked as claimed
         code = ClaimCode.objects.get(code="REGCODE1")
         assert code.is_claimed is True
         assert code.claimed_by == user
 
-    def test_user_is_logged_in_after_registration(self):
+    def test_user_must_verify_email_before_login(self):
         client = Client()
         self._create_valid_session(client)
         client.post(
@@ -215,10 +216,10 @@ class TestClaimRegisterView:
                 "password2": "CorrectHorse99!",
             },
         )
-        # Accessing a login-required page should work (redirects to own profile)
+        # Not logged in yet — must verify email first
         response = client.get("/accounts/profile/")
         assert response.status_code == 302
-        assert "/accounts/publishers/" in response.url
+        assert "/accounts/login/" in response.url
 
     def test_password_mismatch_shows_error(self):
         client = Client()
@@ -277,9 +278,7 @@ class TestClaimRegisterView:
         )
         assert response.status_code == 302
         assert "/claim/" in response.url
-        assert not User.objects.filter(
-            email_hash__isnull=False, display_name="Racer"
-        ).exists()
+        assert not User.objects.filter(display_name="Racer").exists()
 
 
 @pytest.mark.django_db
@@ -305,6 +304,7 @@ class TestClaimCodeAdmin:
         response = client.post(
             "/admin/accounts/claimcode/generate/",
             {"count": 5, "expires_at": "2027-12-31 23:59:59"},
+            follow=True,
         )
         assert response.status_code == 200
         assert ClaimCode.objects.count() == 5
