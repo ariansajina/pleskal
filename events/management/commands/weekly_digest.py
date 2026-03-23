@@ -2,9 +2,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
-from django.utils import timezone
-
 from django.db.models import Sum
+from django.utils import timezone
 
 from events.models import Event, EventCategory, FeedHit
 
@@ -36,13 +35,15 @@ class Command(BaseCommand):
 
         week_ago_date = timezone.localdate() - timezone.timedelta(days=7)
         rss_hits = (
-            FeedHit.objects.filter(feed_type=FeedHit.RSS, date__gte=week_ago_date)
-            .aggregate(total=Sum("count"))["total"]
+            FeedHit.objects.filter(
+                feed_type=FeedHit.RSS, date__gte=week_ago_date
+            ).aggregate(total=Sum("count"))["total"]
             or 0
         )
         ical_hits = (
-            FeedHit.objects.filter(feed_type=FeedHit.ICAL, date__gte=week_ago_date)
-            .aggregate(total=Sum("count"))["total"]
+            FeedHit.objects.filter(
+                feed_type=FeedHit.ICAL, date__gte=week_ago_date
+            ).aggregate(total=Sum("count"))["total"]
             or 0
         )
 
