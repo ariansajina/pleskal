@@ -9,7 +9,7 @@ from django.views import View
 from icalendar import Calendar
 from icalendar import Event as ICalEvent
 
-from .models import Event, EventCategory
+from .models import Event, EventCategory, FeedHit
 
 
 def _plain_text(markdown_text: str) -> str:
@@ -42,6 +42,7 @@ class EventRSSFeed(Feed):
     def get_object(self, request, *args, **kwargs):
         # Store request so we can access query params
         self._request = request
+        FeedHit.record(FeedHit.RSS)
         return None
 
     def link(self):
@@ -77,6 +78,7 @@ class EventRSSFeed(Feed):
 
 class EventICalFeed(View):
     def get(self, request):
+        FeedHit.record(FeedHit.ICAL)
         category = request.GET.get("category")
         queryset = _upcoming_qs(category)
 
