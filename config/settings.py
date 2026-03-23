@@ -235,8 +235,14 @@ AXES_RESET_ON_SUCCESS = True
 SENTRY_DSN = env("SENTRY_DSN", default="")
 if SENTRY_DSN:
     import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
 
-    sentry_sdk.init(dsn=SENTRY_DSN, traces_sample_rate=0.1, send_default_pii=False)
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[DjangoIntegration(middleware_spans=True)],
+        traces_sample_rate=0.2,
+        send_default_pii=False,
+    )
 
 # Security (production only)
 

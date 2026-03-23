@@ -1,0 +1,91 @@
+"""Tests for the weekly_digest management command."""
+
+from io import StringIO
+
+import pytest
+from django.core import mail
+from django.core.management import call_command
+from django.utils import timezone
+
+from accounts.tests.factories import UserFactory
+from events.tests.factories import EventFactory
+
+
+def _digest_email():
+    """Return the weekly digest email from the outbox (not signup notifications)."""
+    return next(m for m in mail.outbox if "weekly digest" in m.subject)
+
+
+@pytest.mark.django_db
+class TestWeeklyDigestDryRun:
+    def test_dry_run_prints_to_stdout(self):
+        stdout = StringIO()
+        call_command("weekly_digest", dry_run=True, stdout=stdout)
+        output = stdout.getvalue()
+        assert "Weekly digest for pleskal" in output
+        assert "This week" in output
+        assert "All time" in output
+
+    def test_dry_run_sends_no_email(self, settings):
+        settings.ADMINS = ["admin@example.com"]
+        call_command("weekly_digest", dry_run=True, stdout=StringIO())
+        assert not any("weekly digest" in m.subject for m in mail.outbox)
+
+    def test_dry_run_shows_correct_counts(self, settings):
+        settings.ADMINS = []
+        UserFactory.create_batch(3)
+        # submitted_by=None avoids creating extra users via SubFactory
+        EventFactory.create_batch(2, submitted_by=None)
+        stdout = StringIO()
+        call_command("weekly_digest", dry_run=True, stdout=stdout)
+        output = stdout.getvalue()
+        assert "New signups:   3" in output
+        assert "New events:    2" in output
+
+
+@pytest.mark.django_db
+class TestWeeklyDigestEmail:
+    def test_sends_to_admins(self, settings):
+        settings.ADMINS = ["admin@example.com", "other@example.com"]
+        call_command("weekly_digest", stdout=StringIO())
+        digest = _digest_email()
+        assert set(digest.to) == {"admin@example.com", "other@example.com"}
+
+    def test_subject_contains_date(self, settings):
+        settings.ADMINS = ["admin@example.com"]
+        call_command("weekly_digest", stdout=StringIO())
+        today = timezone.now().strftime("%Y-%m-%d")
+        assert today in _digest_email().subject
+
+    def test_email_body_contains_stats(self, settings):
+        settings.ADMINS = ["admin@example.com"]
+        UserFactory.create_batch(2)
+        EventFactory.create_batch(4, submitted_by=None)
+        call_command("weekly_digest", stdout=StringIO())
+        body = _digest_email().body
+        assert "New signups:   2" in body
+        assert "New events:    4" in body
+        assert "Total users:" in body
+        assert "Total events:" in body
+
+    def test_no_admins_sends_no_email(self, settings):
+        settings.ADMINS = []
+        call_command("weekly_digest", stdout=StringIO())
+        assert not any("weekly digest" in m.subject for m in mail.outbox)
+
+    def test_old_events_not_counted_as_new(self, settings):
+        settings.ADMINS = ["admin@example.com"]
+        old_time = timezone.now() - timezone.timedelta(days=10)
+        event = EventFactory(submitted_by=None)
+        # Backdating via queryset update bypasses auto_now_add
+        type(event).objects.filter(pk=event.pk).update(created_at=old_time)
+        call_command("weekly_digest", stdout=StringIO())
+        assert "New events:    0" in _digest_email().body
+
+    def test_old_users_not_counted_as_new(self, settings):
+        settings.ADMINS = ["admin@example.com"]
+        old_time = timezone.now() - timezone.timedelta(days=10)
+        user = UserFactory()
+        type(user).objects.filter(pk=user.pk).update(date_joined=old_time)
+        call_command("weekly_digest", stdout=StringIO())
+        assert "New signups:   0" in _digest_email().body

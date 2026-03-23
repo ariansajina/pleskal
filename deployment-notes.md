@@ -1,5 +1,21 @@
 # Deployment Notes
 
+## Weekly digest cron job (Railway)
+
+The `weekly_digest` management command emails growth and activity stats to `ADMINS`.
+Schedule it in Railway as a Cron Job service (separate from the web process):
+
+- **Schedule:** `0 8 * * 1` (every Monday at 08:00 UTC)
+- **Command:** `python manage.py weekly_digest`
+
+The command requires `ADMINS` and `RESEND_API_KEY` to be set. Run a one-off test
+before scheduling:
+
+```bash
+python manage.py weekly_digest --dry-run   # prints to stdout, no email sent
+python manage.py weekly_digest             # sends immediately
+```
+
 ## Password hashing & disaster recovery
 
 Passwords are hashed, not encrypted — they are never stored in a recoverable form.
