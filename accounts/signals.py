@@ -33,10 +33,12 @@ def add_to_resend_contacts(sender, request, email_address, **kwargs):
         resend.Contacts.create(params)
         segment_id = getattr(settings, "RESEND_SEGMENT_ID", None)
         if segment_id:
-            resend.Contacts.Segments.add({
-                "email": email_address.email,
-                "segment_id": segment_id,
-            })
+            resend.Contacts.Segments.add(
+                {
+                    "email": email_address.email,
+                    "segment_id": segment_id,
+                }
+            )
     except Exception:
         logger.exception("Failed to add %s to Resend contacts", email_address.email)
 
