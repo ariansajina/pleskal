@@ -1,15 +1,19 @@
 """Tests for the weekly_digest management command."""
 
 from io import StringIO
+from typing import cast
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
 from django.utils import timezone
 
 from accounts.tests.factories import UserFactory
-from events.models import FeedHit
+from events.models import Event, FeedHit
 from events.tests.factories import EventFactory
+
+User = get_user_model()
 
 
 def _digest_email():
@@ -77,24 +81,28 @@ class TestWeeklyDigestEmail:
     def test_old_events_not_counted_as_new(self, settings):
         settings.ADMINS = ["admin@example.com"]
         old_time = timezone.now() - timezone.timedelta(days=10)
-        event = EventFactory(submitted_by=None)
+        event = cast(Event, EventFactory(submitted_by=None))
         # Backdating via queryset update bypasses auto_now_add
-        type(event).objects.filter(pk=event.pk).update(created_at=old_time)
+        Event.objects.filter(pk=event.pk).update(created_at=old_time)
         call_command("weekly_digest", stdout=StringIO())
         assert "New events:    0" in _digest_email().body
 
     def test_old_users_not_counted_as_new(self, settings):
         settings.ADMINS = ["admin@example.com"]
         old_time = timezone.now() - timezone.timedelta(days=10)
-        user = UserFactory()
-        type(user).objects.filter(pk=user.pk).update(date_joined=old_time)
+        user = cast(User, UserFactory())
+        User.objects.filter(pk=user.pk).update(date_joined=old_time)
         call_command("weekly_digest", stdout=StringIO())
         assert "New signups:   0" in _digest_email().body
 
     def test_feed_hits_appear_in_digest(self, settings):
         settings.ADMINS = ["admin@example.com"]
-        FeedHit.objects.create(feed_type=FeedHit.RSS, date=timezone.localdate(), count=5)
-        FeedHit.objects.create(feed_type=FeedHit.ICAL, date=timezone.localdate(), count=3)
+        FeedHit.objects.create(
+            feed_type=FeedHit.RSS, date=timezone.localdate(), count=5
+        )
+        FeedHit.objects.create(
+            feed_type=FeedHit.ICAL, date=timezone.localdate(), count=3
+        )
         call_command("weekly_digest", stdout=StringIO())
         body = _digest_email().body
         assert "RSS feed hits: 5 (0.7/day avg)" in body
