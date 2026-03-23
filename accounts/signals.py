@@ -13,7 +13,7 @@ def notify_admins_on_new_user(sender, instance, created, **kwargs):
 
     Fires only when created=True so updates don't trigger duplicate emails.
     """
-    if not created:
+    if not created or settings.DEBUG:
         return
 
     admin_emails = list(settings.ADMINS)

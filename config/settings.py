@@ -44,6 +44,8 @@ INSTALLED_APPS = [
 ]
 
 SITE_ID = 1
+SITE_DOMAIN = env("SITE_DOMAIN", default="pleskal.dk")
+SITE_NAME = env("SITE_NAME", default="pleskal")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
