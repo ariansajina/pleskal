@@ -97,12 +97,12 @@ class TestWeeklyDigestEmail:
         FeedHit.objects.create(feed_type=FeedHit.ICAL, date=timezone.localdate(), count=3)
         call_command("weekly_digest", stdout=StringIO())
         body = _digest_email().body
-        assert "RSS feed hits: 5" in body
-        assert "iCal hits:     3" in body
+        assert "RSS feed hits: 5 (0.7/day avg)" in body
+        assert "iCal hits:     3 (0.4/day avg)" in body
 
     def test_old_feed_hits_not_counted(self, settings):
         settings.ADMINS = ["admin@example.com"]
         old_date = timezone.localdate() - timezone.timedelta(days=10)
         FeedHit.objects.create(feed_type=FeedHit.RSS, date=old_date, count=99)
         call_command("weekly_digest", stdout=StringIO())
-        assert "RSS feed hits: 0" in _digest_email().body
+        assert "RSS feed hits: 0 (0.0/day avg)" in _digest_email().body

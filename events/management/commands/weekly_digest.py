@@ -66,8 +66,8 @@ class Command(BaseCommand):
             lines.extend(category_lines)
         lines += [
             "",
-            f"RSS feed hits: {rss_hits}",
-            f"iCal hits:     {ical_hits}",
+            f"RSS feed hits: {rss_hits} ({rss_hits / 7:.1f}/day avg)",
+            f"iCal hits:     {ical_hits} ({ical_hits / 7:.1f}/day avg)",
             "",
             "=== All time ===",
             f"Total users:   {total_users}",
