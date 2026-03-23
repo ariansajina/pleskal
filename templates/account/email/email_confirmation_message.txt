@@ -7,5 +7,5 @@ activate your account:
 
 If you didn't sign up for {{ current_site.name }}, you can safely ignore this email.
 
-Yours;
+Yours,
 {{ current_site.name }}

@@ -203,6 +203,7 @@ ADMINS = [addr.strip() for addr in _admins_raw.split(",") if addr.strip()]
 
 _resend_api_key = env("RESEND_API_KEY", default=None)
 RESEND_API_KEY = _resend_api_key
+RESEND_SEGMENT_ID = env("RESEND_SEGMENT_ID", default=None)
 if _resend_api_key:
     # Use Resend via django-anymail whenever an API key is present (dev or prod).
     EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
