@@ -42,8 +42,7 @@
                     {% for value, label in category_choices %}
                         <label>
                             <input type="checkbox" name="category" value="{{ value }}"
-                                   {% if value in selected_categories %}checked{% endif %}
-                                   style="display:none;">
+                                   {% if value in selected_categories %}checked{% endif %}>
                             <span class="filter-chip">{{ label }}</span>
                         </label>
                     {% endfor %}
@@ -72,11 +71,21 @@
                 </label>
             </div>
 
+            {% if search_query or selected_categories or date_from or date_to or is_free or is_wheelchair_accessible %}
+            <div class="filter-panel__group" style="justify-content:flex-end;align-self:flex-end;">
+              <a href="/" class="btn btn--ghost btn--sm">✕ Clear filters</a>
+            </div>
+            {% endif %}
+
         </div>
     </form>
 
     {# --- Event list --- #}
-    <div id="event-list">
+    <p id="htmx-indicator" aria-live="polite" style="text-align:center;margin-bottom:0.5rem;">
+      loading…
+    </p>
+
+    <div id="event-list" aria-live="polite" aria-atomic="false">
         {% include "events/partials/event_list_results.html" %}
     </div>
 

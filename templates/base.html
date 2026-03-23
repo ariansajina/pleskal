@@ -151,13 +151,13 @@
     /* ─── SECTION DIVIDER ───────────────────────────────── */
     .section-rule {
       display: flex; align-items: center; gap: 0.75rem;
-      margin: 1.5rem 0 1rem; color: var(--blue); opacity: 0.4;
+      margin: 2.25rem 0 1rem; color: var(--blue); opacity: 0.4;
       font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; user-select: none;
     }
     .section-rule::before, .section-rule::after { content: ''; flex: 1; border-top: 1px solid currentColor; }
 
     /* ─── CARDS / EVENT ROWS ────────────────────────────── */
-    .event-list { display: flex; flex-direction: column; gap: 0.45rem; }
+    .event-list { display: flex; flex-direction: column; gap: 0.85rem; }
 
     .card {
       display: block; background: rgba(255,255,255,0.6);
@@ -176,17 +176,17 @@
     .event-title {
       font-family: 'Playfair Display', serif;
       font-weight: 700; font-size: 1rem; color: var(--ink);
-      line-height: 1.25; margin-bottom: 0.45rem;
+      line-height: 1.25; margin-bottom: 0.4rem;
     }
     .event-meta {
       font-size: 0.73rem; color: var(--ink-muted);
-      display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem;
+      display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem;
     }
     .event-meta--venue { color: var(--blue); }
-    .event-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; margin-top: 0.65rem; }
+    .event-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; margin-top: 0.4rem; }
 
     .event-row__thumb {
-      flex-shrink: 0; width: 110px; overflow: hidden;
+      flex-shrink: 0; width: 150px; overflow: hidden;
       border-left: 1.5px solid var(--border-light);
     }
     .event-row__thumb-inner {
@@ -195,13 +195,13 @@
     }
     .event-row__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    @media (max-width: 480px) { .event-row__thumb { width: 80px; } }
+    @media (max-width: 480px) { .event-row__thumb { width: 90px; } }
 
     /* ─── CATEGORY BADGES ───────────────────────────────── */
     .badge {
-      display: inline-block; font-size: 0.62rem; font-weight: 600;
+      display: inline-block; font-size: 0.68rem; font-weight: 600;
       letter-spacing: 0.08em; text-transform: uppercase;
-      padding: 0.18rem 0.5rem; border: 1.5px solid currentColor;
+      padding: 0.22rem 0.6rem; border: 1.5px solid currentColor;
     }
     .badge--performance  { color: var(--c-perf);   background: #FFF0F3; }
     .badge--workshop     { color: var(--c-ws);     background: #EEF3FF; }
@@ -331,6 +331,13 @@
     }
     .filter-chip:hover { border-color: var(--blue); color: var(--blue); }
     input[type="checkbox"]:checked + .filter-chip { border-color: var(--blue); color: var(--cream); background: var(--blue); }
+    input[type="checkbox"]:not(.form-check input) {
+      opacity: 0;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
+    }
 
 /* ─── Page transition ───────────────────────────────── */
     @keyframes fadeUp {
@@ -370,8 +377,13 @@
         <img src="{% static 'images/logo.png' %}" alt="pleskal" height="40">
       </a>
 
-      <button class="nav-toggle" aria-label="Toggle menu"
-              onclick="this.closest('.site-header').querySelector('.site-nav').classList.toggle('open')">
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false"
+              onclick="
+                const nav = this.closest('.site-header').querySelector('.site-nav');
+                const open = nav.classList.toggle('open');
+                this.setAttribute('aria-expanded', open);
+                nav.setAttribute('aria-hidden', !open);
+              ">
         <span></span><span></span><span></span>
       </button>
 
@@ -386,7 +398,6 @@
         </a>
 
         <span class="nav-divider"></span>
-        <span id="htmx-indicator">loading…</span>
 
         {% if user.is_authenticated %}
           <a href="{% url 'event_create' %}" class="nav-btn nav-btn--filled">✦ Submit event</a>
@@ -423,5 +434,14 @@
   </main>
 
 {% block extra_scripts %}{% endblock %}
+
+<footer style="border-top: 1.5px solid var(--border-light); padding: 1.5rem; text-align:center; font-size:0.72rem; color:var(--ink-muted); letter-spacing:0.05em;">
+  <div style="max-width:800px;margin:0 auto;display:flex;flex-wrap:wrap;justify-content:center;gap:0.5rem 2rem;">
+    <a href="{% url 'event_create' %}" class="link-accent">Submit an event</a>
+    <a href="/about/">About pleskal</a>
+    <a href="/moderation/">Moderation</a>
+    <span>A community calendar for Copenhagen dance &amp; performance.</span>
+  </div>
+</footer>
 </body>
 </html>

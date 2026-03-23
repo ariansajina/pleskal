@@ -16,7 +16,7 @@
             <div class="event-meta">
                 <span class="event-meta--venue">{{ event.venue_name }}</span>
                 {% if event.venue_address %}
-                    <span style="opacity:0.5;">·</span>
+                    <span style="opacity:0.5;" aria-hidden="true">·</span>
                     <span>{{ event.venue_address }}</span>
                 {% endif %}
             </div>
