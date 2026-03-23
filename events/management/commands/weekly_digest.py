@@ -4,7 +4,9 @@ from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from events.models import Event, EventCategory
+from django.db.models import Sum
+
+from events.models import Event, EventCategory, FeedHit
 
 User = get_user_model()
 
@@ -32,6 +34,18 @@ class Command(BaseCommand):
             start_datetime__lt=now + timezone.timedelta(days=7),
         ).count()
 
+        week_ago_date = timezone.localdate() - timezone.timedelta(days=7)
+        rss_hits = (
+            FeedHit.objects.filter(feed_type=FeedHit.RSS, date__gte=week_ago_date)
+            .aggregate(total=Sum("count"))["total"]
+            or 0
+        )
+        ical_hits = (
+            FeedHit.objects.filter(feed_type=FeedHit.ICAL, date__gte=week_ago_date)
+            .aggregate(total=Sum("count"))["total"]
+            or 0
+        )
+
         category_lines = []
         for value, label in EventCategory.choices:
             count = Event.objects.filter(
@@ -51,6 +65,9 @@ class Command(BaseCommand):
             lines.append("By category:")
             lines.extend(category_lines)
         lines += [
+            "",
+            f"RSS feed hits: {rss_hits}",
+            f"iCal hits:     {ical_hits}",
             "",
             "=== All time ===",
             f"Total users:   {total_users}",

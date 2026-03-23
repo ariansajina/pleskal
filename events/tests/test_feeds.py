@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.tests.factories import UserFactory
-from events.models import Event
+from events.models import Event, FeedHit
 from events.tests.factories import EventFactory
 
 
@@ -61,6 +61,16 @@ class TestRSSFeed:
 
         # Should not raise
         ET.fromstring(resp.content)
+
+    def test_rss_records_hit(self, client):
+        client.get(reverse("event_rss_feed"))
+        assert FeedHit.objects.filter(feed_type=FeedHit.RSS).exists()
+
+    def test_rss_hit_count_increments(self, client):
+        client.get(reverse("event_rss_feed"))
+        client.get(reverse("event_rss_feed"))
+        total = sum(h.count for h in FeedHit.objects.filter(feed_type=FeedHit.RSS))
+        assert total >= 2
 
 
 @pytest.mark.django_db
@@ -121,3 +131,13 @@ class TestICalFeed:
         # Should not raise
         cal = Calendar.from_ical(resp.content)
         assert cal is not None
+
+    def test_ical_records_hit(self, client):
+        client.get(reverse("event_ical_feed"))
+        assert FeedHit.objects.filter(feed_type=FeedHit.ICAL).exists()
+
+    def test_ical_hit_count_increments(self, client):
+        client.get(reverse("event_ical_feed"))
+        client.get(reverse("event_ical_feed"))
+        total = sum(h.count for h in FeedHit.objects.filter(feed_type=FeedHit.ICAL))
+        assert total >= 2

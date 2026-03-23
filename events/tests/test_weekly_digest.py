@@ -8,6 +8,7 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from accounts.tests.factories import UserFactory
+from events.models import FeedHit
 from events.tests.factories import EventFactory
 
 
@@ -89,3 +90,19 @@ class TestWeeklyDigestEmail:
         type(user).objects.filter(pk=user.pk).update(date_joined=old_time)
         call_command("weekly_digest", stdout=StringIO())
         assert "New signups:   0" in _digest_email().body
+
+    def test_feed_hits_appear_in_digest(self, settings):
+        settings.ADMINS = ["admin@example.com"]
+        FeedHit.objects.create(feed_type=FeedHit.RSS, date=timezone.localdate(), count=5)
+        FeedHit.objects.create(feed_type=FeedHit.ICAL, date=timezone.localdate(), count=3)
+        call_command("weekly_digest", stdout=StringIO())
+        body = _digest_email().body
+        assert "RSS feed hits: 5" in body
+        assert "iCal hits:     3" in body
+
+    def test_old_feed_hits_not_counted(self, settings):
+        settings.ADMINS = ["admin@example.com"]
+        old_date = timezone.localdate() - timezone.timedelta(days=10)
+        FeedHit.objects.create(feed_type=FeedHit.RSS, date=old_date, count=99)
+        call_command("weekly_digest", stdout=StringIO())
+        assert "RSS feed hits: 0" in _digest_email().body

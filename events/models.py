@@ -122,3 +122,36 @@ class Event(models.Model):
         if not self.slug:
             self.slug = self._generate_unique_slug()
         super().save(*args, **kwargs)
+
+
+class FeedHit(models.Model):
+    """Daily hit counter for each feed type, used by the weekly digest."""
+
+    ICAL = "ical"
+    RSS = "rss"
+    FEED_CHOICES = [(ICAL, "iCal"), (RSS, "RSS")]
+
+    objects = models.Manager()
+
+    feed_type = models.CharField(max_length=10, choices=FEED_CHOICES)
+    date = models.DateField()
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = [("feed_type", "date")]
+
+    def __str__(self):
+        return f"{self.feed_type} {self.date}: {self.count}"
+
+    @classmethod
+    def record(cls, feed_type: str) -> None:
+        """Atomically increment the hit counter for today."""
+        from django.db.models import F
+        from django.utils import timezone
+
+        cls.objects.update_or_create(
+            feed_type=feed_type,
+            date=timezone.localdate(),
+            create_defaults={"count": 1},
+            defaults={"count": F("count") + 1},
+        )
