@@ -171,12 +171,16 @@ class TestEventICalSingleView:
         assert str(event.id).encode() in resp.content
 
     def test_contains_venue(self, client):
-        event = EventFactory.create(venue_name="Dansehallerne", venue_address="Pasteursvej 20")
+        event = EventFactory.create(
+            venue_name="Dansehallerne", venue_address="Pasteursvej 20"
+        )
         resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
         assert b"Dansehallerne" in resp.content
 
     def test_nonexistent_slug_returns_404(self, client):
-        resp = client.get(reverse("event_ical_single", kwargs={"slug": "no-such-event"}))
+        resp = client.get(
+            reverse("event_ical_single", kwargs={"slug": "no-such-event"})
+        )
         assert resp.status_code == 404
 
     def test_content_disposition_contains_slug(self, client):

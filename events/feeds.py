@@ -39,12 +39,12 @@ def _build_vevent(event: Event) -> ICalEvent:
     vevent.add("dtstart", event.start_datetime)
     if event.end_datetime:
         vevent.add("dtend", event.end_datetime)
-    location_parts = [event.venue_name]
+    location_parts: list[str] = [str(event.venue_name)]
     if event.venue_address:
-        location_parts.append(event.venue_address)
+        location_parts.append(str(event.venue_address))
     vevent.add("location", ", ".join(location_parts))
     if event.description:
-        vevent.add("description", _plain_text(event.description))
+        vevent.add("description", _plain_text(str(event.description)))
     if event.source_url:
         vevent.add("url", event.source_url)
     return vevent
