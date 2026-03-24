@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
@@ -219,6 +221,25 @@ class EventDetailView(DetailView):
 
     def get_object(self, queryset=None):
         return get_object_or_404(Event, slug=self.kwargs["slug"])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        event = self.object
+        start = event.start_datetime.strftime("%Y%m%dT%H%M%S")
+        end = (event.end_datetime or event.start_datetime).strftime("%Y%m%dT%H%M%S")
+        location = event.venue_name
+        if event.venue_address:
+            location += f", {event.venue_address}"
+        params: dict[str, str] = {
+            "action": "TEMPLATE",
+            "text": str(event.title),
+            "dates": f"{start}/{end}",
+            "location": location,
+        }
+        context["google_calendar_url"] = (
+            "https://calendar.google.com/calendar/render?" + urlencode(params)
+        )
+        return context
 
 
 class MyEventsView(LoginRequiredMixin, View):
