@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .feeds import EventICalFeed, EventRSSFeed
+from .feeds import EventICalFeed, EventICalSingleView, EventRSSFeed
 from .views import (
     EventCreateView,
     EventDeleteView,
@@ -28,6 +28,11 @@ urlpatterns = [
         name="event_duplicate",
     ),
     path("my-events/", MyEventsView.as_view(), name="my_events"),
+    path(
+        "events/<slug:slug>/calendar.ics",
+        EventICalSingleView.as_view(),
+        name="event_ical_single",
+    ),
     # Feeds
     path("feed/events.ics", EventICalFeed.as_view(), name="event_ical_feed"),
     path("feed/events.rss", EventRSSFeed(), name="event_rss_feed"),

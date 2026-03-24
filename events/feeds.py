@@ -4,6 +4,7 @@ import re
 
 from django.contrib.syndication.views import Feed
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views import View
 from icalendar import Calendar
@@ -28,6 +29,25 @@ def _upcoming_qs(category: str | None = None):
     if category and category in {c.value for c in EventCategory}:
         qs = qs.filter(category=category)
     return qs
+
+
+def _build_vevent(event: Event) -> ICalEvent:
+    """Build an iCalendar VEVENT component from an Event instance."""
+    vevent = ICalEvent()
+    vevent.add("uid", str(event.id))
+    vevent.add("summary", event.title)
+    vevent.add("dtstart", event.start_datetime)
+    if event.end_datetime:
+        vevent.add("dtend", event.end_datetime)
+    location_parts: list[str] = [str(event.venue_name)]
+    if event.venue_address:
+        location_parts.append(str(event.venue_address))
+    vevent.add("location", ", ".join(location_parts))
+    if event.description:
+        vevent.add("description", _plain_text(str(event.description)))
+    if event.source_url:
+        vevent.add("url", event.source_url)
+    return vevent
 
 
 # ---------------------------------------------------------------------------
@@ -89,28 +109,36 @@ class EventICalFeed(View):
         cal.add("x-wr-calname", "Copenhagen Dance Calendar")
 
         for event in queryset:
-            vevent = ICalEvent()
-            vevent.add("uid", str(event.id))
-            vevent.add("summary", event.title)
-            vevent.add("dtstart", event.start_datetime)
-            if event.end_datetime:
-                vevent.add("dtend", event.end_datetime)
-            # Location
-            location_parts = [event.venue_name]
-            if event.venue_address:
-                location_parts.append(event.venue_address)
-            vevent.add("location", ", ".join(location_parts))
-            # Description — plain text only, no author info
-            if event.description:
-                vevent.add("description", _plain_text(event.description))
-            # URL for more info
-            if event.source_url:
-                vevent.add("url", event.source_url)
-            cal.add_component(vevent)
+            cal.add_component(_build_vevent(event))
 
         content = cal.to_ical()
         return HttpResponse(
             content,
             content_type="text/calendar; charset=utf-8",
             headers={"Content-Disposition": 'attachment; filename="events.ics"'},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Single-event iCal download
+# ---------------------------------------------------------------------------
+
+
+class EventICalSingleView(View):
+    def get(self, request, slug):
+        event = get_object_or_404(Event, slug=slug)
+
+        cal = Calendar()
+        cal.add("prodid", "-//Copenhagen Dance Calendar//EN")
+        cal.add("version", "2.0")
+        cal.add("calscale", "GREGORIAN")
+
+        cal.add_component(_build_vevent(event))
+
+        content = cal.to_ical()
+        filename = f"{event.slug}.ics"
+        return HttpResponse(
+            content,
+            content_type="text/calendar; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
