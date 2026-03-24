@@ -3,7 +3,7 @@ buildCommand = "npm ci && npm run css:build && python manage.py collectstatic --
 
 [deploy]
 preDeployCommand = "python manage.py migrate --noinput"
-startCommand = "gunicorn config.wsgi --bind 0.0.0.0:$PORT --workers 2"
+startCommand = "gunicorn config.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --log-level debug"
 healthcheckPath = "/health/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
