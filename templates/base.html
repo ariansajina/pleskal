@@ -18,6 +18,9 @@
   {# HTMX #}
   <script src="{% static 'js/htmx.min.js' %}" defer></script>
 
+  {# Nav toggle #}
+  <script src="{% static 'js/nav.js' %}" defer></script>
+
   <style>
     /* ─── CSS Variables ─────────────────────────────────── */
     :root {
@@ -377,13 +380,7 @@
         <img src="{% static 'images/logo.png' %}" alt="pleskal" height="40">
       </a>
 
-      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false"
-              onclick="
-                const nav = this.closest('.site-header').querySelector('.site-nav');
-                const open = nav.classList.toggle('open');
-                this.setAttribute('aria-expanded', open);
-                nav.setAttribute('aria-hidden', !open);
-              ">
+      <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
         <span></span><span></span><span></span>
       </button>
 
