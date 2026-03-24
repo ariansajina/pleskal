@@ -412,8 +412,11 @@ class TestEventDetailView:
     def test_context_contains_google_calendar_url(self, client):
         event = EventFactory.create()
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        from urllib.parse import urlparse
+
         assert "google_calendar_url" in resp.context
-        assert "calendar.google.com" in resp.context["google_calendar_url"]
+        parsed = urlparse(resp.context["google_calendar_url"])
+        assert parsed.netloc == "calendar.google.com"
 
     def test_google_calendar_url_contains_event_title(self, client):
         event = EventFactory.create(title="Salsa Workshop")
