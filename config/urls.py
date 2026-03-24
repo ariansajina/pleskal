@@ -1,10 +1,17 @@
 from django.conf import settings
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import include, path
 
 from accounts.views import ClaimCodeView, ClaimRegisterView
 
+
+def health(request):
+    return HttpResponse("ok")
+
+
 urlpatterns = [
+    path("health/", health, name="health"),
     path("admin/", admin.site.urls),
     # Claim flow at top-level /claim/
     path("claim/", ClaimCodeView.as_view(), name="claim"),
