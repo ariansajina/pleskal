@@ -1,3 +1,5 @@
+import calendar
+import datetime
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -24,6 +26,27 @@ MAX_UPCOMING_EVENTS_PER_USER = 50
 # ---------------------------------------------------------------------------
 # Helpers / mixins
 # ---------------------------------------------------------------------------
+
+
+def _get_quick_date_ranges():
+    """Return ISO date strings for common quick-filter ranges."""
+    today = datetime.date.today()
+    week_start = today - datetime.timedelta(days=today.weekday())
+    week_end = week_start + datetime.timedelta(days=6)
+    next_week_start = week_start + datetime.timedelta(days=7)
+    next_week_end = next_week_start + datetime.timedelta(days=6)
+    month_start = today.replace(day=1)
+    month_last_day = calendar.monthrange(today.year, today.month)[1]
+    month_end = today.replace(day=month_last_day)
+    next_month_start = month_end + datetime.timedelta(days=1)
+    next_month_last_day = calendar.monthrange(next_month_start.year, next_month_start.month)[1]
+    next_month_end = next_month_start.replace(day=next_month_last_day)
+    return {
+        "this_week": (week_start.isoformat(), week_end.isoformat()),
+        "next_week": (next_week_start.isoformat(), next_week_end.isoformat()),
+        "this_month": (month_start.isoformat(), month_end.isoformat()),
+        "next_month": (next_month_start.isoformat(), next_month_end.isoformat()),
+    }
 
 
 class EventOwnerMixin:
@@ -189,6 +212,7 @@ class EventListView(RateLimitMixin, View):
         page_number = request.GET.get("page", 1)
         page_obj = paginator.get_page(page_number)
 
+        quick_date_ranges = _get_quick_date_ranges()
         ctx = {
             "page_obj": page_obj,
             "events": page_obj.object_list,
@@ -204,6 +228,7 @@ class EventListView(RateLimitMixin, View):
             "search_query": search_query,
             "upcoming_count": upcoming_count,
             "past_count": past_count,
+            "quick_date_ranges": quick_date_ranges,
         }
 
         # HTMX: return only the results partial
