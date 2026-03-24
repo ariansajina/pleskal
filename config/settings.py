@@ -11,10 +11,12 @@ SECRET_KEY = env("SECRET_KEY", default="django-insecure-dev-key-change-in-produc
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 
-# Railway: automatically trust the Railway-assigned public domain
+# Railway: automatically trust the Railway-assigned public domain and internal healthcheck host
 _railway_domain = env("RAILWAY_PUBLIC_DOMAIN", default=None)
 if _railway_domain and _railway_domain not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_railway_domain)
+if "healthcheck.railway.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 if _railway_domain:
