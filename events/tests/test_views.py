@@ -409,6 +409,38 @@ class TestEventDetailView:
         resp = client.get(reverse("event_detail", kwargs={"slug": "does-not-exist"}))
         assert resp.status_code == 404
 
+    def test_context_contains_google_calendar_url(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert "google_calendar_url" in resp.context
+        assert "calendar.google.com" in resp.context["google_calendar_url"]
+
+    def test_google_calendar_url_contains_event_title(self, client):
+        event = EventFactory.create(title="Salsa Workshop")
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        url = resp.context["google_calendar_url"]
+        assert "Salsa" in url
+
+    def test_google_calendar_url_contains_dates(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert "dates=" in resp.context["google_calendar_url"]
+
+    def test_google_calendar_url_contains_venue(self, client):
+        event = EventFactory.create(venue_name="Dansehallerne")
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert "Dansehallerne" in resp.context["google_calendar_url"]
+
+    def test_page_renders_add_to_calendar_link(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"Add to calendar" in resp.content
+
+    def test_page_renders_copy_link_button(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"copy-link-btn" in resp.content
+
 
 @pytest.mark.django_db
 class TestMyEventsView:

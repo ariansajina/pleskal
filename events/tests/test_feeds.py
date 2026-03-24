@@ -141,3 +141,70 @@ class TestICalFeed:
         client.get(reverse("event_ical_feed"))
         total = sum(h.count for h in FeedHit.objects.filter(feed_type=FeedHit.ICAL))
         assert total >= 2
+
+
+@pytest.mark.django_db
+class TestEventICalSingleView:
+    def test_returns_200(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert resp.status_code == 200
+
+    def test_content_type(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert "calendar" in resp["Content-Type"]
+
+    def test_begins_with_vcalendar(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert resp.content.startswith(b"BEGIN:VCALENDAR")
+
+    def test_contains_event_title(self, client):
+        event = EventFactory.create(title="Tango Night")
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert b"Tango Night" in resp.content
+
+    def test_contains_uid(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert str(event.id).encode() in resp.content
+
+    def test_contains_venue(self, client):
+        event = EventFactory.create(venue_name="Dansehallerne", venue_address="Pasteursvej 20")
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert b"Dansehallerne" in resp.content
+
+    def test_nonexistent_slug_returns_404(self, client):
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": "no-such-event"}))
+        assert resp.status_code == 404
+
+    def test_content_disposition_contains_slug(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert event.slug in resp["Content-Disposition"]
+
+    def test_is_valid_ical(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        from icalendar import Calendar
+
+        cal = Calendar.from_ical(resp.content)
+        assert cal is not None
+
+    def test_includes_dtend_when_end_datetime_set(self, client):
+        event = EventFactory.create(
+            end_datetime=timezone.now() + timezone.timedelta(days=7, hours=2)
+        )
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert b"DTEND" in resp.content
+
+    def test_omits_dtend_when_no_end_datetime(self, client):
+        event = EventFactory.create(end_datetime=None)
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert b"DTEND" not in resp.content
+
+    def test_includes_source_url(self, client):
+        event = EventFactory.create(source_url="https://example.com/event")
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert b"example.com/event" in resp.content
