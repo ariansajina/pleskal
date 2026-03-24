@@ -1,2 +1,0 @@
-[phases.setup]
-nixPkgs = ["python313", "nodejs_22"]
