@@ -1,4 +1,12 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+
   - repo: local
     hooks:
       - id: ruff-format
@@ -19,3 +27,10 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest -n 8
+        language: system
+        pass_filenames: false
+        always_run: true
