@@ -5,11 +5,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from events.management.commands.base_import import _download_image, _parse_dt
 from events.models import Event
+
+UserModel = get_user_model()
 
 SAMPLE_EVENT = {
     "source_url": "https://dansehallerne.dk/event/1",
@@ -607,3 +610,64 @@ class TestImportSydhavnteaterImages:
         ):
             call_command("import_sydhavnteater", str(f))
         assert Event.objects.filter(external_source="sydhavnteater").count() == 1
+
+
+# ===========================================================================
+# System user attribution (base_import shared behaviour)
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestSystemUserAttribution:
+    """The import sets submitted_by to the matching system account when one exists."""
+
+    def _make_system_user(self, slug):
+        user = UserModel(
+            email=f"system.{slug}@pleskal.internal",
+            display_name=slug.capitalize(),
+            display_name_slug=slug,
+            is_system_account=True,
+        )
+        user.set_unusable_password()
+        user.save()
+        return user
+
+    def test_submitted_by_set_to_system_user_on_create(self, tmp_path):
+        system_user = self._make_system_user("dansehallerne")
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_dansehallerne", str(f))
+        event = Event.objects.get(external_source="dansehallerne")
+        assert event.submitted_by == system_user
+
+    def test_submitted_by_none_when_no_system_user(self, tmp_path):
+        # No system user created — should fall back to None gracefully.
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_dansehallerne", str(f))
+        event = Event.objects.get(external_source="dansehallerne")
+        assert event.submitted_by is None
+
+    def test_system_user_not_shared_across_sources(self, tmp_path):
+        # A system user for hautscene must not be picked up by import_dansehallerne.
+        self._make_system_user("hautscene")
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_dansehallerne", str(f))
+        event = Event.objects.get(external_source="dansehallerne")
+        assert event.submitted_by is None
+
+    def test_submitted_by_updated_when_system_user_created_later(self, tmp_path):
+        # First import without system user → submitted_by=None.
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_dansehallerne", str(f))
+        assert Event.objects.get(external_source="dansehallerne").submitted_by is None
+
+        # Create system user, re-import — existing event is updated.
+        system_user = self._make_system_user("dansehallerne")
+        call_command("import_dansehallerne", str(f))
+        assert (
+            Event.objects.get(external_source="dansehallerne").submitted_by
+            == system_user
+        )

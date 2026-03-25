@@ -102,6 +102,13 @@ class BaseEventImportCommand(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from django.contrib.auth import get_user_model
+
+        user_model = get_user_model()
+        system_user = user_model.objects.filter(
+            is_system_account=True, display_name_slug=self.external_source
+        ).first()
+
         json_path = Path(options["json_file"])
         if not json_path.exists():
             raise CommandError(f"File not found: {json_path}")
@@ -173,7 +180,7 @@ class BaseEventImportCommand(BaseCommand):
                     "price_note": rec.get("price_note", ""),
                     "source_url": source_url,
                     "external_source": self.external_source,
-                    "submitted_by": None,
+                    "submitted_by": system_user,
                 }
 
                 if key in existing:
