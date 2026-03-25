@@ -58,20 +58,20 @@
                     <span style="font-size:0.73rem;color:var(--ink-muted);">–</span>
                     <input type="date" name="date_to" value="{{ date_to }}" class="form-input" style="width:auto;">
                 </div>
-                <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-top:0.4rem;">
-                    <button type="button" class="btn btn--ghost btn--sm"
+                <div class="filter-checkboxes" style="margin-top:0.4rem;">
+                    <button type="button" class="filter-chip"
                             data-quick-date-filter
                             data-date-from="{{ quick_date_ranges.this_week.0 }}"
                             data-date-to="{{ quick_date_ranges.this_week.1 }}">This week</button>
-                    <button type="button" class="btn btn--ghost btn--sm"
+                    <button type="button" class="filter-chip"
                             data-quick-date-filter
                             data-date-from="{{ quick_date_ranges.next_week.0 }}"
                             data-date-to="{{ quick_date_ranges.next_week.1 }}">Next week</button>
-                    <button type="button" class="btn btn--ghost btn--sm"
+                    <button type="button" class="filter-chip"
                             data-quick-date-filter
                             data-date-from="{{ quick_date_ranges.this_month.0 }}"
                             data-date-to="{{ quick_date_ranges.this_month.1 }}">This month</button>
-                    <button type="button" class="btn btn--ghost btn--sm"
+                    <button type="button" class="filter-chip"
                             data-quick-date-filter
                             data-date-from="{{ quick_date_ranges.next_month.0 }}"
                             data-date-to="{{ quick_date_ranges.next_month.1 }}">Next month</button>
