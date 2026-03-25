@@ -7,8 +7,12 @@ Typical workflow:
 Each run upserts events keyed on (source_url, start_datetime):
   - New events are created.
   - Existing events (same key) are updated in place.
-  - Events previously imported from dansehallerne but absent from the current
-    JSON are deleted (stale removal), unless --no-delete is passed.
+  - Events previously imported from dansehallerne (non-workshop) but absent
+    from the current JSON are deleted (stale removal), unless --no-delete is passed.
+
+Note: import_dansehallerne_workshops shares external_source="dansehallerne" but
+is scoped to category=workshop. Stale deletion here is scoped to all non-workshop
+categories so the two commands do not interfere.
 """
 
 from events.management.commands.base_import import BaseEventImportCommand
@@ -22,3 +26,4 @@ class Command(BaseEventImportCommand):
     external_source = "dansehallerne"
     default_json_file = "dansehallerne_events.json"
     default_venue_name = "Dansehallerne"
+    category_scope = ["performance", "talk", "openpractice", "social", "other"]

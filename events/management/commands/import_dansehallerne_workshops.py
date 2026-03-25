@@ -11,8 +11,8 @@ Each run upserts events keyed on (source_url, start_datetime):
     JSON are deleted (stale removal), unless --no-delete is passed.
 
 Note: Both import_dansehallerne and import_dansehallerne_workshops share
-external_source="dansehallerne". When running both independently, pass
---no-delete to avoid each command deleting the other's events.
+external_source="dansehallerne". Stale deletion is scoped to category=workshop
+so the two commands are mutually exclusive and --no-delete is not required.
 """
 
 from events.management.commands.base_import import BaseEventImportCommand
@@ -26,3 +26,4 @@ class Command(BaseEventImportCommand):
     external_source = "dansehallerne"
     default_json_file = "dansehallerne_workshops_events.json"
     default_venue_name = "Dansehallerne"
+    category_scope = ["workshop"]

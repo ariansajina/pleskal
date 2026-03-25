@@ -22,11 +22,18 @@ SAMPLE_EVENT = {
     "description": "A test event",
     "venue_name": "Test Venue",
     "venue_address": "Test Street 1",
-    "category": "workshop",
+    "category": "performance",
     "is_free": True,
     "is_wheelchair_accessible": True,
     "price_note": "",
     "image_url": "",
+}
+
+SAMPLE_WORKSHOP_EVENT = {
+    **SAMPLE_EVENT,
+    "source_url": "https://dansehallerne.dk/workshop/1",
+    "title": "Test Workshop Event",
+    "category": "workshop",
 }
 
 
@@ -671,3 +678,63 @@ class TestSystemUserAttribution:
             Event.objects.get(external_source="dansehallerne").submitted_by
             == system_user
         )
+
+
+# ===========================================================================
+# Stale-deletion: category_scope isolates workshops from regular events
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestCategoryScope:
+    """import_dansehallerne_workshops must not delete non-workshop dansehallerne events."""
+
+    FUTURE_PERFORMANCE = {
+        **SAMPLE_EVENT,
+        "source_url": "https://dansehallerne.dk/event/perf1",
+        "title": "Future Performance",
+        "category": "performance",
+    }
+    FUTURE_WORKSHOP = {
+        **SAMPLE_EVENT,
+        "source_url": "https://dansehallerne.dk/workshop/1",
+        "title": "Future Workshop",
+        "category": "workshop",
+    }
+
+    def test_workshops_importer_does_not_delete_performance_events(self, tmp_path):
+        # Import a performance and a workshop via the regular importer.
+        f = tmp_path / "events.json"
+        _write_json([self.FUTURE_PERFORMANCE, self.FUTURE_WORKSHOP], f)
+        call_command("import_dansehallerne", str(f))
+        assert Event.objects.filter(external_source="dansehallerne").count() == 2
+
+        # Run workshops importer with an empty file — only the workshop should be deleted.
+        wf = tmp_path / "workshops.json"
+        _write_json([], wf)
+        call_command("import_dansehallerne_workshops", str(wf))
+
+        assert Event.objects.filter(
+            source_url=self.FUTURE_PERFORMANCE["source_url"]
+        ).exists(), "Performance event must not be deleted by workshops importer"
+        assert not Event.objects.filter(
+            source_url=self.FUTURE_WORKSHOP["source_url"]
+        ).exists(), "Stale workshop event should be deleted"
+
+    def test_regular_importer_does_not_delete_workshop_events(self, tmp_path):
+        # Import both via the workshops importer first.
+        wf = tmp_path / "workshops.json"
+        _write_json([self.FUTURE_WORKSHOP], wf)
+        call_command("import_dansehallerne_workshops", str(wf))
+        assert Event.objects.filter(
+            source_url=self.FUTURE_WORKSHOP["source_url"]
+        ).exists()
+
+        # Run the regular importer with only the performance — workshop must survive.
+        f = tmp_path / "events.json"
+        _write_json([self.FUTURE_PERFORMANCE], f)
+        call_command("import_dansehallerne", str(f))
+
+        assert Event.objects.filter(
+            source_url=self.FUTURE_WORKSHOP["source_url"]
+        ).exists(), "Workshop event must not be deleted by regular importer"

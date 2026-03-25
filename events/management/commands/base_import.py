@@ -74,6 +74,10 @@ class BaseEventImportCommand(BaseCommand):
     external_source: str
     default_json_file: str
     default_venue_name: str
+    # Optional: restrict upsert/delete to events whose category is in this set.
+    # Use this when multiple importers share the same external_source but cover
+    # different categories (e.g. dansehallerne vs dansehallerne_workshops).
+    category_scope: list[str] | None = None
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -135,8 +139,13 @@ class BaseEventImportCommand(BaseCommand):
             key = (rec["source_url"], rec["start_datetime"])
             incoming[key] = rec
 
-        # Existing events for this source in DB, keyed the same way
+        # Existing events for this source in DB, keyed the same way.
         existing_qs = Event.objects.filter(external_source=self.external_source)
+        if self.category_scope is not None:
+            category_values = [
+                CATEGORY_MAP[c] for c in self.category_scope if c in CATEGORY_MAP
+            ]
+            existing_qs = existing_qs.filter(category__in=category_values)
         existing: dict[tuple[str, str], Event] = {
             (e.source_url, e.start_datetime.isoformat()): e for e in existing_qs
         }
