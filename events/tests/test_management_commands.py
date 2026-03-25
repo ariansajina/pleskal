@@ -667,4 +667,7 @@ class TestSystemUserAttribution:
         # Create system user, re-import — existing event is updated.
         system_user = self._make_system_user("dansehallerne")
         call_command("import_dansehallerne", str(f))
-        assert Event.objects.get(external_source="dansehallerne").submitted_by == system_user
+        assert (
+            Event.objects.get(external_source="dansehallerne").submitted_by
+            == system_user
+        )

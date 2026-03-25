@@ -66,7 +66,9 @@ class TestCreateSourceAccounts:
         _write_sources(f, SAMPLE_SOURCES)
         self._run(f)
         self._run(f)
-        assert User.objects.filter(email="system.testsource@pleskal.internal").count() == 1
+        assert (
+            User.objects.filter(email="system.testsource@pleskal.internal").count() == 1
+        )
 
     def test_second_run_updates_display_name(self, tmp_path):
         f = tmp_path / "sources.json"
