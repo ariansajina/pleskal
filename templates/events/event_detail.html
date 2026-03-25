@@ -94,7 +94,7 @@ details[open] summary::after { content: ''; }
                    class="btn btn--primary">
                     More info / tickets &rarr;
                 </a>
-                {% if event.external_source %}
+                {% if event.external_source and not event.submitted_by %}
                     <span style="font-size:0.73rem;color:var(--ink-muted);margin-left:0.75rem;">via {{ event.external_source }}</span>
                 {% endif %}
             </div>
