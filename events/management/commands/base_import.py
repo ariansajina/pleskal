@@ -104,8 +104,8 @@ class BaseEventImportCommand(BaseCommand):
     def handle(self, *args, **options):
         from django.contrib.auth import get_user_model
 
-        User = get_user_model()
-        system_user = User.objects.filter(
+        user_model = get_user_model()
+        system_user = user_model.objects.filter(
             is_system_account=True, display_name_slug=self.external_source
         ).first()
 

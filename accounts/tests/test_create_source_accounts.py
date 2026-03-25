@@ -41,7 +41,9 @@ class TestCreateSourceAccounts:
         f = tmp_path / "sources.json"
         _write_sources(f, SAMPLE_SOURCES)
         self._run(f)
-        assert UserModel.objects.filter(email="system.testsource@pleskal.internal").exists()
+        assert UserModel.objects.filter(
+            email="system.testsource@pleskal.internal"
+        ).exists()
 
     def test_created_user_has_correct_fields(self, tmp_path):
         f = tmp_path / "sources.json"
@@ -67,7 +69,8 @@ class TestCreateSourceAccounts:
         self._run(f)
         self._run(f)
         assert (
-            UserModel.objects.filter(email="system.testsource@pleskal.internal").count() == 1
+            UserModel.objects.filter(email="system.testsource@pleskal.internal").count()
+            == 1
         )
 
     def test_second_run_updates_display_name(self, tmp_path):
