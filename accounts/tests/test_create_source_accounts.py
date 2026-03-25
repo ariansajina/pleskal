@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-User = get_user_model()
+UserModel = get_user_model()
 
 
 def _write_sources(path, sources):
@@ -41,13 +41,13 @@ class TestCreateSourceAccounts:
         f = tmp_path / "sources.json"
         _write_sources(f, SAMPLE_SOURCES)
         self._run(f)
-        assert User.objects.filter(email="system.testsource@pleskal.internal").exists()
+        assert UserModel.objects.filter(email="system.testsource@pleskal.internal").exists()
 
     def test_created_user_has_correct_fields(self, tmp_path):
         f = tmp_path / "sources.json"
         _write_sources(f, SAMPLE_SOURCES)
         self._run(f)
-        user = User.objects.get(email="system.testsource@pleskal.internal")
+        user = UserModel.objects.get(email="system.testsource@pleskal.internal")
         assert user.display_name == "Test Source"
         assert user.display_name_slug == "testsource"
         assert user.website == "https://testsource.example.com"
@@ -58,7 +58,7 @@ class TestCreateSourceAccounts:
         f = tmp_path / "sources.json"
         _write_sources(f, SAMPLE_SOURCES)
         self._run(f)
-        user = User.objects.get(email="system.testsource@pleskal.internal")
+        user = UserModel.objects.get(email="system.testsource@pleskal.internal")
         assert not user.has_usable_password()
 
     def test_idempotent_second_run_does_not_duplicate(self, tmp_path):
@@ -67,7 +67,7 @@ class TestCreateSourceAccounts:
         self._run(f)
         self._run(f)
         assert (
-            User.objects.filter(email="system.testsource@pleskal.internal").count() == 1
+            UserModel.objects.filter(email="system.testsource@pleskal.internal").count() == 1
         )
 
     def test_second_run_updates_display_name(self, tmp_path):
@@ -79,7 +79,7 @@ class TestCreateSourceAccounts:
         _write_sources(f, updated)
         self._run(f)
 
-        user = User.objects.get(email="system.testsource@pleskal.internal")
+        user = UserModel.objects.get(email="system.testsource@pleskal.internal")
         assert user.display_name == "Updated Name"
 
     def test_second_run_updates_website(self, tmp_path):
@@ -91,7 +91,7 @@ class TestCreateSourceAccounts:
         _write_sources(f, updated)
         self._run(f)
 
-        user = User.objects.get(email="system.testsource@pleskal.internal")
+        user = UserModel.objects.get(email="system.testsource@pleskal.internal")
         assert user.website == "https://new.example.com"
 
     def test_missing_file_raises(self, tmp_path):
@@ -123,7 +123,7 @@ class TestCreateSourceAccounts:
         f = tmp_path / "sources.json"
         _write_sources(f, SAMPLE_SOURCES)
         self._run(f)
-        user = User.objects.get(email="system.testsource@pleskal.internal")
+        user = UserModel.objects.get(email="system.testsource@pleskal.internal")
         assert user.bio == ""
 
     def test_multiple_sources_all_created(self, tmp_path):
@@ -144,4 +144,4 @@ class TestCreateSourceAccounts:
         f = tmp_path / "sources.json"
         _write_sources(f, sources)
         self._run(f)
-        assert User.objects.filter(is_system_account=True).count() == 2
+        assert UserModel.objects.filter(is_system_account=True).count() == 2

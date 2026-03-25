@@ -12,7 +12,7 @@ from django.core.management.base import CommandError
 from events.management.commands.base_import import _download_image, _parse_dt
 from events.models import Event
 
-User = get_user_model()
+UserModel = get_user_model()
 
 SAMPLE_EVENT = {
     "source_url": "https://dansehallerne.dk/event/1",
@@ -622,7 +622,7 @@ class TestSystemUserAttribution:
     """The import sets submitted_by to the matching system account when one exists."""
 
     def _make_system_user(self, slug):
-        user = User(
+        user = UserModel(
             email=f"system.{slug}@pleskal.internal",
             display_name=slug.capitalize(),
             display_name_slug=slug,
