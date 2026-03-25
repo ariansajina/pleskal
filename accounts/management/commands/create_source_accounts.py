@@ -31,11 +31,11 @@ class Command(BaseCommand):
         except json.JSONDecodeError as exc:
             raise CommandError(f"Invalid JSON in {SOURCES_FILE}: {exc}") from exc
 
-        User = get_user_model()
+        user_model = get_user_model()
 
         for source in sources:
             slug = source["external_source"]
-            user, created = User.objects.get_or_create(
+            user, created = user_model.objects.get_or_create(
                 email=source["email"],
                 defaults={
                     "display_name": source["display_name"],
