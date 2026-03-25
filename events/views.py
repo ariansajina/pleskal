@@ -39,7 +39,9 @@ def _get_quick_date_ranges():
     month_last_day = calendar.monthrange(today.year, today.month)[1]
     month_end = today.replace(day=month_last_day)
     next_month_start = month_end + datetime.timedelta(days=1)
-    next_month_last_day = calendar.monthrange(next_month_start.year, next_month_start.month)[1]
+    next_month_last_day = calendar.monthrange(
+        next_month_start.year, next_month_start.month
+    )[1]
     next_month_end = next_month_start.replace(day=next_month_last_day)
     return {
         "this_week": (week_start.isoformat(), week_end.isoformat()),
