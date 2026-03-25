@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('events', '0003_remove_event_rejection_note_remove_event_status'),
+        ("events", "0003_remove_event_rejection_note_remove_event_status"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='event',
-            name='is_wheelchair_accessible',
+            model_name="event",
+            name="is_wheelchair_accessible",
             field=models.BooleanField(default=False),
         ),
     ]

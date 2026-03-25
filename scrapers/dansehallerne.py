@@ -25,7 +25,14 @@ import markdownify
 import requests
 from bs4 import BeautifulSoup
 
-from scrapers.base import build_arg_parser, get_soup, scrape_url_list, write_output
+from scrapers.base import (
+    build_arg_parser,
+    get_crawl_delay,
+    get_soup,
+    make_session,
+    scrape_url_list,
+    write_output,
+)
 
 BASE_URL = "https://dansehallerne.dk"
 PROGRAM_URL = f"{BASE_URL}/en/public-program/"
@@ -342,7 +349,13 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
 
 def scrape(delay: float = 0.5) -> list[dict]:
     """Scrape the full programme and return a list of event dicts."""
-    session = requests.Session()
+    session = make_session()
+    crawl_delay = get_crawl_delay(BASE_URL)
+    if crawl_delay is not None and crawl_delay > delay:
+        log.info(
+            "robots.txt Crawl-delay %.1fs overrides --delay %.1fs", crawl_delay, delay
+        )
+        delay = crawl_delay
     urls = collect_event_urls(session)
     return scrape_url_list(urls, session, scrape_detail, delay)
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime
 import logging
 import re
+import time
 import zoneinfo
 from urllib.parse import urljoin
 
@@ -21,7 +22,14 @@ import markdownify
 import requests
 from bs4 import BeautifulSoup, Tag
 
-from scrapers.base import build_arg_parser, get_soup, scrape_url_list, write_output
+from scrapers.base import (
+    build_arg_parser,
+    get_crawl_delay,
+    get_soup,
+    make_session,
+    scrape_url_list,
+    write_output,
+)
 
 BASE_URL = "https://www.hautscene.dk"
 CALENDAR_URL = f"{BASE_URL}/en/calendar"
@@ -75,7 +83,7 @@ def _next_page_url(soup: BeautifulSoup, current_url: str) -> str | None:
     return best[1] if best else None
 
 
-def collect_event_urls(session: requests.Session) -> list[str]:
+def collect_event_urls(session: requests.Session, delay: float = 0.5) -> list[str]:
     """Return all unique event detail URLs from the calendar listing."""
     seen: set[str] = set()
     urls: list[str] = []
@@ -83,6 +91,8 @@ def collect_event_urls(session: requests.Session) -> list[str]:
     page_url: str | None = CALENDAR_URL
     pages_fetched = 0
     while page_url:
+        if pages_fetched > 0:
+            time.sleep(delay)
         pages_fetched += 1
         try:
             soup = get_soup(page_url, session)
@@ -323,8 +333,14 @@ def scrape_detail(url: str, session: requests.Session) -> dict | None:
 
 def scrape(delay: float = 0.5) -> list[dict]:
     """Scrape the full calendar and return a list of event dicts."""
-    session = requests.Session()
-    urls = collect_event_urls(session)
+    session = make_session()
+    crawl_delay = get_crawl_delay(BASE_URL)
+    if crawl_delay is not None and crawl_delay > delay:
+        log.info(
+            "robots.txt Crawl-delay %.1fs overrides --delay %.1fs", crawl_delay, delay
+        )
+        delay = crawl_delay
+    urls = collect_event_urls(session, delay)
     return scrape_url_list(urls, session, scrape_detail, delay)
 
 

@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import TemplateView
 
 from .feeds import EventICalFeed, EventICalSingleView, EventRSSFeed
 from .views import (
@@ -38,4 +39,6 @@ urlpatterns = [
     path("feed/events.rss", EventRSSFeed(), name="event_rss_feed"),
     # Subscribe page
     path("subscribe/", SubscribeView.as_view(), name="subscribe"),
+    # About page
+    path("about/", TemplateView.as_view(template_name="about.html"), name="about"),
 ]

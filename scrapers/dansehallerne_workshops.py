@@ -22,7 +22,14 @@ from urllib.parse import urljoin
 
 import requests
 
-from scrapers.base import build_arg_parser, get_soup, scrape_url_list, write_output
+from scrapers.base import (
+    build_arg_parser,
+    get_crawl_delay,
+    get_soup,
+    make_session,
+    scrape_url_list,
+    write_output,
+)
 from scrapers.dansehallerne import (
     parse_date_string,
     parse_description,
@@ -169,7 +176,13 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
 
 def scrape(delay: float = 0.5) -> list[dict]:
     """Scrape all workshops and return a list of event dicts."""
-    session = requests.Session()
+    session = make_session()
+    crawl_delay = get_crawl_delay(BASE_URL)
+    if crawl_delay is not None and crawl_delay > delay:
+        log.info(
+            "robots.txt Crawl-delay %.1fs overrides --delay %.1fs", crawl_delay, delay
+        )
+        delay = crawl_delay
     urls = collect_workshop_urls(session)
     return scrape_url_list(urls, session, scrape_detail, delay)
 

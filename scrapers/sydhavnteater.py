@@ -22,9 +22,8 @@ import re
 import zoneinfo
 
 import markdownify
-import requests
 
-from scrapers.base import build_arg_parser, write_output
+from scrapers.base import build_arg_parser, make_session, write_output
 
 BASE_URL = "https://sydhavnteater.dk"
 API_URL = "https://cms.sydhavnteater.dk/api"
@@ -32,7 +31,7 @@ EXTERNAL_SOURCE = "sydhavnteater"
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; pleskalScraper/1.0)",
+    "User-Agent": "pleskalScraper/1.0 (+https://pleskal.dk/about/)",
     "Content-Type": "application/json",
 }
 
@@ -109,7 +108,8 @@ log = logging.getLogger(__name__)
 
 def fetch_events() -> list[dict]:
     """POST the GraphQL query and return the raw list of event dicts."""
-    resp = requests.post(
+    session = make_session()
+    resp = session.post(
         API_URL,
         headers=HEADERS,
         json={"query": GRAPHQL_QUERY},

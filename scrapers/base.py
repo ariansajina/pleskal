@@ -9,17 +9,48 @@ import argparse
 import json
 import logging
 import time
+import urllib.robotparser
 from collections.abc import Callable
 
 import requests
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; pleskalScraper/1.0)",
-    "Accept-Language": "en-US,en;q=0.9",
+    "User-Agent": "pleskalScraper/1.0 (+https://pleskal.dk/about/)",
+    "Accept-Language": "da,en;q=0.9",
 }
 
 log = logging.getLogger(__name__)
+
+
+def make_session() -> requests.Session:
+    """Return a requests.Session with retry/backoff for transient errors."""
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=1,  # waits 1s, 2s, 4s between retries
+        status_forcelist={429, 500, 502, 503, 504},
+        allowed_methods={"GET", "POST"},
+        raise_on_status=False,  # let raise_for_status() handle it downstream
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+def get_crawl_delay(base_url: str) -> float | None:
+    """Return the Crawl-delay from robots.txt, or None if not specified."""
+    rp = urllib.robotparser.RobotFileParser()
+    rp.set_url(f"{base_url}/robots.txt")
+    try:
+        rp.read()
+        delay = rp.crawl_delay("*")
+        return float(delay) if delay is not None else None
+    except Exception:
+        return None
 
 
 def get_soup(url: str, session: requests.Session) -> BeautifulSoup:
