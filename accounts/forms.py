@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.forms import AuthenticationForm
+from django.utils.html import mark_safe
 
 User = get_user_model()
 
@@ -38,7 +39,9 @@ class ProfileForm(forms.ModelForm):
         }
         help_texts = {
             "display_name": "Shown next to your submitted events. Can include spaces and special characters.",
-            "bio": "Up to 500 characters. Markdown supported. Displayed on your public profile.",
+            "bio": mark_safe(
+                'Up to 500 characters. <a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" rel="noopener noreferrer">Markdown</a> supported. Displayed on your public profile.'
+            ),
             "website": "Optional link displayed on your public profile.",
             "email": "Used for password resets.",
         }
