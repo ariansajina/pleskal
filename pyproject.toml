@@ -3,7 +3,7 @@ name = "pleskal"
 version = "0.1.0"
 description = "A local-first, crowd-sourced web application for discovering and sharing dance events in Copenhagen."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "django>=6.0.3",
     "psycopg[binary]>=3.2",
