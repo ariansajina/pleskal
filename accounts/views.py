@@ -160,6 +160,7 @@ class ClaimCodeView(RateLimitMixin, View):
             return render(request, "accounts/claim.html", {"form": form})
 
         code_value = form.cleaned_data["code"]
+        invalid_msg = "Invalid or expired code."
         try:
             claim_code = ClaimCode.objects.get(code__iexact=code_value)
         except ClaimCode.DoesNotExist:
@@ -168,15 +169,11 @@ class ClaimCodeView(RateLimitMixin, View):
                 code_value,
                 request.META.get("REMOTE_ADDR"),
             )
-            form.add_error("code", "Invalid code.")
+            form.add_error("code", invalid_msg)
             return render(request, "accounts/claim.html", {"form": form})
 
-        if claim_code.is_claimed:
-            form.add_error("code", "This code has already been used.")
-            return render(request, "accounts/claim.html", {"form": form})
-
-        if claim_code.is_expired:
-            form.add_error("code", "This code has expired.")
+        if claim_code.is_claimed or claim_code.is_expired:
+            form.add_error("code", invalid_msg)
             return render(request, "accounts/claim.html", {"form": form})
 
         request.session["claim_code"] = claim_code.code

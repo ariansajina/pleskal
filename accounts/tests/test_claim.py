@@ -146,7 +146,7 @@ class TestClaimCodeView:
         client = Client()
         response = client.post("/claim/", {"code": "BADCODE1"})
         assert response.status_code == 200
-        assert b"Invalid code" in response.content
+        assert b"Invalid or expired code." in response.content
 
     def test_expired_code_shows_error(self):
         ClaimCode.objects.create(
@@ -156,7 +156,7 @@ class TestClaimCodeView:
         client = Client()
         response = client.post("/claim/", {"code": "EXPDCODE"})
         assert response.status_code == 200
-        assert b"expired" in response.content
+        assert b"Invalid or expired code." in response.content
 
     def test_claimed_code_shows_error(self):
         user = UserFactory.create()
@@ -169,7 +169,7 @@ class TestClaimCodeView:
         client = Client()
         response = client.post("/claim/", {"code": "USEDCODE"})
         assert response.status_code == 200
-        assert b"already been used" in response.content
+        assert b"Invalid or expired code." in response.content
 
 
 @pytest.mark.django_db

@@ -39,9 +39,10 @@ class TestUserModel:
         user2 = UserFactory.create(display_name="Same Name")
         assert user1.display_name_slug != user2.display_name_slug
 
-    def test_display_name_slug_falls_back_to_email_prefix(self):
+    def test_display_name_slug_falls_back_to_random_token(self):
         user = UserFactory.create(email="beatrice@example.com", display_name="")
-        assert "beatrice" in user.display_name_slug
+        assert user.display_name_slug.startswith("user-")
+        assert "beatrice" not in user.display_name_slug
 
 
 @pytest.mark.django_db

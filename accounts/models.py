@@ -45,7 +45,7 @@ class User(AbstractBaseUser, PermissionsMixin):
             base = (
                 slugify(self.display_name)
                 if self.display_name
-                else slugify(str(self.email).split("@")[0])
+                else f"user-{secrets.token_hex(4)}"
             )
             slug = base or str(self.pk)[:8]
             # Ensure uniqueness by appending a counter if needed.
@@ -63,7 +63,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     @property
     def public_name(self):
-        return self.display_name if self.display_name else str(self.email).split("@")[0]
+        return self.display_name if self.display_name else "Anonymous"
 
 
 def generate_claim_code():
