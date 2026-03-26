@@ -277,7 +277,7 @@ class BaseEventImportCommand(BaseCommand):
 
         try:
             with open(tmp_path, "rb") as f:
-                event.image.save(filename, File(f), save=True)  # type: ignore[union-attr]
+                event.image.save(filename, File(f), save=True)  # type: ignore
         except Exception as exc:
             self.stderr.write(
                 f"    Image save failed for {str(event.title)[:40]}: {exc}"

@@ -61,4 +61,4 @@ class RateLimitMixin:
                 return HttpResponse(
                     "Too many requests. Please try again later.", status=429
                 )
-        return super().dispatch(request, *args, **kwargs)  # type: ignore[unresolved-attribute]
+        return super().dispatch(request, *args, **kwargs)  # type: ignore

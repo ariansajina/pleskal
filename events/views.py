@@ -55,8 +55,8 @@ class EventOwnerMixin:
     """Restrict access to the event owner. Returns 403 otherwise."""
 
     def get_object(self, queryset=None):
-        obj = super().get_object(queryset)  # type: ignore[misc]
-        user = self.request.user  # type: ignore[attr-defined]
+        obj = super().get_object(queryset)  # type: ignore
+        user = self.request.user  # type: ignore
         if obj.submitted_by != user:
             from django.core.exceptions import PermissionDenied
 

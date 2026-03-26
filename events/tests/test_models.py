@@ -97,6 +97,6 @@ class TestEventValidation:
     def test_submitted_by_set_null_on_delete(self):
         event = EventFactory.create()
         user = event.submitted_by
-        user.delete()  # type: ignore[union-attr]
+        user.delete()  # type: ignore
         event.refresh_from_db()
         assert event.submitted_by is None
