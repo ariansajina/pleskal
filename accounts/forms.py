@@ -40,7 +40,7 @@ class ProfileForm(forms.ModelForm):
         help_texts = {
             "display_name": "Shown next to your submitted events. Can include spaces and special characters.",
             "bio": mark_safe(
-                'Up to 500 characters. <a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" rel="noopener noreferrer">Markdown</a> supported. Displayed on your public profile.'
+                'Up to 1,500 characters. <a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" rel="noopener noreferrer">Markdown</a> supported. Displayed on your public profile.'
             ),
             "website": "Optional link displayed on your public profile.",
             "email": "Used for password resets.",

@@ -8,7 +8,7 @@
     <div class="page-hero__ornrow">✦</div>
     <h1 class="page-hero__title" style="font-size:2rem;">{{ publisher.public_name }}</h1>
     {% if publisher.bio %}
-        <div class="page-hero__sub prose-content">{{ publisher.bio|render_markdown }}</div>
+        <div class="page-hero__sub prose-content" style="text-align:left;">{{ publisher.bio|render_markdown }}</div>
     {% endif %}
     {% if publisher.website %}
         <a href="{{ publisher.website }}"
