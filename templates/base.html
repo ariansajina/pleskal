@@ -156,7 +156,7 @@
     /* ─── SECTION DIVIDER ───────────────────────────────── */
     .section-rule {
       display: flex; align-items: center; gap: 0.75rem;
-      margin: 2.25rem 0 1rem; color: var(--blue); opacity: 0.4;
+      margin: 1.25rem 0 0.5rem; color: var(--blue); opacity: 0.4;
       font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; user-select: none;
     }
     .section-rule::before, .section-rule::after { content: ''; flex: 1; border-top: 1px solid currentColor; }
@@ -175,8 +175,8 @@
       box-shadow: 3px 3px 0 var(--blue);
     }
 
-    .event-row { display: flex; align-items: stretch; }
-    .event-row__body { flex: 1; padding: 0.85rem 1rem; min-width: 0; }
+    .event-row { display: flex; align-items: stretch; height: 140px; }
+    .event-row__body { flex: 1; padding: 0.85rem 1rem; min-width: 0; overflow: hidden; }
 
     .event-title {
       font-family: 'Playfair Display', serif;
@@ -195,8 +195,7 @@
       border-left: 1.5px solid var(--border-light);
     }
     .event-row__thumb-inner {
-      width: 100%; height: 100%; min-height: 90px;
-      display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 100%;
     }
     .event-row__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
