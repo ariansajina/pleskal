@@ -34,7 +34,7 @@ class TestValidateImageFile:
 
     def test_invalid_format_rejected(self):
         f = self._make_image("BMP")
-        with pytest.raises(ValidationError, match="JPEG, PNG, or WebP"):
+        with pytest.raises(ValidationError, match="JPEG, PNG, WebP, or HEIC"):
             validate_image_file(f)
 
     def test_oversized_file_rejected(self):

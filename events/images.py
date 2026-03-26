@@ -4,6 +4,9 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from PIL import Image
+from pillow_heif import register_heif_opener
+
+register_heif_opener()
 
 
 def validate_and_process(upload) -> ContentFile:

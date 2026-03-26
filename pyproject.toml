@@ -27,6 +27,7 @@ dependencies = [
     "django-allauth>=65.15.0",
     "argon2-cffi>=25.1.0",
     "resend>=2.26.0",
+    "pillow-heif>=1.3.0",
 ]
 
 [dependency-groups]
