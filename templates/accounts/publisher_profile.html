@@ -38,38 +38,7 @@
     {% if events %}
         <div class="event-list">
             {% for event in events %}
-                {% if is_own_profile %}
-                    <div class="card" style="display:block;">
-                        <div class="event-row">
-                            <div class="event-row__body">
-                                <div class="event-tags" style="margin-bottom:0.5rem;margin-top:0;">
-                                    <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
-                                </div>
-                                <div class="event-title">
-                                    <a href="{% url 'event_detail' event.slug %}" style="color:var(--ink);">
-                                        {{ event.title }}
-                                    </a>
-                                </div>
-                                <div class="event-meta" style="margin-top:0.25rem;">
-                                    <span>{{ event.start_datetime|date:"j M Y · H:i" }}</span>
-                                    {% if event.end_datetime %}
-                                        <span>–</span>
-                                        <span>{{ event.end_datetime|date:"H:i" }}</span>
-                                    {% endif %}
-                                    <span style="opacity:0.4;">·</span>
-                                    <span class="event-meta--venue">{{ event.venue_name }}</span>
-                                </div>
-                            </div>
-                            <div style="display:flex;align-items:center;gap:0.5rem;padding:0.85rem 1rem;flex-shrink:0;">
-                                <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
-                                <a href="{% url 'event_duplicate' event.slug %}" class="btn btn--ghost btn--sm">Duplicate</a>
-                                <a href="{% url 'event_delete' event.slug %}" class="btn btn--danger btn--sm">Delete</a>
-                            </div>
-                        </div>
-                    </div>
-                {% else %}
-                    {% include "events/partials/event_card.html" with event=event %}
-                {% endif %}
+                {% include "events/partials/event_card.html" with event=event %}
             {% endfor %}
         </div>
     {% else %}

@@ -117,6 +117,7 @@ details[open] summary::after { content: ''; }
                 <hr class="rule">
                 <div style="display:flex;gap:0.75rem;">
                     <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
+                    <a href="{% url 'event_duplicate' event.slug %}" class="btn btn--ghost btn--sm">Duplicate</a>
                     <a href="{% url 'event_delete' event.slug %}" class="btn btn--danger btn--sm">Delete</a>
                 </div>
             {% endif %}
