@@ -20,4 +20,4 @@ class Command(BaseEventImportCommand):
     )
     external_source = "hautscene"
     default_json_file = "hautscene_events.json"
-    default_venue_name = "Haut Scene"
+    default_venue_name = "HAUT scene"

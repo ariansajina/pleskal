@@ -253,7 +253,7 @@ def scrape_detail(url: str, session: requests.Session) -> dict | None:
 
     # ── Venue / address ───────────────────────────────────────────────────────
     place_text = _get_info_row_value(info_div, "place")
-    venue_name = "Haut Scene"
+    venue_name = "HAUT scene"
     venue_address = place_text[:200]
 
     # ── Description ───────────────────────────────────────────────────────────
