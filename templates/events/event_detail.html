@@ -46,15 +46,27 @@ details[open] summary::after { content: ''; }
         </div>
 
         {# Price #}
-        <div class="event-meta" style="margin-bottom:1rem;font-size:0.88rem;">
+        <div class="event-meta" style="margin-bottom:0.5rem;font-size:0.88rem;">
             {% if event.is_free %}
                 <span style="color:var(--c-op);">Free admission</span>
             {% elif event.price_note %}
                 <span>{{ event.price_note }}</span>
             {% else %}
-                <span>See source for pricing</span>
+                <span>(see more info / tickets for pricing)</span>
             {% endif %}
         </div>
+
+        {# Publisher attribution #}
+        {% if event.submitted_by %}
+            <div class="event-meta" style="margin-bottom:1rem;font-size:0.78rem;color:var(--ink-muted);">
+                by
+                <a href="{% url 'publisher_profile' event.submitted_by.display_name_slug %}" class="link-accent" style="font-weight:600;">
+                    {{ event.submitted_by.public_name }}
+                </a>
+            </div>
+        {% else %}
+            <div style="margin-bottom:1rem;"></div>
+        {% endif %}
 
         {# Action buttons #}
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1.5rem;">
@@ -97,17 +109,6 @@ details[open] summary::after { content: ''; }
                 {% if event.external_source and not event.submitted_by %}
                     <span style="font-size:0.73rem;color:var(--ink-muted);margin-left:0.75rem;">via {{ event.external_source }}</span>
                 {% endif %}
-            </div>
-        {% endif %}
-
-        {# Publisher attribution #}
-        {% if event.submitted_by %}
-            <hr class="rule">
-            <div style="font-size:0.78rem;color:var(--ink-muted);margin-bottom:1rem;">
-                Published by
-                <a href="{% url 'publisher_profile' event.submitted_by.display_name_slug %}" class="link-accent" style="font-weight:600;">
-                    {{ event.submitted_by.public_name }}
-                </a>
             </div>
         {% endif %}
 

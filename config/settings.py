@@ -170,8 +170,8 @@ IMAGE_WEBP_QUALITY = 70
 # Event settings
 
 SCRAPED_EVENT_DISCLAIMER = (
-    "> This event was scraped from the source page. "
-    "Some information may be inaccurate. Please check the event source page when "
+    "> This event was scraped and may be partly inaccurate. "
+    "Follow the more info link to read the source page when "
     "planning your visit/participation."
 )
 
