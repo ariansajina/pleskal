@@ -1,7 +1,7 @@
 [project]
 name = "pleskal"
 version = "0.1.0"
-description = "A local-first, crowd-sourced web application for discovering and sharing dance events in Copenhagen."
+description = "A web application for a Copenhagen dance and perofmance arts event calendar."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-pleskal is a local-first, crowd-sourced Django web application for discovering and sharing dance events in Copenhagen. Anyone can submit events. Community-maintained, editorially neutral.
+pleskal is a Django web application for a Copenhagen dance and performance arts calendar.
 
 Inspired by [dukop.dk](https://dukop.dk). Designed for low operational cost and complexity.
 
