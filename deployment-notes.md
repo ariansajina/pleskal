@@ -14,9 +14,14 @@ database in a single run. Schedule it in Railway as a **Cron Job** service:
 
 | Setting | Value |
 |---|---|
-| **Build command** | `npm ci && npm run css:build && pip install -r requirements.txt` (or use the same Nixpacks/builder as the web service) |
-| **Start command** | `python manage.py run_scrapers` |
+| **Config file path** | `railway.cron.toml` |
 | **Cron schedule** | `0 6 * * *` (daily at 06:00 UTC / 07:00–08:00 CET/CEST) |
+
+   `railway.cron.toml` sets the build command (`uv sync --no-dev`) and start command
+   (`python manage.py run_scrapers`) — no separate dashboard overrides needed.
+
+   `run_scrapers` already calls all `import_*` commands internally: it scrapes each
+   source, writes a temp JSON file, and invokes the corresponding importer.
 
 4. Under **Variables**, reference the same environment variables as the web service.
    Required: `DATABASE_URL`, `SECRET_KEY`, `PASSWORD_PEPPER`.
