@@ -85,7 +85,7 @@
             {# Description #}
             <div>
                 <label for="{{ form.description.id_for_label }}" class="form-label">
-                    Description <span class="form-help" style="text-transform:none;letter-spacing:0;">(Markdown supported)</span>
+                    Description <span class="form-help" style="text-transform:none;letter-spacing:0;">(<a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" rel="noopener noreferrer">Markdown</a> supported)</span>
                 </label>
                 {{ form.description }}
                 {% if form.description.errors %}
@@ -127,13 +127,13 @@
                     Price note
                 </label>
                 {{ form.price_note }}
-                <p class="form-help" style="margin-top:0.3rem;">Only shown for paid events</p>
+                <p class="form-help" style="margin-top:0.3rem;">Only displayed for events that are not free.</p>
             </div>
 
             {# Source URL #}
             <div>
                 <label for="{{ form.source_url.id_for_label }}" class="form-label">
-                    Source URL
+                    link for more info / tickets
                 </label>
                 {{ form.source_url }}
                 {% if form.source_url.errors %}
