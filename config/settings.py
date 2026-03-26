@@ -247,7 +247,7 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         integrations=[DjangoIntegration(middleware_spans=True)],
         traces_sample_rate=0.2,
-        send_default_pii=False,
+        send_default_pii=True,
     )
 
 # Security (production only)
