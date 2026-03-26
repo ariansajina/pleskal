@@ -14,7 +14,7 @@ class TestAxesLockout:
         # Reset axes state cleanly for each test
         from axes.models import AccessAttempt
 
-        AccessAttempt.objects.all().delete()  # type: ignore[union-attr]
+        AccessAttempt.objects.all().delete()  # type: ignore
 
         settings.AXES_FAILURE_LIMIT = 5
         UserFactory.create(email="victim@example.com")
@@ -43,7 +43,7 @@ class TestAxesLockout:
     def test_successful_login_resets_attempt_count(self, client, settings):
         from axes.models import AccessAttempt
 
-        AccessAttempt.objects.all().delete()  # type: ignore[union-attr]
+        AccessAttempt.objects.all().delete()  # type: ignore
 
         settings.AXES_FAILURE_LIMIT = 5
         settings.AXES_RESET_ON_SUCCESS = True

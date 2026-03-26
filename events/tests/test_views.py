@@ -495,7 +495,7 @@ class TestEventUpdateView:
             reverse("event_edit", kwargs={"slug": event.slug}),
             {
                 "title": "Completely Different Title",
-                "start_datetime": event.start_datetime.strftime("%Y-%m-%dT%H:%M"),  # type: ignore[union-attr]
+                "start_datetime": event.start_datetime.strftime("%Y-%m-%dT%H:%M"),  # type: ignore
                 "venue_name": event.venue_name,
                 "category": event.category,
                 "is_free": event.is_free,
