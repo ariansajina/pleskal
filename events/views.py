@@ -374,10 +374,15 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
         return render(
             request,
             EVENT_FORM_TEMPLATE,
-            {"form": form, "page_title": "Duplicate Event"},
+            {
+                "form": form,
+                "page_title": "Duplicate Event",
+                "source_image": source.image or None,
+            },
         )
 
     def post(self, request, slug):
+        from django.core.files.base import ContentFile
         from django.shortcuts import render
 
         source = get_object_or_404(Event, slug=slug)
@@ -392,13 +397,25 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
             if image_file:
                 processed = validate_and_process(image_file)
                 event.image.save(processed.name, processed, save=False)
+            elif source.image and request.POST.get("copy_source_image"):
+                source.image.open()
+                event.image.save(
+                    source.image.name.split("/")[-1],
+                    ContentFile(source.image.read()),
+                    save=False,
+                )
+                source.image.close()
             event.save()
             messages.success(request, "Event duplicated.")
             return redirect("event_detail", slug=event.slug)
         return render(
             request,
             EVENT_FORM_TEMPLATE,
-            {"form": form, "page_title": "Duplicate Event"},
+            {
+                "form": form,
+                "page_title": "Duplicate Event",
+                "source_image": source.image or None,
+            },
         )
 
 

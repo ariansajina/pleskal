@@ -31,7 +31,9 @@ def validate_image_file(image):
     image.seek(0)
 
     if fmt not in ALLOWED_IMAGE_FORMATS:
-        raise ValidationError(f"Image format must be JPEG, PNG, WebP, or HEIC. Got {fmt}.")
+        raise ValidationError(
+            f"Image format must be JPEG, PNG, WebP, or HEIC. Got {fmt}."
+        )
 
 
 def validate_url_scheme(value):

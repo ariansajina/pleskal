@@ -100,6 +100,9 @@
                 </label>
                 {% if form.instance.image %}
                     <p class="form-help">Current: {{ form.instance.image.name }}</p>
+                {% elif source_image %}
+                    <input type="hidden" name="copy_source_image" value="1">
+                    <p class="form-help">Image from original event will be used. Upload a new image to replace it.</p>
                 {% endif %}
                 {{ form.image }}
                 {% if form.image.errors %}
