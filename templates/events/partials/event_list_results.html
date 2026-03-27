@@ -3,7 +3,7 @@
 {% endif %}
 
 {% if events %}
-    {% regroup events by start_datetime|date:"Y-m-d" as events_by_date %}
+    {% regroup events by start_datetime.date as events_by_date %}
 
     <div class="event-list">
         {% for date_group in events_by_date %}
