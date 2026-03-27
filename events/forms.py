@@ -97,6 +97,20 @@ class EventForm(forms.ModelForm):
             raise forms.ValidationError("Image must be under 10 MB.")
         return image
 
+    def _validate_start_for_creation(self, start_dt):
+        if start_dt <= timezone.now():
+            self.add_error(
+                "date",
+                "Events cannot be created in the past. "
+                "Please choose a future date and time.",
+            )
+        one_year = timezone.now() + timezone.timedelta(days=365)
+        if start_dt > one_year:
+            self.add_error(
+                "date",
+                "Start date must not be more than 1 year in the future.",
+            )
+
     def clean(self):
         cleaned = super().clean()
         date = cleaned.get("date")
@@ -106,28 +120,15 @@ class EventForm(forms.ModelForm):
         if date and start_time:
             start_dt = timezone.make_aware(datetime.datetime.combine(date, start_time))
             if self._is_creation:
-                if start_dt <= timezone.now():
-                    self.add_error(
-                        "date",
-                        "Events cannot be created in the past. "
-                        "Please choose a future date and time.",
-                    )
-                one_year = timezone.now() + timezone.timedelta(days=365)
-                if start_dt > one_year:
-                    self.add_error(
-                        "date",
-                        "Start date must not be more than 1 year in the future.",
-                    )
+                self._validate_start_for_creation(start_dt)
             cleaned["start_datetime"] = start_dt
-
+            cleaned["end_datetime"] = None
             if end_time:
                 end_dt = timezone.make_aware(datetime.datetime.combine(date, end_time))
                 if end_dt <= start_dt:
                     self.add_error("end_time", "End time must be after start time.")
                 else:
                     cleaned["end_datetime"] = end_dt
-            else:
-                cleaned["end_datetime"] = None
 
         return cleaned
 
