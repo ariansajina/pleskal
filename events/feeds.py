@@ -25,6 +25,7 @@ def _plain_text(markdown_text: str) -> str:
 def _upcoming_qs(category: str | None = None):
     qs = Event.objects.filter(
         start_datetime__gte=timezone.now(),
+        is_draft=False,
     ).order_by("start_datetime")
     if category and category in {c.value for c in EventCategory}:
         qs = qs.filter(category=category)
@@ -126,7 +127,7 @@ class EventICalFeed(View):
 
 class EventICalSingleView(View):
     def get(self, request, slug):
-        event = get_object_or_404(Event, slug=slug)
+        event = get_object_or_404(Event, slug=slug, is_draft=False)
 
         cal = Calendar()
         cal.add("prodid", "-//Copenhagen Dance Calendar//EN")

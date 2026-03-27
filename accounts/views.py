@@ -124,7 +124,10 @@ class PublisherProfileView(View):
         publisher = get_object_or_404(User, display_name_slug=slug)
         is_own_profile = request.user.is_authenticated and request.user == publisher
 
-        qs = Event.objects.filter(submitted_by=publisher).select_related("submitted_by")
+        # Base queryset: published events only (drafts shown separately for own profile)
+        qs = Event.objects.filter(
+            submitted_by=publisher, is_draft=False
+        ).select_related("submitted_by")
 
         show_past = request.GET.get("past") == "1"
         now = timezone.now()
@@ -132,6 +135,14 @@ class PublisherProfileView(View):
             qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime")
         else:
             qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
+
+        drafts = None
+        if is_own_profile:
+            drafts = (
+                Event.objects.filter(submitted_by=publisher, is_draft=True)
+                .select_related("submitted_by")
+                .order_by("start_datetime")
+            )
 
         return render(
             request,
@@ -141,6 +152,7 @@ class PublisherProfileView(View):
                 "events": qs,
                 "show_past": show_past,
                 "is_own_profile": is_own_profile,
+                "drafts": drafts,
             },
         )
 

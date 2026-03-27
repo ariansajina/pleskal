@@ -102,6 +102,7 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
     def form_valid(self, form):
         event = form.save(commit=False)
         event.submitted_by = self.request.user
+        event.is_draft = self.request.POST.get("submit_action") == "draft"
 
         # Process uploaded image
         image_file = form.cleaned_data.get("image")
@@ -111,7 +112,10 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
 
         event.save()
 
-        messages.success(self.request, "Your event has been submitted.")
+        if event.is_draft:
+            messages.success(self.request, "Your event has been saved as a draft.")
+        else:
+            messages.success(self.request, "Your event has been submitted.")
         return redirect("event_detail", slug=event.slug)
 
     def get_context_data(self, **kwargs):
@@ -184,9 +188,9 @@ class EventListView(RateLimitMixin, View):
         from django.shortcuts import render
 
         expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
-        qs = Event.objects.filter(start_datetime__gte=expiry_cutoff).select_related(
-            "submitted_by"
-        )
+        qs = Event.objects.filter(
+            start_datetime__gte=expiry_cutoff, is_draft=False
+        ).select_related("submitted_by")
 
         qs, categories, date_from, date_to, search_query, date_range_active = (
             self._apply_filters(qs, request)
@@ -248,7 +252,14 @@ class EventDetailView(DetailView):
     slug_url_kwarg = "slug"
 
     def get_object(self, queryset=None):
-        return get_object_or_404(Event, slug=self.kwargs["slug"])
+        event = get_object_or_404(Event, slug=self.kwargs["slug"])
+        if event.is_draft:
+            user = self.request.user
+            if not user.is_authenticated or user != event.submitted_by:
+                from django.http import Http404
+
+                raise Http404
+        return event
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -294,6 +305,13 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
     def form_valid(self, form):
         event = form.save(commit=False)
 
+        submit_action = self.request.POST.get("submit_action")
+        if submit_action == "draft":
+            event.is_draft = True
+        elif submit_action == "publish":
+            event.is_draft = False
+        # If neither button was used (fallback), keep existing value.
+
         # Process newly uploaded image
         image_file = form.cleaned_data.get("image")
         if image_file and hasattr(image_file, "read"):
@@ -301,7 +319,10 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
             event.image.save(processed.name, processed, save=False)
 
         event.save()
-        messages.success(self.request, "Event updated.")
+        if event.is_draft:
+            messages.success(self.request, "Event saved as draft.")
+        else:
+            messages.success(self.request, "Event updated.")
         return redirect("event_detail", slug=event.slug)
 
     def get_context_data(self, **kwargs):
@@ -394,6 +415,7 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
         if form.is_valid():
             event = form.save(commit=False)
             event.submitted_by = request.user
+            event.is_draft = request.POST.get("submit_action") == "draft"
             image_file = form.cleaned_data.get("image")
             if image_file:
                 processed = validate_and_process(image_file)
@@ -407,7 +429,10 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
                 )
                 source.image.close()
             event.save()
-            messages.success(request, "Event duplicated.")
+            if event.is_draft:
+                messages.success(request, "Event duplicated and saved as draft.")
+            else:
+                messages.success(request, "Event duplicated.")
             return redirect("event_detail", slug=event.slug)
         return render(
             request,

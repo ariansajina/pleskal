@@ -21,6 +21,7 @@
             </div>
             <div class="event-row__footer">
                 <div class="event-tags">
+                    {% if show_draft_badge %}<span class="badge badge--draft">Draft</span>{% endif %}
                     <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
                     {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
                 </div>

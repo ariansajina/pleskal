@@ -621,3 +621,180 @@ class TestEventDuplicateView:
         )
         assert resp.status_code == 302
         assert not Event.objects.filter(title="Blocked Duplicate").exists()
+
+
+# ---------------------------------------------------------------------------
+# Draft tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestEventDrafts:
+    """Tests for the is_draft functionality across views."""
+
+    def _post_create(
+        self, client, user, submit_action="publish", title="Draft Test Event"
+    ):
+        client.force_login(user)
+        return client.post(
+            reverse("event_create"),
+            {
+                "title": title,
+                "date": _future_dt(7).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(7).strftime("%H:%M"),
+                "venue_name": "Test Venue",
+                "category": "social",
+                "submit_action": submit_action,
+            },
+        )
+
+    # --- Create ---
+
+    def test_submit_action_publish_creates_published_event(self, client):
+        user = UserFactory.create()
+        resp = self._post_create(client, user, "publish", "Published Event")
+        assert resp.status_code == 302
+        event = Event.objects.get(title="Published Event")
+        assert not event.is_draft
+
+    def test_submit_action_draft_creates_draft_event(self, client):
+        user = UserFactory.create()
+        resp = self._post_create(client, user, "draft", "My Draft Event")
+        assert resp.status_code == 302
+        event = Event.objects.get(title="My Draft Event")
+        assert event.is_draft
+
+    def test_default_no_action_creates_published_event(self, client):
+        """If submit_action is absent (e.g. JS disabled), event is published."""
+        user = UserFactory.create()
+        client.force_login(user)
+        resp = client.post(
+            reverse("event_create"),
+            {
+                "title": "No Action Event",
+                "date": _future_dt(7).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(7).strftime("%H:%M"),
+                "venue_name": "Test Venue",
+                "category": "social",
+            },
+        )
+        assert resp.status_code == 302
+        event = Event.objects.get(title="No Action Event")
+        assert not event.is_draft
+
+    # --- Event list ---
+
+    def test_draft_excluded_from_public_event_list(self, client):
+        EventFactory.create(title="Public Event", is_draft=False)
+        EventFactory.create(title="Hidden Draft", is_draft=True)
+        resp = client.get(reverse("event_list"))
+        assert resp.status_code == 200
+        assert b"Public Event" in resp.content
+        assert b"Hidden Draft" not in resp.content
+
+    # --- Detail view ---
+
+    def test_owner_can_view_draft_detail(self, client):
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, is_draft=True)
+        client.force_login(user)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert resp.status_code == 200
+
+    def test_non_owner_cannot_view_draft_detail(self, client):
+        owner = UserFactory.create()
+        other = UserFactory.create()
+        event = EventFactory.create(submitted_by=owner, is_draft=True)
+        client.force_login(other)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert resp.status_code == 404
+
+    def test_anonymous_cannot_view_draft_detail(self, client):
+        owner = UserFactory.create()
+        event = EventFactory.create(submitted_by=owner, is_draft=True)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert resp.status_code == 404
+
+    def test_detail_shows_draft_banner_for_owner(self, client):
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, is_draft=True)
+        client.force_login(user)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"Draft" in resp.content
+
+    def test_detail_no_draft_banner_for_published_event(self, client):
+        event = EventFactory.create(is_draft=False)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"only visible to you" not in resp.content
+
+    # --- Update ---
+
+    def test_owner_can_publish_draft(self, client):
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, is_draft=True)
+        client.force_login(user)
+        resp = client.post(
+            reverse("event_edit", kwargs={"slug": event.slug}),
+            {
+                "title": event.title,
+                "date": event.start_datetime.strftime("%Y-%m-%d"),
+                "start_time": event.start_datetime.strftime("%H:%M"),
+                "venue_name": event.venue_name,
+                "category": event.category,
+                "submit_action": "publish",
+            },
+        )
+        assert resp.status_code == 302
+        event.refresh_from_db()
+        assert not event.is_draft
+
+    def test_owner_can_unpublish_event(self, client):
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, is_draft=False)
+        client.force_login(user)
+        resp = client.post(
+            reverse("event_edit", kwargs={"slug": event.slug}),
+            {
+                "title": event.title,
+                "date": event.start_datetime.strftime("%Y-%m-%d"),
+                "start_time": event.start_datetime.strftime("%H:%M"),
+                "venue_name": event.venue_name,
+                "category": event.category,
+                "submit_action": "draft",
+            },
+        )
+        assert resp.status_code == 302
+        event.refresh_from_db()
+        assert event.is_draft
+
+    # --- Publisher profile ---
+
+    def test_drafts_not_shown_on_other_user_profile(self, client):
+        owner = UserFactory.create()
+        other = UserFactory.create()
+        EventFactory.create(submitted_by=owner, is_draft=True, title="Secret Draft")
+        client.force_login(other)
+        resp = client.get(
+            reverse("publisher_profile", kwargs={"slug": owner.display_name_slug})
+        )
+        assert b"Secret Draft" not in resp.content
+
+    def test_drafts_shown_on_own_profile(self, client):
+        user = UserFactory.create()
+        EventFactory.create(submitted_by=user, is_draft=True, title="My Draft")
+        client.force_login(user)
+        resp = client.get(
+            reverse("publisher_profile", kwargs={"slug": user.display_name_slug})
+        )
+        assert b"My Draft" in resp.content
+
+    def test_published_events_not_in_drafts_section_on_own_profile(self, client):
+        user = UserFactory.create()
+        EventFactory.create(submitted_by=user, is_draft=False, title="Published One")
+        EventFactory.create(submitted_by=user, is_draft=True, title="Draft One")
+        client.force_login(user)
+        resp = client.get(
+            reverse("publisher_profile", kwargs={"slug": user.display_name_slug})
+        )
+        assert b"Published One" in resp.content
+        assert b"Draft One" in resp.content
