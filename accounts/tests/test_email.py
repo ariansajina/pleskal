@@ -1,5 +1,7 @@
 """Tests for email sending: admin signup notification and password reset."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
@@ -7,6 +9,48 @@ from django.test import Client
 from .factories import UserFactory
 
 User = get_user_model()
+
+
+# ---------------------------------------------------------------------------
+# Resend contact sync signal
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestResendContactSync:
+    def _make_email_address(self, user):
+        email_address = MagicMock()
+        email_address.user = user
+        email_address.email = user.email
+        return email_address
+
+    def test_system_account_skipped(self, settings):
+        settings.RESEND_API_KEY = "test-key"
+        user = UserFactory.create(is_system_account=True)
+        email_address = self._make_email_address(user)
+        mock_resend = MagicMock()
+
+        with patch.dict("sys.modules", {"resend": mock_resend}):
+            from accounts.signals import add_to_resend_contacts
+
+            add_to_resend_contacts(
+                sender=None, request=None, email_address=email_address
+            )
+            mock_resend.Contacts.create.assert_not_called()
+
+    def test_regular_user_added(self, settings):
+        settings.RESEND_API_KEY = "test-key"
+        user = UserFactory.create(is_system_account=False)
+        email_address = self._make_email_address(user)
+        mock_resend = MagicMock()
+
+        with patch.dict("sys.modules", {"resend": mock_resend}):
+            from accounts.signals import add_to_resend_contacts
+
+            add_to_resend_contacts(
+                sender=None, request=None, email_address=email_address
+            )
+            mock_resend.Contacts.create.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
