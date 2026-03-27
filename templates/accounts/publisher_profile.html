@@ -28,6 +28,18 @@
 
 <div class="content-wrap">
 
+    {# Drafts section — own profile only, shown before the upcoming/past toggle #}
+    {% if is_own_profile and drafts %}
+        <section style="margin-bottom:2rem;">
+            <h2 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-muted);margin-bottom:0.75rem;font-weight:600;">Drafts</h2>
+            <div class="event-list">
+                {% for event in drafts %}
+                    {% include "events/partials/event_card.html" with event=event show_draft_badge=True %}
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+
     {# Upcoming / Past toggle #}
     <div class="page-tabs" style="margin-bottom:1.5rem;">
         <a href="?past=0" class="page-tab {% if not show_past %}active{% endif %}">Upcoming</a>
