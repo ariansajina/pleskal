@@ -70,7 +70,13 @@ class EventForm(forms.ModelForm):
                 local_end = timezone.localtime(self.instance.end_datetime)
                 self.initial["end_time"] = local_end.strftime(TIME_FORMAT)
         # Apply CSS classes to text fields
-        for fname in ["title", "venue_name", "venue_address", "price_note", "source_url"]:
+        for fname in [
+            "title",
+            "venue_name",
+            "venue_address",
+            "price_note",
+            "source_url",
+        ]:
             if fname in self.fields:
                 self.fields[fname].widget.attrs.setdefault("class", "form-input")
         if "category" in self.fields:
