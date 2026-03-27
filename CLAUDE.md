@@ -105,15 +105,15 @@ uv run python manage.py createsuperuser    # Create admin user
 ### Testing
 
 ```bash
-uv run pytest                              # Run all tests (parallel, 8 workers)
-uv run pytest --cov                        # Tests with coverage report
-uv run pytest --cov --cov-fail-under=90    # Enforce 90% coverage (local)
+uv run pytest -n auto                      # Run all tests (parallel, auto workers)
+uv run pytest -n auto --cov               # Tests with coverage report
+uv run pytest -n auto --cov --cov-fail-under=90  # Enforce 90% coverage (local)
 uv run pytest path/to/test_file.py         # Run specific test file
 uv run pytest -k "test_name"              # Run tests matching name
 uv run pytest --create-db                  # Force fresh DB (default: --reuse-db)
 ```
 
-- Tests run in parallel via pytest-xdist (`-n 8`)
+- Tests run in parallel via pytest-xdist (`-n auto`)
 - `--reuse-db` is on by default; use `--create-db` to force fresh DB
 - Coverage minimum: 90% for `events/` and `accounts/` (local), 80% in CI
 - Test factories: `accounts/tests/factories.py` (UserFactory), `events/tests/factories.py` (EventFactory)
@@ -330,6 +330,21 @@ Unique together: `(feed_type, date)`.
 | `AccountProfileView` | `/accounts/profile/` | Login required (redirects to own publisher profile) |
 | `ClaimCodeView` | `/claim/` | Public |
 | `ClaimRegisterView` | `/claim/register/` | Public (requires valid claim code in session) |
+
+## Remote Session Requirements
+
+When running as a Claude Code remote agent (e.g. via the web or API), **before creating a pull request** you must:
+
+1. Run pre-commit hooks across all files and fix any issues:
+   ```bash
+   pre-commit run --all-files
+   ```
+2. Run the full test suite and fix any failures:
+   ```bash
+   uv run pytest -n auto
+   ```
+
+Do not open a PR until both commands pass cleanly.
 
 ## CI Pipeline
 
