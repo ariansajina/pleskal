@@ -223,6 +223,7 @@ class EventListView(RateLimitMixin, View):
             "show_past": show_past,
             "date_from": date_from or "",
             "date_to": date_to or "",
+            "today": datetime.date.today().isoformat(),
             "date_range_active": date_range_active,
             "is_free": request.GET.get("is_free") == "1",
             "is_wheelchair_accessible": request.GET.get("is_wheelchair_accessible")
