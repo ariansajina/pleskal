@@ -737,8 +737,8 @@ class TestEventDrafts:
             reverse("event_edit", kwargs={"slug": event.slug}),
             {
                 "title": event.title,
-                "date": event.start_datetime.strftime("%Y-%m-%d"),
-                "start_time": event.start_datetime.strftime("%H:%M"),
+                "date": _future_dt(7).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(7).strftime("%H:%M"),
                 "venue_name": event.venue_name,
                 "category": event.category,
                 "submit_action": "publish",
@@ -756,8 +756,8 @@ class TestEventDrafts:
             reverse("event_edit", kwargs={"slug": event.slug}),
             {
                 "title": event.title,
-                "date": event.start_datetime.strftime("%Y-%m-%d"),
-                "start_time": event.start_datetime.strftime("%H:%M"),
+                "date": _future_dt(7).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(7).strftime("%H:%M"),
                 "venue_name": event.venue_name,
                 "category": event.category,
                 "submit_action": "draft",
