@@ -49,7 +49,8 @@ class TestEventCreateView:
             reverse("event_create"),
             {
                 "title": "Great Dance Night",
-                "start_datetime": (_future_dt(7)).strftime("%Y-%m-%dT%H:%M"),
+                "date": _future_dt(7).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(7).strftime("%H:%M"),
                 "venue_name": "Dance Hall",
                 "category": "social",
                 "is_free": True,
@@ -67,7 +68,8 @@ class TestEventCreateView:
             reverse("event_create"),
             {
                 "title": "Past Event",
-                "start_datetime": past.strftime("%Y-%m-%dT%H:%M"),
+                "date": past.strftime("%Y-%m-%d"),
+                "start_time": past.strftime("%H:%M"),
                 "venue_name": "Nowhere",
                 "category": "other",
             },
@@ -83,7 +85,8 @@ class TestEventCreateView:
             reverse("event_create"),
             {
                 "title": "Event With Image",
-                "start_datetime": (_future_dt(3)).strftime("%Y-%m-%dT%H:%M"),
+                "date": _future_dt(3).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(3).strftime("%H:%M"),
                 "venue_name": "Gallery",
                 "category": "performance",
                 "is_free": True,
@@ -104,7 +107,8 @@ class TestEventCreateView:
             reverse("event_create"),
             {
                 "title": "Image URL Test",
-                "start_datetime": (_future_dt(3)).strftime("%Y-%m-%dT%H:%M"),
+                "date": _future_dt(3).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(3).strftime("%H:%M"),
                 "venue_name": "Gallery",
                 "category": "performance",
                 "is_free": True,
@@ -130,7 +134,8 @@ class TestEventCreateView:
             reverse("event_create"),
             {
                 "title": "Oversized Image Event",
-                "start_datetime": (_future_dt(3)).strftime("%Y-%m-%dT%H:%M"),
+                "date": _future_dt(3).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(3).strftime("%H:%M"),
                 "venue_name": "Gallery",
                 "category": "performance",
                 "is_free": True,
@@ -144,14 +149,13 @@ class TestEventCreateView:
     def test_end_before_start_rejected(self, client):
         user = UserFactory.create()
         client.force_login(user)
-        start = _future_dt(7)
-        end = _future_dt(3)  # before start
         resp = client.post(
             reverse("event_create"),
             {
                 "title": "Bad Dates",
-                "start_datetime": start.strftime("%Y-%m-%dT%H:%M"),
-                "end_datetime": end.strftime("%Y-%m-%dT%H:%M"),
+                "date": _future_dt(7).strftime("%Y-%m-%d"),
+                "start_time": "20:00",
+                "end_time": "19:00",  # before start_time
                 "venue_name": "Somewhere",
                 "category": "social",
             },
@@ -167,7 +171,8 @@ class TestEventCreateView:
             reverse("event_create"),
             {
                 "title": "Past Event Message",
-                "start_datetime": past.strftime("%Y-%m-%dT%H:%M"),
+                "date": past.strftime("%Y-%m-%d"),
+                "start_time": past.strftime("%H:%M"),
                 "venue_name": "Nowhere",
                 "category": "other",
             },
@@ -203,7 +208,8 @@ class TestEventCreateView:
             reverse("event_create"),
             {
                 "title": "One Too Many",
-                "start_datetime": _future_dt(5).strftime("%Y-%m-%dT%H:%M"),
+                "date": _future_dt(5).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(5).strftime("%H:%M"),
                 "venue_name": "Club",
                 "category": "social",
             },
@@ -491,11 +497,13 @@ class TestEventUpdateView:
         event = EventFactory.create(submitted_by=user)
         original_slug = event.slug
         client.force_login(user)
+        local_start = timezone.localtime(event.start_datetime)  # type: ignore
         client.post(
             reverse("event_edit", kwargs={"slug": event.slug}),
             {
                 "title": "Completely Different Title",
-                "start_datetime": event.start_datetime.strftime("%Y-%m-%dT%H:%M"),  # type: ignore
+                "date": local_start.strftime("%Y-%m-%d"),
+                "start_time": local_start.strftime("%H:%M"),
                 "venue_name": event.venue_name,
                 "category": event.category,
                 "is_free": event.is_free,
@@ -564,7 +572,8 @@ class TestEventDuplicateView:
             reverse("event_duplicate", kwargs={"slug": event.slug}),
             {
                 "title": "Tango Night II",
-                "start_datetime": new_start.strftime("%Y-%m-%dT%H:%M"),
+                "date": new_start.strftime("%Y-%m-%d"),
+                "start_time": new_start.strftime("%H:%M"),
                 "venue_name": event.venue_name,
                 "category": event.category,
                 "is_free": event.is_free,
@@ -604,7 +613,8 @@ class TestEventDuplicateView:
             reverse("event_duplicate", kwargs={"slug": source.slug}),
             {
                 "title": "Blocked Duplicate",
-                "start_datetime": _future_dt(5).strftime("%Y-%m-%dT%H:%M"),
+                "date": _future_dt(5).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(5).strftime("%H:%M"),
                 "venue_name": "Club",
                 "category": "social",
             },

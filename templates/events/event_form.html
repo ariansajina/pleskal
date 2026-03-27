@@ -42,24 +42,33 @@
                 {% endif %}
             </div>
 
-            {# Dates #}
+            {# Date and times #}
+            <div>
+                <label for="{{ form.date.id_for_label }}" class="form-label">
+                    Date <span class="form-required">*</span>
+                </label>
+                {{ form.date }}
+                {% if form.date.errors %}
+                    <p class="form-field-error">{{ form.date.errors|join:", " }}</p>
+                {% endif %}
+            </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
                 <div>
-                    <label for="{{ form.start_datetime.id_for_label }}" class="form-label">
-                        Start <span class="form-required">*</span>
+                    <label for="{{ form.start_time.id_for_label }}" class="form-label">
+                        Start time <span class="form-required">*</span>
                     </label>
-                    {{ form.start_datetime }}
-                    {% if form.start_datetime.errors %}
-                        <p class="form-field-error">{{ form.start_datetime.errors|join:", " }}</p>
+                    {{ form.start_time }}
+                    {% if form.start_time.errors %}
+                        <p class="form-field-error">{{ form.start_time.errors|join:", " }}</p>
                     {% endif %}
                 </div>
                 <div>
-                    <label for="{{ form.end_datetime.id_for_label }}" class="form-label">
-                        End
+                    <label for="{{ form.end_time.id_for_label }}" class="form-label">
+                        End time
                     </label>
-                    {{ form.end_datetime }}
-                    {% if form.end_datetime.errors %}
-                        <p class="form-field-error">{{ form.end_datetime.errors|join:", " }}</p>
+                    {{ form.end_time }}
+                    {% if form.end_time.errors %}
+                        <p class="form-field-error">{{ form.end_time.errors|join:", " }}</p>
                     {% endif %}
                 </div>
             </div>
