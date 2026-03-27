@@ -8,12 +8,13 @@ Inspired by [dukop.dk](https://dukop.dk). Designed for low operational cost and 
 
 ## Tech Stack
 
-- **Framework:** Django 6.0.3+ (Python 3.13+)
+- **Framework:** Django 6.0.3+ (Python 3.14+)
 - **Database:** PostgreSQL (production), SQLite (dev default)
 - **Frontend:** Django templates + HTMX (no JS framework)
 - **Styling:** Tailwind CSS 4.0 (built via CLI)
 - **Package manager:** `uv` (Python), `npm` (Tailwind only)
 - **Image storage:** Cloudflare R2 (S3-compatible) in production, local filesystem in dev
+- **Image formats:** JPEG, PNG, WebP, HEIF/HEIC (via pillow-heif)
 - **Auth:** django-allauth (email verification) + django-axes (brute-force protection) + zxcvbn password strength + HMAC-peppered Argon2id hasher
 - **Registration:** Invite-only via claim codes (no open self-registration)
 - **Markdown:** django-markdownx + nh3 sanitization
@@ -57,6 +58,7 @@ events/
     import_dansehallerne_workshops.py  # Dansehallerne workshops importer
     import_hautscene.py         # HAUT Scene importer
     import_sydhavnteater.py     # Sydhavn Teater importer
+    run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     weekly_digest.py            # Weekly digest email (feed analytics)
 
 accounts/
@@ -143,11 +145,16 @@ uv run python manage.py generate_claim_codes --count 5 --expires 2026-12-31
 # Source accounts (create system users for scrapers)
 uv run python manage.py create_source_accounts
 
-# Event importers
+# Event importers (individual)
 uv run python manage.py import_dansehallerne
 uv run python manage.py import_dansehallerne_workshops
 uv run python manage.py import_hautscene
 uv run python manage.py import_sydhavnteater
+
+# Unified scraper (runs all sources; used by Railway cron)
+uv run python manage.py run_scrapers              # run all
+uv run python manage.py run_scrapers --dry-run    # preview only (no DB writes)
+uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # subset
 
 # Weekly digest email
 uv run python manage.py weekly_digest
@@ -158,7 +165,7 @@ uv run python manage.py weekly_digest
 ### Style & Linting
 
 - **Line length:** 88 (ruff default)
-- **Python target:** 3.13
+- **Python target:** 3.13 (ruff target; runtime requires Python 3.14+)
 - **Ruff rules:** E, F, I (isort), UP (pyupgrade), B (bugbear), SIM (simplify), S (security); E501 ignored
 - **Per-file ignores:** tests allow S101 (assert), S106 (hardcoded password), S314
 - **Migrations excluded** from linting
@@ -228,14 +235,14 @@ Extends `AbstractBaseUser` + `PermissionsMixin`, UUID primary key, email-based a
 | `email` | Required, unique; used as `USERNAME_FIELD` |
 | `display_name` | Optional, max 100 chars; shown in public UI |
 | `display_name_slug` | Auto-generated unique slug (from display_name or email prefix) |
-| `bio` | Markdown, 500 chars max |
+| `bio` | Markdown, 1500 chars max |
 | `website` | Optional URL |
 | `is_active` | Boolean, default True |
 | `is_staff` | Boolean, default False |
 | `is_system_account` | Boolean, default False; marks scraper accounts |
 | `date_joined` | Timestamp |
 
-Properties: `public_name` returns display_name or email prefix.
+Properties: `public_name` returns display_name or `"Anonymous"` if unset.
 
 ### ClaimCode (`accounts/models.py`)
 
@@ -373,3 +380,4 @@ See `.env.example` for the full list. Key variables:
 - **Email:** Resend via django-anymail
 - **Monitoring:** Sentry (errors), UptimeRobot (uptime)
 - **Estimated cost:** $5-10/month
+- **Cron job:** `railway.cron.toml` runs `python manage.py run_scrapers` on a schedule (restartPolicyType: NEVER)
