@@ -7,7 +7,7 @@
 
     <div class="event-list">
         {% for date_group in events_by_date %}
-            <div class="section-rule">{{ date_group.grouper|date:"l, j F Y" }}</div>
+            <div class="section-rule">{{ date_group.grouper|date:"l" }}</div>
             {% for event in date_group.list %}
                 {% include "events/partials/event_card.html" with event=event %}
             {% endfor %}
