@@ -10,7 +10,7 @@
                         <span>{{ event.end_datetime|date:"H:i" }}</span>
                     {% endif %}
                 </div>
-                <div class="event-meta event-meta--single-line">
+                <div class="event-meta event-meta--two-line">
                     <span class="event-meta--venue">{{ event.venue_name }}</span>{% if event.venue_address %}<span style="opacity:0.5;" aria-hidden="true"> · </span><span>{{ event.venue_address }}</span>{% endif %}
                 </div>
                 {% if event.submitted_by %}
