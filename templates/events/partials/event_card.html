@@ -1,31 +1,30 @@
 <a href="{% url 'event_detail' event.slug %}" class="card">
     <div class="event-row">
         <div class="event-row__body">
-            <div class="event-tags" style="margin-top:0;margin-bottom:0.45rem;">
-                <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
-                {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
-            </div>
-            <div class="event-title">{{ event.title }}</div>
-            <div class="event-meta">
-                <span>{{ event.start_datetime|date:"l, j F · H:i" }}</span>
-                {% if event.end_datetime %}
-                    <span>–</span>
-                    <span>{{ event.end_datetime|date:"H:i" }}</span>
-                {% endif %}
-            </div>
-            <div class="event-meta">
-                <span class="event-meta--venue">{{ event.venue_name }}</span>
-                {% if event.venue_address %}
-                    <span style="opacity:0.5;" aria-hidden="true">·</span>
-                    <span>{{ event.venue_address }}</span>
-                {% endif %}
-            </div>
-            {% if event.submitted_by %}
-                <div class="event-meta" style="margin-top:0.3rem;">
-                    <span style="opacity:0.5;">by</span>
-                    <span style="color:var(--blue);font-weight:500;">{{ event.submitted_by.public_name }}</span>
+            <div class="event-row__content">
+                <div class="event-title">{{ event.title }}</div>
+                <div class="event-meta">
+                    <span>{{ event.start_datetime|date:"l, j F · H:i" }}</span>
+                    {% if event.end_datetime %}
+                        <span>–</span>
+                        <span>{{ event.end_datetime|date:"H:i" }}</span>
+                    {% endif %}
                 </div>
-            {% endif %}
+                <div class="event-meta event-meta--single-line">
+                    <span class="event-meta--venue">{{ event.venue_name }}</span>{% if event.venue_address %}<span style="opacity:0.5;" aria-hidden="true"> · </span><span>{{ event.venue_address }}</span>{% endif %}
+                </div>
+                {% if event.submitted_by %}
+                    <div class="event-meta event-meta--single-line">
+                        <span style="opacity:0.5;">by</span> <span style="color:var(--blue);font-weight:500;">{{ event.submitted_by.public_name }}</span>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="event-row__footer">
+                <div class="event-tags">
+                    <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
+                    {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
+                </div>
+            </div>
         </div>
         {% if event.image %}
             <div class="event-row__thumb">

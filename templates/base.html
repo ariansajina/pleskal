@@ -177,20 +177,24 @@
       box-shadow: 3px 3px 0 var(--blue);
     }
 
-    .event-row { display: flex; align-items: stretch; height: 140px; }
-    .event-row__body { flex: 1; padding: 0.85rem 1rem; min-width: 0; overflow: hidden; }
+    .event-row { display: flex; align-items: stretch; height: 160px; }
+    .event-row__body { flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .event-row__content { flex: 1; padding: 0.75rem 1rem 0.35rem; min-width: 0; overflow: hidden; }
+    .event-row__footer { padding: 0 1rem 0.5rem; }
 
     .event-title {
       font-family: 'Playfair Display', serif;
       font-weight: 700; font-size: 1rem; color: var(--ink);
-      line-height: 1.25; margin-bottom: 0.4rem;
+      line-height: 1.25; margin-bottom: 0.35rem;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
     .event-meta {
       font-size: 0.73rem; color: var(--ink-muted);
-      display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem;
+      display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;
     }
     .event-meta--venue { color: var(--blue); }
-    .event-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; margin-top: 0.4rem; }
+    .event-meta--single-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .event-tags { display: flex; gap: 0.3rem; flex-wrap: nowrap; align-items: center; }
 
     .event-row__thumb {
       flex-shrink: 0; width: 150px; overflow: hidden;
