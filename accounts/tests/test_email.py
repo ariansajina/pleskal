@@ -33,7 +33,9 @@ class TestResendContactSync:
         with patch.dict("sys.modules", {"resend": mock_resend}):
             from accounts.signals import add_to_resend_contacts
 
-            add_to_resend_contacts(sender=None, request=None, email_address=email_address)
+            add_to_resend_contacts(
+                sender=None, request=None, email_address=email_address
+            )
             mock_resend.Contacts.create.assert_not_called()
 
     def test_regular_user_added(self, settings):
@@ -45,7 +47,9 @@ class TestResendContactSync:
         with patch.dict("sys.modules", {"resend": mock_resend}):
             from accounts.signals import add_to_resend_contacts
 
-            add_to_resend_contacts(sender=None, request=None, email_address=email_address)
+            add_to_resend_contacts(
+                sender=None, request=None, email_address=email_address
+            )
             mock_resend.Contacts.create.assert_called_once()
 
 
