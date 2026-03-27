@@ -1,3 +1,5 @@
+import datetime
+
 from django import forms
 from django.conf import settings
 from django.utils import timezone
@@ -5,11 +7,38 @@ from markdownx.widgets import MarkdownxWidget
 
 from .models import Event
 
-DATETIME_LOCAL_FORMAT = "%Y-%m-%dT%H:%M"
+DATE_FORMAT = "%Y-%m-%d"
+TIME_FORMAT = "%H:%M"
 
 
 class EventForm(forms.ModelForm):
     """Form for creating and editing events."""
+
+    date = forms.DateField(
+        label="Date",
+        widget=forms.DateInput(
+            attrs={"type": "date", "class": "form-input"},
+            format=DATE_FORMAT,
+        ),
+        input_formats=[DATE_FORMAT],
+    )
+    start_time = forms.TimeField(
+        label="Start time",
+        widget=forms.TimeInput(
+            attrs={"type": "time", "class": "form-input"},
+            format=TIME_FORMAT,
+        ),
+        input_formats=[TIME_FORMAT],
+    )
+    end_time = forms.TimeField(
+        label="End time",
+        widget=forms.TimeInput(
+            attrs={"type": "time", "class": "form-input"},
+            format=TIME_FORMAT,
+        ),
+        input_formats=[TIME_FORMAT],
+        required=False,
+    )
 
     class Meta:
         model = Event
@@ -17,8 +46,6 @@ class EventForm(forms.ModelForm):
             "title",
             "description",
             "image",
-            "start_datetime",
-            "end_datetime",
             "venue_name",
             "venue_address",
             "category",
@@ -28,37 +55,26 @@ class EventForm(forms.ModelForm):
             "source_url",
         ]
         widgets = {
-            "start_datetime": forms.DateTimeInput(
-                attrs={"type": "datetime-local", "class": "form-input"},
-                format=DATETIME_LOCAL_FORMAT,
-            ),
-            "end_datetime": forms.DateTimeInput(
-                attrs={"type": "datetime-local", "class": "form-input"},
-                format=DATETIME_LOCAL_FORMAT,
-            ),
             "description": MarkdownxWidget(attrs={"rows": 8}),
         }
 
     def __init__(self, *args, creation=True, **kwargs):
         super().__init__(*args, **kwargs)
         self._is_creation = creation
-        # Apply new style CSS classes to remaining fields
-        _text_fields = [
-            "title",
-            "venue_name",
-            "venue_address",
-            "price_note",
-            "source_url",
-        ]
-        for fname in _text_fields:
+        # Pre-populate date/time fields from existing instance when editing
+        if self.instance and self.instance.pk and self.instance.start_datetime:
+            local_start = timezone.localtime(self.instance.start_datetime)
+            self.initial["date"] = local_start.date()
+            self.initial["start_time"] = local_start.strftime(TIME_FORMAT)
+            if self.instance.end_datetime:
+                local_end = timezone.localtime(self.instance.end_datetime)
+                self.initial["end_time"] = local_end.strftime(TIME_FORMAT)
+        # Apply CSS classes to text fields
+        for fname in ["title", "venue_name", "venue_address", "price_note", "source_url"]:
             if fname in self.fields:
                 self.fields[fname].widget.attrs.setdefault("class", "form-input")
         if "category" in self.fields:
             self.fields["category"].widget.attrs.setdefault("class", "form-select")
-        # Make datetime fields input_formats aware of the local format
-        self.fields["start_datetime"].input_formats = [DATETIME_LOCAL_FORMAT]
-        self.fields["end_datetime"].input_formats = [DATETIME_LOCAL_FORMAT]
-        self.fields["end_datetime"].required = False
         self.fields["image"].required = False
         self.fields["description"].required = False
         self.fields["venue_address"].required = False
@@ -75,28 +91,44 @@ class EventForm(forms.ModelForm):
             raise forms.ValidationError("Image must be under 10 MB.")
         return image
 
-    def clean_start_datetime(self):
-        dt = self.cleaned_data.get("start_datetime")
-        if dt and self._is_creation:
-            if dt <= timezone.now():
-                raise forms.ValidationError(
-                    "Events cannot be created in the past. "
-                    "Please choose a future start date and time."
-                )
-            one_year = timezone.now() + timezone.timedelta(days=365)
-            if dt > one_year:
-                raise forms.ValidationError(
-                    "Start date must not be more than 1 year in the future."
-                )
-        return dt
-
     def clean(self):
         cleaned = super().clean()
-        start = cleaned.get("start_datetime")
-        end = cleaned.get("end_datetime")
-        if start and end and end <= start:
-            self.add_error(
-                "end_datetime",
-                "End date and time must be after start date and time.",
-            )
+        date = cleaned.get("date")
+        start_time = cleaned.get("start_time")
+        end_time = cleaned.get("end_time")
+
+        if date and start_time:
+            start_dt = timezone.make_aware(datetime.datetime.combine(date, start_time))
+            if self._is_creation:
+                if start_dt <= timezone.now():
+                    self.add_error(
+                        "date",
+                        "Events cannot be created in the past. "
+                        "Please choose a future date and time.",
+                    )
+                one_year = timezone.now() + timezone.timedelta(days=365)
+                if start_dt > one_year:
+                    self.add_error(
+                        "date",
+                        "Start date must not be more than 1 year in the future.",
+                    )
+            cleaned["start_datetime"] = start_dt
+
+            if end_time:
+                end_dt = timezone.make_aware(datetime.datetime.combine(date, end_time))
+                if end_dt <= start_dt:
+                    self.add_error("end_time", "End time must be after start time.")
+                else:
+                    cleaned["end_datetime"] = end_dt
+            else:
+                cleaned["end_datetime"] = None
+
         return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.start_datetime = self.cleaned_data["start_datetime"]
+        instance.end_datetime = self.cleaned_data.get("end_datetime")
+        if commit:
+            instance.save()
+        return instance
