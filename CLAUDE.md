@@ -331,6 +331,21 @@ Unique together: `(feed_type, date)`.
 | `ClaimCodeView` | `/claim/` | Public |
 | `ClaimRegisterView` | `/claim/register/` | Public (requires valid claim code in session) |
 
+## Remote Session Requirements
+
+When running as a Claude Code remote agent (e.g. via the web or API), **before creating a pull request** you must:
+
+1. Run pre-commit hooks across all files and fix any issues:
+   ```bash
+   pre-commit run --all-files
+   ```
+2. Run the full test suite and fix any failures:
+   ```bash
+   uv run pytest
+   ```
+
+Do not open a PR until both commands pass cleanly.
+
 ## CI Pipeline
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on push/PR to `main`:
