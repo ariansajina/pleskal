@@ -44,7 +44,7 @@ def _get_quick_date_ranges():
     )[1]
     next_month_end = next_month_start.replace(day=next_month_last_day)
     return {
-        "this_week": (week_start.isoformat(), week_end.isoformat()),
+        "this_week": (today.isoformat(), week_end.isoformat()),
         "next_week": (next_week_start.isoformat(), next_week_end.isoformat()),
         "this_month": (month_start.isoformat(), month_end.isoformat()),
         "next_month": (next_month_start.isoformat(), next_month_end.isoformat()),
@@ -223,6 +223,7 @@ class EventListView(RateLimitMixin, View):
             "show_past": show_past,
             "date_from": date_from or "",
             "date_to": date_to or "",
+            "today": datetime.date.today().isoformat(),
             "date_range_active": date_range_active,
             "is_free": request.GET.get("is_free") == "1",
             "is_wheelchair_accessible": request.GET.get("is_wheelchair_accessible")
