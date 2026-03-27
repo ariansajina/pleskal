@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.addEventListener('click', function () {
             var alreadyActive = btn.hasAttribute('data-active');
             if (alreadyActive) {
-                form.querySelector('[name="date_from"]').value = '';
+                form.querySelector('[name="date_from"]').value = form.dataset.today || '';
                 form.querySelector('[name="date_to"]').value = '';
             } else {
                 form.querySelector('[name="date_from"]').value = btn.dataset.dateFrom;
