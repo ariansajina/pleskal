@@ -62,6 +62,12 @@ class Event(models.Model):
 
     class Meta:
         ordering = ["start_datetime"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["title", "start_datetime"],
+                name="unique_event_title_start_datetime",
+            )
+        ]
 
     def __str__(self):
         return self.title

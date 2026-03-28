@@ -133,10 +133,18 @@ class BaseEventImportCommand(BaseCommand):
 
         self.stdout.write(f"Loaded {len(records)} records from {json_path}")
 
-        # Build a lookup: (source_url, start_datetime_isoformat) → record
-        incoming: dict[tuple[str, str], dict] = {}
+        # Build a lookup: (source_url, start_datetime_utc) → record
+        # Normalize start_datetime to UTC so keys match regardless of the
+        # timezone offset in the scraped JSON vs. what Django stores in the DB.
+        incoming: dict[tuple[str, datetime.datetime], dict] = {}
         for rec in records:
-            key = (rec["source_url"], rec["start_datetime"])
+            try:
+                start_dt_utc = _parse_dt(rec["start_datetime"]).astimezone(
+                    datetime.UTC
+                )
+            except ValueError:
+                continue  # malformed records are handled during upsert
+            key = (rec["source_url"], start_dt_utc)
             incoming[key] = rec
 
         # Existing events for this source in DB, keyed the same way.
@@ -146,8 +154,9 @@ class BaseEventImportCommand(BaseCommand):
                 CATEGORY_MAP[c] for c in self.category_scope if c in CATEGORY_MAP
             ]
             existing_qs = existing_qs.filter(category__in=category_values)
-        existing: dict[tuple[str, str], Event] = {
-            (e.source_url, e.start_datetime.isoformat()): e for e in existing_qs
+        existing: dict[tuple[str, datetime.datetime], Event] = {
+            (e.source_url, e.start_datetime.astimezone(datetime.UTC)): e
+            for e in existing_qs
         }
 
         created = updated = deleted = skipped = 0
@@ -155,9 +164,9 @@ class BaseEventImportCommand(BaseCommand):
         with transaction.atomic():
             # ── Upsert ────────────────────────────────────────────────────────
             for key, rec in incoming.items():
-                source_url, start_iso = key
+                source_url, start_dt_utc = key
                 try:
-                    start_dt = _parse_dt(start_iso)
+                    start_dt = _parse_dt(rec["start_datetime"])
                     end_dt = (
                         _parse_dt(rec["end_datetime"])
                         if rec.get("end_datetime")

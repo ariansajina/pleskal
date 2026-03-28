@@ -138,6 +138,16 @@ class EventForm(forms.ModelForm):
                 else:
                     cleaned["end_datetime"] = end_dt
 
+            title = cleaned.get("title")
+            if title:
+                qs = Event.objects.filter(title=title, start_datetime=start_dt)
+                if self.instance and self.instance.pk:
+                    qs = qs.exclude(pk=self.instance.pk)
+                if qs.exists():
+                    raise forms.ValidationError(
+                        "An event with this title already exists at the same date and time."
+                    )
+
         return cleaned
 
     def save(self, commit=True):
