@@ -55,7 +55,7 @@ class EventForm(forms.ModelForm):
             "source_url",
         ]
         widgets = {
-            "description": MarkdownxWidget(attrs={"rows": 8}),
+            "description": MarkdownxWidget(attrs={"rows": 8, "maxlength": 1500}),
         }
 
     def __init__(self, *args, creation=True, **kwargs):
@@ -94,6 +94,14 @@ class EventForm(forms.ModelForm):
         self.fields["venue_address"].required = False
         self.fields["price_note"].required = False
         self.fields["source_url"].required = False
+
+    def clean_description(self):
+        description = self.cleaned_data.get("description", "")
+        if len(description) > 1500:
+            raise forms.ValidationError(
+                f"Description must be 1500 characters or fewer (currently {len(description)})."
+            )
+        return description
 
     def clean_image(self):
         image = self.cleaned_data.get("image")

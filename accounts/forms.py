@@ -24,7 +24,7 @@ class ProfileForm(forms.ModelForm):
                 attrs={"class": "form-input", "maxlength": 100}
             ),
             "bio": forms.Textarea(
-                attrs={"rows": 4, "maxlength": 500, "class": "form-textarea"}
+                attrs={"rows": 4, "maxlength": 1500, "class": "form-textarea"}
             ),
             "website": forms.URLInput(
                 attrs={"placeholder": "https://", "class": "form-input"}
@@ -49,6 +49,14 @@ class ProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["email"].required = False
+
+    def clean_bio(self):
+        bio = self.cleaned_data.get("bio", "")
+        if len(bio) > 1500:
+            raise forms.ValidationError(
+                f"Bio must be 1,500 characters or fewer (currently {len(bio)})."
+            )
+        return bio
 
     def clean_email(self):
         email = self.cleaned_data.get("email", "")
