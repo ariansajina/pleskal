@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Subscribe — pleskal{% endblock %}
 
@@ -17,24 +18,71 @@
     <strong>How often to update?</strong> I recommend that you configure your calendar app to auto-refresh every week or every day, but not more frequently than that.
   </p>
 
-  <div class="section-rule">Feeds</div>
+  <div class="section-rule">Filter your feed</div>
+
+  <div id="subscribe-filters"
+       data-ical-base="{{ request.scheme }}://{{ request.get_host }}{% url 'event_ical_feed' %}"
+       data-rss-base="{{ request.scheme }}://{{ request.get_host }}{% url 'event_rss_feed' %}">
+
+    <div class="filter-panel" style="margin-top:var(--space-4);">
+
+      <div class="filter-panel__group">
+        <span class="filter-panel__group-label">Category</span>
+        <div class="filter-checkboxes">
+          {% for value, label in category_choices %}
+            <label>
+              <input type="checkbox" name="category" value="{{ value }}">
+              <span class="filter-chip">{{ label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if publishers %}
+      <div class="filter-panel__group">
+        <span class="filter-panel__group-label">Publisher</span>
+        <div class="filter-checkboxes">
+          {% for pub in publishers %}
+            <label>
+              <input type="checkbox" name="publisher" value="{{ pub.display_name_slug }}">
+              <span class="filter-chip">{{ pub.public_name }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <div class="section-rule" style="margin-top:var(--space-8);">Feeds</div>
 
   <div style="display:flex;flex-direction:column;gap:var(--space-4);margin-top:var(--space-4);">
 
     <div class="card-panel">
       <div class="form-label" style="margin-bottom:var(--space-2);">iCal Feed</div>
       <div class="text-base text-muted" style="margin-bottom:var(--space-3);">Works with Apple Calendar, Google Calendar, Outlook, and most calendar apps.</div>
-      <a href="{% url 'event_ical_feed' %}" class="btn btn--sm" style="margin-right:var(--space-2);">Open feed</a>
-      <code class="text-sm text-muted" style="word-break:break-all;">{{ request.scheme }}://{{ request.get_host }}{% url 'event_ical_feed' %}</code>
+      <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
+        <a id="ical-open-link" href="{% url 'event_ical_feed' %}" class="btn btn--sm">Open feed</a>
+        <button type="button" id="ical-copy-btn" class="btn btn--sm btn--ghost">Copy URL</button>
+      </div>
+      <code id="ical-url-display" class="text-sm text-muted" style="word-break:break-all;">{{ request.scheme }}://{{ request.get_host }}{% url 'event_ical_feed' %}</code>
     </div>
 
     <div class="card-panel">
       <div class="form-label" style="margin-bottom:var(--space-2);">RSS Feed</div>
       <div class="text-base text-muted" style="margin-bottom:var(--space-3);">Works with RSS readers and news aggregators.</div>
-      <a href="{% url 'event_rss_feed' %}" class="btn btn--sm" style="margin-right:var(--space-2);">Open feed</a>
-      <code class="text-sm text-muted" style="word-break:break-all;">{{ request.scheme }}://{{ request.get_host }}{% url 'event_rss_feed' %}</code>
+      <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
+        <a id="rss-open-link" href="{% url 'event_rss_feed' %}" class="btn btn--sm">Open feed</a>
+        <button type="button" id="rss-copy-btn" class="btn btn--sm btn--ghost">Copy URL</button>
+      </div>
+      <code id="rss-url-display" class="text-sm text-muted" style="word-break:break-all;">{{ request.scheme }}://{{ request.get_host }}{% url 'event_rss_feed' %}</code>
     </div>
 
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/subscribe-filters.js' %}" defer></script>
 {% endblock %}

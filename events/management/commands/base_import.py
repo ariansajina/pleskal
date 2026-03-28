@@ -139,9 +139,7 @@ class BaseEventImportCommand(BaseCommand):
         incoming: dict[tuple[str, datetime.datetime], dict] = {}
         for rec in records:
             try:
-                start_dt_utc = _parse_dt(rec["start_datetime"]).astimezone(
-                    datetime.UTC
-                )
+                start_dt_utc = _parse_dt(rec["start_datetime"]).astimezone(datetime.UTC)
             except ValueError:
                 continue  # malformed records are handled during upsert
             key = (rec["source_url"], start_dt_utc)

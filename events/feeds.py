@@ -22,13 +22,21 @@ def _plain_text(markdown_text: str) -> str:
     return text.strip()
 
 
-def _upcoming_qs(category: str | None = None):
+def _upcoming_qs(
+    categories: list[str] | None = None,
+    publisher_slugs: list[str] | None = None,
+):
     qs = Event.objects.filter(
         start_datetime__gte=timezone.now(),
         is_draft=False,
     ).order_by("start_datetime")
-    if category and category in {c.value for c in EventCategory}:
-        qs = qs.filter(category=category)
+    if categories:
+        valid = {c.value for c in EventCategory}
+        clean = [c for c in categories if c in valid]
+        if clean:
+            qs = qs.filter(category__in=clean)
+    if publisher_slugs:
+        qs = qs.filter(submitted_by__display_name_slug__in=publisher_slugs)
     return qs
 
 
@@ -70,10 +78,12 @@ class EventRSSFeed(Feed):
         return "/"
 
     def items(self):
-        category = getattr(self, "_request", None)
-        if category:
-            category = self._request.GET.get("category")
-        return _upcoming_qs(category)[:50]
+        req = getattr(self, "_request", None)
+        if not req:
+            return _upcoming_qs()[:50]
+        categories = req.GET.getlist("category")
+        publisher_slugs = req.GET.getlist("publisher")
+        return _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)[:50]
 
     def item_title(self, item):
         return str(item.title)
@@ -100,8 +110,9 @@ class EventRSSFeed(Feed):
 class EventICalFeed(View):
     def get(self, request):
         FeedHit.record(FeedHit.ICAL)
-        category = request.GET.get("category")
-        queryset = _upcoming_qs(category)
+        categories = request.GET.getlist("category")
+        publisher_slugs = request.GET.getlist("publisher")
+        queryset = _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)
 
         cal = Calendar()
         cal.add("prodid", "-//Copenhagen Dance Calendar//EN")

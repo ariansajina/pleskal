@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.tests.factories import UserFactory
-from events.models import Event, FeedHit
+from events.models import Event, EventCategory, FeedHit
 from events.tests.factories import EventFactory
 
 
@@ -212,3 +212,156 @@ class TestEventICalSingleView:
         event = EventFactory.create(source_url="https://example.com/event")
         resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
         assert b"example.com/event" in resp.content
+
+
+@pytest.mark.django_db
+class TestRSSFeedFilters:
+    def test_multi_category_filter(self, client):
+        workshop = EventFactory.create(category="workshop")
+        social = EventFactory.create(category="social")
+        performance = EventFactory.create(category="performance")
+        resp = client.get(
+            reverse("event_rss_feed") + "?category=workshop&category=social"
+        )
+        assert str(workshop.title).encode() in resp.content
+        assert str(social.title).encode() in resp.content
+        assert str(performance.title).encode() not in resp.content
+
+    def test_publisher_filter(self, client):
+        user_a = UserFactory.create()
+        user_b = UserFactory.create()
+        event_a = EventFactory.create(submitted_by=user_a)
+        event_b = EventFactory.create(submitted_by=user_b)
+        resp = client.get(
+            reverse("event_rss_feed") + f"?publisher={user_a.display_name_slug}"
+        )
+        assert str(event_a.title).encode() in resp.content
+        assert str(event_b.title).encode() not in resp.content
+
+    def test_multi_publisher_filter(self, client):
+        user_a = UserFactory.create()
+        user_b = UserFactory.create()
+        user_c = UserFactory.create()
+        event_a = EventFactory.create(submitted_by=user_a)
+        event_b = EventFactory.create(submitted_by=user_b)
+        event_c = EventFactory.create(submitted_by=user_c)
+        url = (
+            reverse("event_rss_feed")
+            + f"?publisher={user_a.display_name_slug}&publisher={user_b.display_name_slug}"
+        )
+        resp = client.get(url)
+        assert str(event_a.title).encode() in resp.content
+        assert str(event_b.title).encode() in resp.content
+        assert str(event_c.title).encode() not in resp.content
+
+    def test_publisher_and_category_combined(self, client):
+        user = UserFactory.create()
+        match = EventFactory.create(submitted_by=user, category="workshop")
+        wrong_category = EventFactory.create(submitted_by=user, category="social")
+        wrong_publisher = EventFactory.create(category="workshop")
+        url = (
+            reverse("event_rss_feed")
+            + f"?publisher={user.display_name_slug}&category=workshop"
+        )
+        resp = client.get(url)
+        assert str(match.title).encode() in resp.content
+        assert str(wrong_category.title).encode() not in resp.content
+        assert str(wrong_publisher.title).encode() not in resp.content
+
+
+@pytest.mark.django_db
+class TestICalFeedFilters:
+    def test_multi_category_filter(self, client):
+        workshop = EventFactory.create(category="workshop")
+        social = EventFactory.create(category="social")
+        performance = EventFactory.create(category="performance")
+        resp = client.get(
+            reverse("event_ical_feed") + "?category=workshop&category=social"
+        )
+        assert str(workshop.title).encode() in resp.content
+        assert str(social.title).encode() in resp.content
+        assert str(performance.title).encode() not in resp.content
+
+    def test_publisher_filter(self, client):
+        user_a = UserFactory.create()
+        user_b = UserFactory.create()
+        event_a = EventFactory.create(submitted_by=user_a)
+        event_b = EventFactory.create(submitted_by=user_b)
+        resp = client.get(
+            reverse("event_ical_feed") + f"?publisher={user_a.display_name_slug}"
+        )
+        assert str(event_a.title).encode() in resp.content
+        assert str(event_b.title).encode() not in resp.content
+
+    def test_multi_publisher_filter(self, client):
+        user_a = UserFactory.create()
+        user_b = UserFactory.create()
+        user_c = UserFactory.create()
+        event_a = EventFactory.create(submitted_by=user_a)
+        event_b = EventFactory.create(submitted_by=user_b)
+        event_c = EventFactory.create(submitted_by=user_c)
+        url = (
+            reverse("event_ical_feed")
+            + f"?publisher={user_a.display_name_slug}&publisher={user_b.display_name_slug}"
+        )
+        resp = client.get(url)
+        assert str(event_a.title).encode() in resp.content
+        assert str(event_b.title).encode() in resp.content
+        assert str(event_c.title).encode() not in resp.content
+
+    def test_publisher_and_category_combined(self, client):
+        user = UserFactory.create()
+        match = EventFactory.create(submitted_by=user, category="workshop")
+        wrong_category = EventFactory.create(submitted_by=user, category="social")
+        wrong_publisher = EventFactory.create(category="workshop")
+        url = (
+            reverse("event_ical_feed")
+            + f"?publisher={user.display_name_slug}&category=workshop"
+        )
+        resp = client.get(url)
+        assert str(match.title).encode() in resp.content
+        assert str(wrong_category.title).encode() not in resp.content
+        assert str(wrong_publisher.title).encode() not in resp.content
+
+
+@pytest.mark.django_db
+class TestSubscribeView:
+    def test_returns_200(self, client):
+        resp = client.get(reverse("subscribe"))
+        assert resp.status_code == 200
+
+    def test_provides_category_choices(self, client):
+        resp = client.get(reverse("subscribe"))
+        assert resp.context["category_choices"] == EventCategory.choices
+        assert len(resp.context["category_choices"]) == 7
+
+    def test_provides_publishers_with_upcoming_events(self, client):
+        user_a = UserFactory.create()
+        user_b = UserFactory.create()
+        EventFactory.create(submitted_by=user_a)
+        EventFactory.create(submitted_by=user_b)
+        resp = client.get(reverse("subscribe"))
+        slugs = [p.display_name_slug for p in resp.context["publishers"]]
+        assert user_a.display_name_slug in slugs
+        assert user_b.display_name_slug in slugs
+
+    def test_includes_system_accounts_in_publishers(self, client):
+        system_user = UserFactory.create(is_system_account=True)
+        EventFactory.create(submitted_by=system_user)
+        resp = client.get(reverse("subscribe"))
+        slugs = [p.display_name_slug for p in resp.context["publishers"]]
+        assert system_user.display_name_slug in slugs
+
+    def test_excludes_users_with_no_upcoming_events(self, client):
+        user = UserFactory.create()
+        past = Event(
+            title="Past",
+            start_datetime=timezone.now() - timezone.timedelta(days=1),
+            venue_name="Somewhere",
+            category="social",
+            submitted_by=user,
+        )
+        past.save()
+        resp = client.get(reverse("subscribe"))
+        slugs = [p.display_name_slug for p in resp.context["publishers"]]
+        assert user.display_name_slug not in slugs

@@ -468,3 +468,23 @@ class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
 
 class SubscribeView(TemplateView):
     template_name = "events/subscribe.html"
+
+    def get_context_data(self, **kwargs):
+        from django.contrib.auth import get_user_model
+
+        ctx = super().get_context_data(**kwargs)
+        User = get_user_model()
+        ctx["category_choices"] = EventCategory.choices
+        upcoming_publisher_ids = (
+            Event.objects.filter(
+                start_datetime__gte=timezone.now(),
+                is_draft=False,
+                submitted_by__isnull=False,
+            )
+            .values_list("submitted_by_id", flat=True)
+            .distinct()
+        )
+        ctx["publishers"] = User.objects.filter(pk__in=upcoming_publisher_ids).order_by(
+            "display_name"
+        )
+        return ctx
