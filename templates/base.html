@@ -39,11 +39,12 @@
       --border:        #AAAADD;
       --border-light:  #CCCCEE;
       --star:          #FFDD44;
-      --c-perf:        #CC2244;
+      --c-perf:        #8B4A58;
       --c-ws:          #2266CC;
       --c-wip:         #8833BB;
       --c-op:          #116633;
       --c-social:      #BB5500;
+      --c-talk:        #556699;
 
       /* Spacing scale */
       --space-1: 0.25rem;
@@ -238,12 +239,15 @@
       letter-spacing: 0.08em; text-transform: uppercase;
       padding: 0.2rem 0.5rem; border: 1.5px solid currentColor;
     }
-    .badge--performance  { color: var(--c-perf);   background: #FFF0F3; }
+    .badge--performance  { color: var(--c-perf);   background: #F4E8F0; }
     .badge--workshop     { color: var(--c-ws);     background: #EEF3FF; }
+    .badge--worksharing,
     .badge--wip,
     .badge--work_in_progress { color: var(--c-wip);    background: #F6EEFF; }
+    .badge--openpractice,
     .badge--open-practice,
     .badge--open_practice    { color: var(--c-op);     background: #EEFBF3; }
+    .badge--talk         { color: var(--c-talk);  background: #EEF2F8; }
     .badge--social       { color: var(--c-social); background: #FFF5EE; }
     .badge--other        { color: var(--ink-muted); background: var(--surface-2); border-color: var(--border); }
     .badge--free         { color: var(--c-op); background: #EEFBF3; border-color: var(--c-op); }
