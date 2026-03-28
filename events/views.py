@@ -220,9 +220,16 @@ class EventListView(RateLimitMixin, View):
         page_number = request.GET.get("page", 1)
         page_obj = paginator.get_page(page_number)
 
+        # Build a query string with all current params except `page`, so
+        # pagination links preserve active filters.
+        params = request.GET.copy()
+        params.pop("page", None)
+        base_query_string = params.urlencode()
+
         quick_date_ranges = _get_quick_date_ranges()
         ctx = {
             "page_obj": page_obj,
+            "base_query_string": base_query_string,
             "events": page_obj.object_list,
             "category_choices": EventCategory.choices,
             "selected_categories": categories,

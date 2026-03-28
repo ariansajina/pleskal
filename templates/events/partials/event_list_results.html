@@ -18,9 +18,9 @@
     {% if page_obj.has_other_pages %}
         <nav style="display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-8);" aria-label="Pagination">
             {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}"
+                <a href="?{% if base_query_string %}{{ base_query_string }}&{% endif %}page={{ page_obj.previous_page_number }}"
                    class="btn btn--ghost btn--sm"
-                   hx-get="?page={{ page_obj.previous_page_number }}"
+                   hx-get="?{% if base_query_string %}{{ base_query_string }}&{% endif %}page={{ page_obj.previous_page_number }}"
                    hx-target="#event-list"
                    hx-push-url="true">
                     &larr; Prev
@@ -32,9 +32,9 @@
             </span>
 
             {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}"
+                <a href="?{% if base_query_string %}{{ base_query_string }}&{% endif %}page={{ page_obj.next_page_number }}"
                    class="btn btn--ghost btn--sm"
-                   hx-get="?page={{ page_obj.next_page_number }}"
+                   hx-get="?{% if base_query_string %}{{ base_query_string }}&{% endif %}page={{ page_obj.next_page_number }}"
                    hx-target="#event-list"
                    hx-push-url="true">
                     Next &rarr;
