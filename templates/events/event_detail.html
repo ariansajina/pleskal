@@ -11,29 +11,29 @@ details[open] summary::after { content: ''; }
 {% endblock %}
 
 {% block content %}
-<div class="content-wrap" style="padding-top:1.5rem;">
+<div class="content-wrap" style="padding-top:var(--space-6);">
     <article>
 
         {# Draft banner (owner-only) #}
         {% if event.is_draft %}
-            <div style="background:#fff8e6;border:1.5px solid #f0d060;padding:0.65rem 0.85rem;margin-bottom:1.25rem;font-size:0.82rem;color:#7a5c00;display:flex;align-items:center;gap:0.5rem;">
+            <div class="alert alert--warning" style="display:flex;align-items:center;gap:var(--space-2);">
                 This event is only visible to you. Publish it to make it visible to everyone.
             </div>
         {% endif %}
 
         {# Category + free badge #}
-        <div class="event-tags" style="margin-bottom:1rem;">
+        <div class="event-tags" style="margin-bottom:var(--space-4);">
             <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
             {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
         </div>
 
         {# Title #}
-        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:clamp(1.6rem,4vw,2.4rem);color:var(--blue);line-height:1.1;margin-bottom:1.25rem;">
+        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:clamp(1.6rem,4vw,2.4rem);color:var(--blue);line-height:1.1;margin-bottom:var(--space-4);">
             {{ event.title }}
         </h1>
 
         {# Date / time #}
-        <div class="event-meta" style="margin-bottom:0.5rem;font-size:0.88rem;">
+        <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
             <span><strong>{{ event.start_datetime|date:"l, j F Y" }}</strong></span>
             <span style="opacity:0.4;">·</span>
             <span>{{ event.start_datetime|date:"H:i" }}</span>
@@ -44,7 +44,7 @@ details[open] summary::after { content: ''; }
         </div>
 
         {# Venue #}
-        <div class="event-meta" style="margin-bottom:0.5rem;font-size:0.88rem;">
+        <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
             <span class="event-meta--venue">{{ event.venue_name }}</span>
             {% if event.venue_address %}
                 <span style="opacity:0.4;">·</span>
@@ -53,7 +53,7 @@ details[open] summary::after { content: ''; }
         </div>
 
         {# Price #}
-        <div class="event-meta" style="margin-bottom:0.5rem;font-size:0.88rem;">
+        <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
             {% if event.is_free %}
                 <span style="color:var(--c-op);">Free admission</span>
             {% elif event.price_note %}
@@ -65,22 +65,22 @@ details[open] summary::after { content: ''; }
 
         {# Publisher attribution #}
         {% if event.submitted_by %}
-            <div class="event-meta" style="margin-bottom:1rem;font-size:0.78rem;color:var(--ink-muted);">
+            <div class="event-meta text-sm text-muted" style="margin-bottom:var(--space-4);">
                 by
                 <a href="{% url 'publisher_profile' event.submitted_by.display_name_slug %}" class="link-accent" style="font-weight:600;">
                     {{ event.submitted_by.public_name }}
                 </a>
             </div>
         {% else %}
-            <div style="margin-bottom:1rem;"></div>
+            <div style="margin-bottom:var(--space-4);"></div>
         {% endif %}
 
         {# Action buttons #}
-        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1.5rem;">
+        <div class="btn-row" style="flex-wrap:wrap;margin-bottom:var(--space-6);gap:var(--space-2);">
             <button id="copy-link-btn" class="btn btn--ghost btn--sm" type="button">Copy link</button>
             <details style="position:relative;">
                 <summary class="btn btn--ghost btn--sm" style="list-style:none;cursor:pointer;">Add to calendar</summary>
-                <div style="position:absolute;top:calc(100% + 4px);left:0;z-index:20;background:var(--surface);border:1.5px solid var(--border);padding:0.35rem;min-width:170px;display:flex;flex-direction:column;gap:0.25rem;box-shadow:3px 3px 0 var(--border-light);">
+                <div style="position:absolute;top:calc(100% + 4px);left:0;z-index:20;background:var(--surface);border:1.5px solid var(--border);padding:var(--space-1);min-width:170px;display:flex;flex-direction:column;gap:var(--space-1);box-shadow:3px 3px 0 var(--border-light);">
                     <a href="{% url 'event_ical_single' event.slug %}" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Download .ics</a>
                     <a href="{{ google_calendar_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Google Calendar &nearr;</a>
                 </div>
@@ -89,7 +89,7 @@ details[open] summary::after { content: ''; }
 
         {# Event image #}
         {% if event.image %}
-            <div style="margin-bottom:1.5rem;border:1.5px solid var(--border-light);overflow:hidden;">
+            <div style="margin-bottom:var(--space-6);border:1.5px solid var(--border-light);overflow:hidden;">
                 <img src="{{ event.image.url }}" alt="{{ event.title }}"
                      style="width:100%;max-height:360px;object-fit:cover;display:block;">
             </div>
@@ -98,7 +98,7 @@ details[open] summary::after { content: ''; }
         {# Description #}
         {% if event.get_display_description %}
             <hr class="rule">
-            <div class="prose-content" style="margin-bottom:1.5rem;">
+            <div class="prose-content" style="margin-bottom:var(--space-6);">
                 {{ event.get_display_description|render_markdown }}
             </div>
         {% endif %}
@@ -106,7 +106,7 @@ details[open] summary::after { content: ''; }
         {# Source link #}
         {% if event.source_url %}
             <hr class="rule">
-            <div style="margin-bottom:1.5rem;">
+            <div style="margin-bottom:var(--space-6);">
                 <a href="{{ event.source_url }}"
                    target="_blank"
                    rel="noopener noreferrer"
@@ -114,7 +114,7 @@ details[open] summary::after { content: ''; }
                     More info / tickets &rarr;
                 </a>
                 {% if event.external_source and not event.submitted_by %}
-                    <span style="font-size:0.73rem;color:var(--ink-muted);margin-left:0.75rem;">via {{ event.external_source }}</span>
+                    <span class="text-sm text-muted" style="margin-left:var(--space-3);">via {{ event.external_source }}</span>
                 {% endif %}
             </div>
         {% endif %}
@@ -123,7 +123,7 @@ details[open] summary::after { content: ''; }
         {% if user.is_authenticated %}
             {% if user == event.submitted_by %}
                 <hr class="rule">
-                <div style="display:flex;gap:0.75rem;">
+                <div class="btn-row">
                     <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
                     <form method="post" action="{% url 'event_toggle_draft' event.slug %}" style="display:contents;">
                         {% csrf_token %}

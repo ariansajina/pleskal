@@ -4,17 +4,17 @@
 
 {% block content %}
 <div class="content-wrap">
-    <div style="max-width:420px;margin:0 auto;">
-        <div class="page-hero" style="padding-top:2rem;">
+    <div class="auth-container">
+        <div class="page-hero" style="padding-top:var(--space-8);">
             <div class="page-hero__ornrow">✦ · ✦</div>
-            <h1 class="page-hero__title" style="font-size:2rem;">Claim your invite</h1>
+            <h1 class="page-hero__title page-hero__title--sm">Claim your invite</h1>
         </div>
 
-        <p style="margin:1.5rem 0;color:var(--ink-muted);font-size:0.95rem;">
+        <p class="text-muted text-base" style="margin:var(--space-6) 0;">
             Enter the code from your invite card to create your account.
         </p>
 
-        <form method="post" style="display:flex;flex-direction:column;gap:1.25rem;">
+        <form method="post" class="form-stack">
             {% csrf_token %}
             {% for field in form %}
             <div>
@@ -33,7 +33,7 @@
             <button type="submit" class="btn btn--primary" style="width:100%;justify-content:center;">Continue</button>
         </form>
 
-        <div style="margin-top:1.5rem;text-align:center;font-size:0.78rem;color:var(--ink-muted);">
+        <div class="text-center text-muted text-sm" style="margin-top:var(--space-6);">
             Already have an account? <a href="{% url 'login' %}" class="link-accent">Log in</a>
         </div>
     </div>

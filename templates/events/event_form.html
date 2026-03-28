@@ -9,11 +9,11 @@
 {% block content %}
 <div class="content-wrap">
     <div style="max-width:600px;">
-        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:1.8rem;color:var(--blue);margin-bottom:2rem;">
+        <h1 class="heading-page">
             {{ page_title|default:"Event" }}
         </h1>
 
-        <form method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:1.5rem;">
+        <form method="post" enctype="multipart/form-data" class="form-stack" style="gap:var(--space-6);">
             {% csrf_token %}
 
             {% if form.non_field_errors %}
@@ -52,7 +52,7 @@
                     <p class="form-field-error">{{ form.date.errors|join:", " }}</p>
                 {% endif %}
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6);">
                 <div>
                     <label for="{{ form.start_time.id_for_label }}" class="form-label">
                         Start time <span class="form-required">*</span>
@@ -123,14 +123,14 @@
             <div>
                 <label class="form-check">
                     {{ form.is_free }}
-                    <span style="font-size:0.85rem;">Free event</span>
+                    <span class="text-base">Free event</span>
                 </label>
             </div>
 
             <div>
                 <label class="form-check">
                     {{ form.is_wheelchair_accessible }}
-                    <span style="font-size:0.85rem;">Wheelchair accessible</span>
+                    <span class="text-base">Wheelchair accessible</span>
                 </label>
             </div>
 
@@ -139,7 +139,7 @@
                     Price note
                 </label>
                 {{ form.price_note }}
-                <p class="form-help" style="margin-top:0.3rem;">Only displayed for events that are not free.</p>
+                <p class="form-help" style="margin-top:var(--space-1);">Only displayed for events that are not free.</p>
             </div>
 
             {# Source URL #}
@@ -153,19 +153,19 @@
                 {% endif %}
             </div>
 
-            <div style="border-top:1.5px solid var(--border-light);padding-top:1.25rem;display:flex;flex-direction:column;gap:0.75rem;">
-                <div style="font-size:0.8rem;color:var(--ink-muted);background:var(--surface-alt,#f7f7f5);border:1.5px solid var(--border-light);padding:0.65rem 0.85rem;line-height:1.5;">
+            <div style="border-top:1.5px solid var(--border-light);padding-top:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3);">
+                <div class="text-base text-muted" style="background:var(--surface-alt,#f7f7f5);border:1.5px solid var(--border-light);padding:var(--space-3);line-height:1.5;">
                     <strong style="color:var(--ink);">Published</strong> events are visible to everyone on the calendar.
                     <strong style="color:var(--ink);">Drafts</strong> are only visible to you — publish them when you're ready.
                 </div>
-                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+                <div class="btn-row" style="flex-wrap:wrap;">
                     {% if form.instance.pk %}
                         {# Editing an existing event #}
                         {% if form.instance.is_draft %}
                             <button type="submit" name="submit_action" value="publish" class="btn btn--primary">Publish event</button>
                             <button type="submit" name="submit_action" value="draft" class="btn btn--ghost">Save draft</button>
                         {% else %}
-                            <button type="submit" name="submit_action" value="publish" class="btn btn--primary">Save changes</button>
+                            <button type="submit" name="submit_action" value="publish" class="btn btn--primary">Publish</button>
                             <button type="submit" name="submit_action" value="draft" class="btn btn--ghost">Save as draft</button>
                         {% endif %}
                     {% else %}

@@ -4,8 +4,8 @@
 
 {% block content %}
 <div class="content-wrap">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1.5rem;">
-        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:1.8rem;color:var(--blue);">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:var(--space-6);">
+        <h1 class="heading-page" style="margin-bottom:0;">
             My Events
         </h1>
         <a href="{% url 'event_create' %}" class="btn btn--primary btn--sm">✦ Submit event</a>
@@ -17,7 +17,7 @@
                 <div class="card" style="display:block;">
                     <div class="event-row">
                         <div class="event-row__body">
-                            <div class="event-tags" style="margin-bottom:0.5rem;margin-top:0;">
+                            <div class="event-tags" style="margin-bottom:var(--space-2);margin-top:0;">
                                 <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
                             </div>
 
@@ -27,14 +27,14 @@
                                 </a>
                             </div>
 
-                            <div class="event-meta" style="margin-top:0.25rem;">
+                            <div class="event-meta" style="margin-top:var(--space-1);">
                                 <span>{{ event.start_datetime|date:"j M Y · H:i" }}</span>
                                 <span style="opacity:0.4;">·</span>
                                 <span class="event-meta--venue">{{ event.venue_name }}</span>
                             </div>
                         </div>
 
-                        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.85rem 1rem;flex-shrink:0;">
+                        <div class="btn-row" style="padding:var(--space-4);flex-shrink:0;gap:var(--space-2);">
                             <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
                             <a href="{% url 'event_delete' event.slug %}" class="btn btn--danger btn--sm">Delete</a>
                         </div>
@@ -43,8 +43,8 @@
             {% endfor %}
         </div>
     {% else %}
-        <div style="text-align:center;padding:4rem 0;color:var(--ink-muted);">
-            <p style="font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:0.75rem;">No events yet.</p>
+        <div class="text-center text-muted" style="padding:var(--space-16) 0;">
+            <p style="font-family:'Playfair Display',serif;font-size:var(--text-lg);margin-bottom:var(--space-3);">No events yet.</p>
             <a href="{% url 'event_create' %}" class="link-accent">Submit your first event →</a>
         </div>
     {% endif %}

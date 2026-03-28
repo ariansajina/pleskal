@@ -5,25 +5,25 @@
 {% block content %}
 <div class="content-wrap">
     <div style="max-width:480px;">
-        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:1.8rem;color:var(--c-perf);margin-bottom:1.5rem;">
+        <h1 class="heading-page" style="color:var(--c-perf);margin-bottom:var(--space-6);">
             Delete Your Account
         </h1>
 
-        <div class="alert alert--error" style="margin-bottom:1.5rem;">
-            <p style="font-weight:600;margin-bottom:0.5rem;">This action is permanent and cannot be undone.</p>
-            <ul style="padding-left:1.2em;margin:0;">
+        <div class="alert alert--error" style="margin-bottom:var(--space-6);">
+            <p style="font-weight:600;margin-bottom:var(--space-2);">This action is permanent and cannot be undone.</p>
+            <ul style="padding-left:1.4em;margin:0;">
                 <li>Your account will be permanently deleted.</li>
                 <li>By default, your submitted events will remain visible but will no longer be associated with your account.</li>
             </ul>
         </div>
 
-        <form method="post" style="display:flex;flex-direction:column;gap:1.25rem;">
+        <form method="post" class="form-stack">
             {% csrf_token %}
-            <label style="display:flex;align-items:center;gap:0.6rem;font-size:0.9rem;cursor:pointer;">
-                <input type="checkbox" name="delete_posts" value="1" style="width:1rem;height:1rem;cursor:pointer;">
-                Also permanently delete all my submitted events.
+            <label class="form-check">
+                <input type="checkbox" name="delete_posts" value="1">
+                <span class="text-base">Also permanently delete all my submitted events.</span>
             </label>
-            <div style="display:flex;gap:0.75rem;">
+            <div class="btn-row">
                 <button type="submit" class="btn btn--danger">Delete My Account</button>
                 <a href="/" class="btn btn--ghost">Cancel</a>
             </div>

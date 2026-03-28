@@ -16,7 +16,7 @@
 
     {# Pagination #}
     {% if page_obj.has_other_pages %}
-        <nav style="display:flex;align-items:center;gap:0.75rem;margin-top:2rem;" aria-label="Pagination">
+        <nav style="display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-8);" aria-label="Pagination">
             {% if page_obj.has_previous %}
                 <a href="?page={{ page_obj.previous_page_number }}"
                    class="btn btn--ghost btn--sm"
@@ -27,7 +27,7 @@
                 </a>
             {% endif %}
 
-            <span style="font-size:0.73rem;color:var(--ink-muted);">
+            <span class="text-sm text-muted">
                 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
             </span>
 
@@ -44,7 +44,7 @@
     {% endif %}
 
 {% else %}
-    <p style="font-size:0.85rem;color:var(--ink-muted);padding:2rem 0;text-align:center;">
+    <p class="text-base text-muted text-center" style="padding:var(--space-8) 0;">
         No events found. Try adjusting your filters.
     </p>
 {% endif %}

@@ -5,11 +5,11 @@
 {% block content %}
 <div class="content-wrap">
     <div style="max-width:480px;">
-        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:1.8rem;color:var(--blue);margin-bottom:1.5rem;">
+        <h1 class="heading-page" style="margin-bottom:var(--space-6);">
             Delete event?
         </h1>
 
-        <div class="alert alert--error" style="margin-bottom:1.5rem;">
+        <div class="alert alert--error" style="margin-bottom:var(--space-6);">
             Are you sure you want to permanently delete
             <strong>{{ object.title }}</strong>?
             This cannot be undone.
@@ -17,7 +17,7 @@
 
         <form method="post">
             {% csrf_token %}
-            <div style="display:flex;gap:0.75rem;">
+            <div class="btn-row">
                 <button type="submit" class="btn btn--danger">Yes, delete</button>
                 <a href="{% url 'event_detail' object.slug %}" class="btn btn--ghost">Cancel</a>
             </div>

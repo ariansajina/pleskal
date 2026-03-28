@@ -6,7 +6,7 @@
 {% block content %}
 <div class="page-hero">
     <div class="page-hero__ornrow">✦</div>
-    <h1 class="page-hero__title" style="font-size:2rem;">{{ publisher.public_name }}</h1>
+    <h1 class="page-hero__title page-hero__title--sm">{{ publisher.public_name }}</h1>
     {% if publisher.bio %}
         <div class="page-hero__sub prose-content" style="text-align:left;">{{ publisher.bio|render_markdown }}</div>
     {% endif %}
@@ -14,13 +14,13 @@
         <a href="{{ publisher.website }}"
            target="_blank"
            rel="noopener noreferrer"
-           class="link-accent"
-           style="font-size:0.78rem;display:inline-block;margin-top:0.5rem;">
+           class="link-accent text-sm"
+           style="display:inline-block;margin-top:var(--space-2);">
             {{ publisher.website }} →
         </a>
     {% endif %}
     {% if is_own_profile %}
-        <div style="margin-top:1.25rem;">
+        <div style="margin-top:var(--space-4);">
             <a href="{% url 'edit_profile' %}" class="btn btn--ghost btn--sm">Edit profile</a>
         </div>
     {% endif %}
@@ -30,8 +30,8 @@
 
     {# Drafts section — own profile only, shown before the upcoming/past toggle #}
     {% if is_own_profile and drafts %}
-        <section style="margin-bottom:2rem;">
-            <h2 style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-muted);margin-bottom:0.75rem;font-weight:600;">Drafts</h2>
+        <section style="margin-bottom:var(--space-8);">
+            <h2 class="heading-section">Drafts</h2>
             <div class="event-list">
                 {% for event in drafts %}
                     {% include "events/partials/event_card.html" with event=event show_draft_badge=True %}
@@ -41,7 +41,7 @@
     {% endif %}
 
     {# Upcoming / Past toggle #}
-    <div class="page-tabs" style="margin-bottom:1.5rem;">
+    <div class="page-tabs" style="margin-bottom:var(--space-6);">
         <a href="?past=0" class="page-tab {% if not show_past %}active{% endif %}">Upcoming</a>
         <a href="?past=1" class="page-tab {% if show_past %}active{% endif %}">Past</a>
     </div>
@@ -55,12 +55,12 @@
         </div>
     {% else %}
         {% if is_own_profile %}
-            <div style="text-align:center;padding:4rem 0;color:var(--ink-muted);">
-                <p style="font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:0.75rem;">No events yet.</p>
+            <div class="text-center text-muted" style="padding:var(--space-16) 0;">
+                <p style="font-family:'Playfair Display',serif;font-size:var(--text-lg);margin-bottom:var(--space-3);">No events yet.</p>
                 <a href="{% url 'event_create' %}" class="link-accent">Submit your first event →</a>
             </div>
         {% else %}
-            <p style="font-size:0.85rem;color:var(--ink-muted);padding:2rem 0;text-align:center;">
+            <p class="text-base text-muted text-center" style="padding:var(--space-8) 0;">
                 No {% if show_past %}past{% else %}upcoming{% endif %} events.
             </p>
         {% endif %}

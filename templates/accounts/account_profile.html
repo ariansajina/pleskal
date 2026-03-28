@@ -5,11 +5,9 @@
 {% block content %}
 <div class="content-wrap">
     <div style="max-width:520px;">
-        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:1.8rem;color:var(--blue);margin-bottom:2rem;">
-            My Profile
-        </h1>
+        <h1 class="heading-page">My Profile</h1>
 
-        <form method="post" style="display:flex;flex-direction:column;gap:1.5rem;background:rgba(255,255,255,0.6);border:1.5px solid var(--border-light);padding:1.75rem;">
+        <form method="post" class="form-stack card-panel">
             {% csrf_token %}
 
             <div>
@@ -56,16 +54,16 @@
                 {% endfor %}
             </div>
 
-            <div style="display:flex;align-items:center;gap:1rem;padding-top:0.5rem;">
+            <div class="btn-row--wide" style="padding-top:var(--space-2);">
                 <button type="submit" class="btn btn--primary">Save changes</button>
                 <a href="{% url 'publisher_profile' request.user.display_name_slug %}"
-                   style="font-size:0.78rem;color:var(--ink-muted);">
+                   class="text-sm text-muted">
                     Cancel
                 </a>
             </div>
         </form>
 
-        <div style="margin-top:1.5rem;border-top:1px solid var(--border-light);padding-top:1rem;font-size:0.85rem;display:flex;gap:1.5rem;align-items:center;">
+        <div class="btn-row--wide text-base" style="margin-top:var(--space-6);border-top:1px solid var(--border-light);padding-top:var(--space-4);">
             <a href="{% url 'change_password' %}" style="color:var(--blue);font-weight:500;">Change password</a>
             <a href="{% url 'account_delete' %}" style="color:var(--c-perf);">Delete account</a>
         </div>

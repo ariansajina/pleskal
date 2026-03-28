@@ -25,7 +25,7 @@ class EventForm(forms.ModelForm):
     start_time = forms.TimeField(
         label="Start time",
         widget=forms.TimeInput(
-            attrs={"type": "time", "class": "form-input"},
+            attrs={"type": "time", "class": "form-input", "lang": "en"},
             format=TIME_FORMAT,
         ),
         input_formats=[TIME_FORMAT],
@@ -33,7 +33,7 @@ class EventForm(forms.ModelForm):
     end_time = forms.TimeField(
         label="End time",
         widget=forms.TimeInput(
-            attrs={"type": "time", "class": "form-input"},
+            attrs={"type": "time", "class": "form-input", "lang": "en"},
             format=TIME_FORMAT,
         ),
         input_formats=[TIME_FORMAT],
@@ -69,6 +69,14 @@ class EventForm(forms.ModelForm):
             if self.instance.end_datetime:
                 local_end = timezone.localtime(self.instance.end_datetime)
                 self.initial["end_time"] = local_end.strftime(TIME_FORMAT)
+        elif creation:
+            # Default to today and next full hour for new events
+            now = timezone.localtime(timezone.now())
+            self.initial["date"] = now.date()
+            next_hour = now.replace(
+                minute=0, second=0, microsecond=0
+            ) + datetime.timedelta(hours=1)
+            self.initial["start_time"] = next_hour.strftime(TIME_FORMAT)
         # Apply CSS classes to text fields
         for fname in [
             "title",

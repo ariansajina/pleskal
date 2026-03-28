@@ -54,12 +54,12 @@
             {# Date range #}
             <div class="filter-panel__group">
                 <span class="filter-panel__group-label">Date range</span>
-                <div style="display:flex;gap:0.5rem;align-items:center;">
+                <div style="display:flex;gap:var(--space-2);align-items:center;">
                     <input type="date" name="date_from" value="{{ date_from|default:today }}" class="form-input" style="width:auto;">
-                    <span style="font-size:0.73rem;color:var(--ink-muted);">–</span>
+                    <span class="text-sm text-muted">–</span>
                     <input type="date" name="date_to" value="{{ date_to }}" class="form-input" style="width:auto;">
                 </div>
-                <div class="filter-checkboxes" style="margin-top:0.4rem;">
+                <div class="filter-checkboxes" style="margin-top:var(--space-2);">
                     <button type="button" class="filter-chip"
                             data-quick-date-filter
                             data-date-from="{{ quick_date_ranges.this_week.0 }}"
@@ -83,11 +83,11 @@
             <div class="filter-panel__group" style="justify-content:flex-end;">
                 <label class="form-check">
                     <input type="checkbox" name="is_free" value="1" {% if is_free %}checked{% endif %}>
-                    <span style="font-size:0.78rem;">Free only</span>
+                    <span class="text-sm">Free only</span>
                 </label>
-                <label class="form-check" style="margin-top:0.4rem;">
+                <label class="form-check" style="margin-top:var(--space-2);">
                     <input type="checkbox" name="is_wheelchair_accessible" value="1" {% if is_wheelchair_accessible %}checked{% endif %}>
-                    <span style="font-size:0.78rem;">Wheelchair accessible</span>
+                    <span class="text-sm">Wheelchair accessible</span>
                 </label>
             </div>
 
@@ -99,7 +99,7 @@
     </form>
 
     {# --- Event list --- #}
-    <p id="htmx-indicator" aria-live="polite" style="text-align:center;margin-bottom:0.5rem;">
+    <p id="htmx-indicator" class="text-center" aria-live="polite" style="margin-bottom:var(--space-2);">
       loading…
     </p>
 

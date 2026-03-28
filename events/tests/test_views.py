@@ -720,7 +720,7 @@ class TestEventDrafts:
         event = EventFactory.create(submitted_by=user, is_draft=True)
         client.force_login(user)
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
-        assert b"Draft" in resp.content
+        assert b"only visible to you" in resp.content
 
     def test_detail_no_draft_banner_for_published_event(self, client):
         event = EventFactory.create(is_draft=False)
