@@ -8,6 +8,7 @@ from .views import (
     EventDetailView,
     EventDuplicateView,
     EventListView,
+    EventToggleDraftView,
     EventUpdateView,
     MyEventsView,
     SubscribeView,
@@ -27,6 +28,11 @@ urlpatterns = [
         "events/<slug:slug>/duplicate/",
         EventDuplicateView.as_view(),
         name="event_duplicate",
+    ),
+    path(
+        "events/<slug:slug>/toggle-draft/",
+        EventToggleDraftView.as_view(),
+        name="event_toggle_draft",
     ),
     path("my-events/", MyEventsView.as_view(), name="my_events"),
     path(

@@ -445,5 +445,26 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
         )
 
 
+class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
+    rate_limit_key = "event_update"
+    rate_limit_limit = 20
+    rate_limit_window = 60
+    rate_limit_by_user = True
+
+    def post(self, request, slug):
+        event = get_object_or_404(Event, slug=slug)
+        if event.submitted_by != request.user:
+            from django.core.exceptions import PermissionDenied
+
+            raise PermissionDenied
+        event.is_draft = not event.is_draft
+        event.save(update_fields=["is_draft", "updated_at"])
+        if event.is_draft:
+            messages.success(request, "Event saved as draft.")
+        else:
+            messages.success(request, "Event published.")
+        return redirect("event_detail", slug=event.slug)
+
+
 class SubscribeView(TemplateView):
     template_name = "events/subscribe.html"

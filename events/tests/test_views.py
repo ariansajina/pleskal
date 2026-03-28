@@ -497,7 +497,7 @@ class TestEventUpdateView:
         event = EventFactory.create(submitted_by=user)
         original_slug = event.slug
         client.force_login(user)
-        local_start = timezone.localtime(event.start_datetime)  # type: ignore
+        local_start = timezone.localtime(event.start_datetime)
         client.post(
             reverse("event_edit", kwargs={"slug": event.slug}),
             {
