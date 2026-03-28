@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-"""Generate favicon files from static/images/logo.png."""
-
 from PIL import Image
 
-src = "static/images/logo.png"
+src = "static/images/logo-white-bg.png"
 img = Image.open(src).convert("RGBA")
 
 img.resize((32, 32), Image.Resampling.LANCZOS).save("static/images/favicon-32x32.png")
