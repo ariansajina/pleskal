@@ -2,6 +2,7 @@ import calendar
 import datetime
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
@@ -20,7 +21,7 @@ from .models import Event, EventCategory
 
 EVENTS_PER_PAGE = 20
 EVENT_FORM_TEMPLATE = "events/event_form.html"
-MAX_UPCOMING_EVENTS_PER_USER = 50
+MAX_UPCOMING_EVENTS_PER_USER = settings.MAX_UPCOMING_EVENTS_PER_USER
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +84,7 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
     def dispatch(self, request, *args, **kwargs):
         if (
             request.user.is_authenticated
+            and not request.user.is_system_account
             and self._upcoming_events_count() >= MAX_UPCOMING_EVENTS_PER_USER
         ):
             messages.error(
@@ -362,7 +364,10 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
         ).count()
 
     def _check_event_limit(self, request):
-        if self._upcoming_events_count(request) >= MAX_UPCOMING_EVENTS_PER_USER:
+        if (
+            not request.user.is_system_account
+            and self._upcoming_events_count(request) >= MAX_UPCOMING_EVENTS_PER_USER
+        ):
             messages.error(
                 request,
                 f"You have reached the limit of {MAX_UPCOMING_EVENTS_PER_USER} "

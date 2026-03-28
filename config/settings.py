@@ -49,6 +49,8 @@ SITE_ID = 1
 SITE_DOMAIN = env("SITE_DOMAIN", default="pleskal.dk")
 SITE_NAME = env("SITE_NAME", default="pleskal")
 
+MAX_UPCOMING_EVENTS_PER_USER = env.int("MAX_UPCOMING_EVENTS_PER_USER", default=100)
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",

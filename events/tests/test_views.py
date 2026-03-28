@@ -258,6 +258,19 @@ class TestEventCreateView:
         resp = client.get(reverse("event_create"))
         assert resp.status_code == 200
 
+    def test_system_account_not_blocked_by_limit(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create(is_system_account=True)
+        client.force_login(user)
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER,
+            submitted_by=user,
+            start_datetime=_future_dt(10),
+        )
+        resp = client.get(reverse("event_create"))
+        assert resp.status_code == 200
+
 
 @pytest.mark.django_db
 class TestEventListView:
@@ -621,6 +634,20 @@ class TestEventDuplicateView:
         )
         assert resp.status_code == 302
         assert not Event.objects.filter(title="Blocked Duplicate").exists()
+
+    def test_system_account_not_blocked_by_duplicate_limit(self, client):
+        from events.views import MAX_UPCOMING_EVENTS_PER_USER
+
+        user = UserFactory.create(is_system_account=True)
+        source = EventFactory.create(submitted_by=user)
+        client.force_login(user)
+        EventFactory.create_batch(
+            MAX_UPCOMING_EVENTS_PER_USER,
+            submitted_by=user,
+            start_datetime=_future_dt(10),
+        )
+        resp = client.get(reverse("event_duplicate", kwargs={"slug": source.slug}))
+        assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------
