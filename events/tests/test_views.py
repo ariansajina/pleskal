@@ -10,6 +10,7 @@ from PIL import Image
 from accounts.tests.factories import UserFactory
 from events.models import Event
 from events.tests.factories import EventFactory
+from events.views import EVENTS_PER_PAGE
 
 
 def _make_image_upload(width=100, height=100, fmt="JPEG", name="test.jpg"):
@@ -328,6 +329,20 @@ class TestEventListView:
         resp = client.get(reverse("event_list"))
         assert resp.status_code == 200
         assert b"<!DOCTYPE html>" in resp.content
+
+    def test_pagination_preserves_filters(self, client):
+        """Pagination links carry active filter params so navigating pages doesn't reset them."""
+        # Fill page 1 and overflow into page 2, all workshops
+        EventFactory.create_batch(EVENTS_PER_PAGE + 1, category="workshop")
+        # Add social events that should be excluded by the filter
+        EventFactory.create_batch(3, category="social")
+
+        resp = client.get(reverse("event_list") + "?category=workshop")
+        assert resp.status_code == 200
+        # Context must expose filters without `page` so templates can build URLs
+        assert resp.context["base_query_string"] == "category=workshop"
+        # The rendered Next link must include both the filter and the page number
+        assert b"category=workshop&page=2" in resp.content
 
     def test_date_from_filter(self, client):
         near = EventFactory.create(
