@@ -214,3 +214,6 @@ __marimo__/
 
 # temp
 .data/
+
+# macOS
+.DS_Store
