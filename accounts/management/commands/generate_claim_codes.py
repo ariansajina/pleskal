@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError
 from django.utils import timezone
@@ -23,6 +24,12 @@ class Command(BaseCommand):
             required=True,
             help="Expiration date in YYYY-MM-DD format.",
         )
+        parser.add_argument(
+            "--created-by",
+            type=str,
+            default=None,
+            help="Email of the user to record as the creator of the codes.",
+        )
 
     def handle(self, *args, **options):
         count = options["count"]
@@ -41,6 +48,16 @@ class Command(BaseCommand):
         if expires_at <= timezone.now():
             raise CommandError("Expiration date must be in the future.")
 
+        created_by = None
+        if options["created_by"]:
+            User = get_user_model()
+            try:
+                created_by = User.objects.get(email=options["created_by"])
+            except User.DoesNotExist:
+                raise CommandError(
+                    f"No user found with email '{options['created_by']}'."
+                ) from None
+
         codes = []
         max_retries = count * 10
         attempts = 0
@@ -48,7 +65,9 @@ class Command(BaseCommand):
             attempts += 1
             code = generate_claim_code()
             try:
-                ClaimCode.objects.create(code=code, expires_at=expires_at)
+                ClaimCode.objects.create(
+                    code=code, expires_at=expires_at, created_by=created_by
+                )
                 codes.append(code)
             except IntegrityError:
                 continue

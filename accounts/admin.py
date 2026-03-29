@@ -79,7 +79,11 @@ class ClaimCodeAdmin(admin.ModelAdmin):
                     attempts += 1
                     code = generate_claim_code()
                     try:
-                        ClaimCode.objects.create(code=code, expires_at=expires_at)
+                        ClaimCode.objects.create(
+                            code=code,
+                            expires_at=expires_at,
+                            created_by=request.user,
+                        )
                         codes.append(code)
                     except IntegrityError:
                         continue
