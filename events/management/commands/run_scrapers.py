@@ -127,6 +127,19 @@ class Command(BaseCommand):
             if only and name not in only:
                 continue
 
+            env_key = f"SCRAPER_{name.upper()}_ENABLED"
+            if os.environ.get(env_key, "true").strip().lower() in {
+                "false",
+                "0",
+                "no",
+                "off",
+            }:
+                self.stdout.write(
+                    self.style.WARNING(f"Skipping {name} ({env_key}=disabled)")
+                )
+                results.append((name, True, "disabled via env"))
+                continue
+
             self.stdout.write("")
             self.stdout.write(self.style.HTTP_INFO(f"{'=' * 60}"))
             self.stdout.write(self.style.HTTP_INFO(f"  {name}"))
