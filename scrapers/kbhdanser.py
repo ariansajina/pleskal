@@ -306,7 +306,9 @@ def _extract_description(soup: BeautifulSoup) -> str:
     paragraphs: list[str] = []
 
     for tag in soup.find_all(["p", "div"]):
-        if tag.name == "div" and "e-n-accordion-item-title-text" in (tag.get("class") or []):
+        if tag.name == "div" and "e-n-accordion-item-title-text" in (
+            tag.get("class") or []
+        ):
             if "read more" in tag.get_text(strip=True).lower():
                 break
             continue

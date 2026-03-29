@@ -605,8 +605,11 @@ def test_scrape_detail_prefers_english_page(mock_dt):
     resp_en = MagicMock()
     resp_en.text = english_html
     resp_en.raise_for_status.return_value = None
-    # First call returns Danish, second call returns English
-    session.get.side_effect = [resp_da, resp_en]
+    resp_press = MagicMock()
+    resp_press.text = "<html></html>"
+    resp_press.raise_for_status.return_value = None
+    # First call returns Danish, second call returns English, third returns empty press page
+    session.get.side_effect = [resp_da, resp_en, resp_press]
 
     card = {
         "title": "Chroniques",
@@ -718,8 +721,11 @@ def test_scrape_detail_en_page_fetch_error_falls_back_to_danish(mock_dt):
     resp_ok.raise_for_status.return_value = None
     resp_err = MagicMock()
     resp_err.raise_for_status.side_effect = requests.HTTPError("503")
-    # First call (Danish page) succeeds; second (EN page) fails
-    session.get.side_effect = [resp_ok, resp_err]
+    resp_press = MagicMock()
+    resp_press.text = "<html></html>"
+    resp_press.raise_for_status.return_value = None
+    # First call (Danish page) succeeds; second (EN page) fails; third (press page) succeeds
+    session.get.side_effect = [resp_ok, resp_err, resp_press]
 
     card = {
         "title": "Show",
