@@ -28,6 +28,7 @@ from scrapers.dansehallerne_workshops import (
 )
 from scrapers.hautscene import scrape as scrape_hautscene
 from scrapers.sydhavnteater import scrape as scrape_sydhavnteater
+from scrapers.toastercph import scrape as scrape_toastercph
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +57,12 @@ SCRAPERS = [
         {},
         "import_sydhavnteater",
     ),
+    (
+        "toastercph",
+        scrape_toastercph,
+        {"delay": 0.5},
+        "import_toastercph",
+    ),
 ]
 
 
@@ -81,7 +88,7 @@ class Command(BaseCommand):
             help=(
                 "Run only the named scraper(s). Can be repeated. "
                 "Choices: dansehallerne, dansehallerne_workshops, "
-                "hautscene, sydhavnteater."
+                "hautscene, sydhavnteater, toastercph."
             ),
         )
 

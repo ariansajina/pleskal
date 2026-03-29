@@ -16,5 +16,11 @@
     "display_name": "Sydhavn Teater",
     "email": "system.sydhavnteater@pleskal.internal",
     "website": "https://sydhavnteater.dk"
+  },
+  {
+    "external_source": "toastercph",
+    "display_name": "Toaster CPH",
+    "email": "system.toastercph@pleskal.internal",
+    "website": "https://toastercph.dk"
   }
 ]
