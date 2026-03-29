@@ -9,6 +9,11 @@ from django.utils.text import slugify
 
 from .validators import validate_url_scheme
 
+# Field length constraints
+MAX_TITLE_LENGTH = 250
+MAX_VENUE_LENGTH = 200
+MAX_PRICE_NOTE_LENGTH = 200
+
 
 class EventCategory(models.TextChoices):
     PERFORMANCE = "performance", "Performance"
@@ -25,7 +30,7 @@ class Event(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     slug = models.SlugField(max_length=250, unique=True, editable=False)
-    title = models.CharField(max_length=200)
+    title = models.CharField(max_length=MAX_TITLE_LENGTH)
     description = models.TextField(blank=True, max_length=4000)
     image = models.ImageField(
         upload_to="events/",
@@ -34,8 +39,8 @@ class Event(models.Model):
     )
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField(blank=True, null=True)
-    venue_name = models.CharField(max_length=200)
-    venue_address = models.CharField(max_length=200, blank=True)
+    venue_name = models.CharField(max_length=MAX_VENUE_LENGTH)
+    venue_address = models.CharField(max_length=MAX_VENUE_LENGTH, blank=True)
     category = models.CharField(
         max_length=20,
         choices=EventCategory.choices,
@@ -43,7 +48,7 @@ class Event(models.Model):
     )
     is_free = models.BooleanField(default=False)
     is_wheelchair_accessible = models.BooleanField(default=False)
-    price_note = models.CharField(max_length=200, blank=True)
+    price_note = models.CharField(max_length=MAX_PRICE_NOTE_LENGTH, blank=True)
     source_url = models.URLField(
         blank=True,
         validators=[validate_url_scheme],
@@ -74,7 +79,7 @@ class Event(models.Model):
 
     def _generate_unique_slug(self):
         """Generate a unique slug from the title, appending a suffix on collision."""
-        base_slug = slugify(self.title)[:200]
+        base_slug = slugify(self.title)[:MAX_TITLE_LENGTH]
         if not base_slug:
             base_slug = "event"
         slug = base_slug

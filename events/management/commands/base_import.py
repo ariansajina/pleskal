@@ -22,7 +22,13 @@ from django.core.files import File
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from events.models import Event, EventCategory
+from events.models import (
+    MAX_PRICE_NOTE_LENGTH,
+    MAX_TITLE_LENGTH,
+    MAX_VENUE_LENGTH,
+    Event,
+    EventCategory,
+)
 
 # Map scraper category strings → EventCategory values (shared across all scrapers)
 CATEGORY_MAP = {
@@ -182,18 +188,20 @@ class BaseEventImportCommand(BaseCommand):
                 )
 
                 fields = {
-                    "title": rec["title"],
+                    "title": rec["title"][:MAX_TITLE_LENGTH],
                     "description": rec.get("description", ""),
                     "start_datetime": start_dt,
                     "end_datetime": end_dt,
-                    "venue_name": rec.get("venue_name", self.default_venue_name),
-                    "venue_address": rec.get("venue_address", ""),
+                    "venue_name": rec.get("venue_name", self.default_venue_name)[
+                        :MAX_VENUE_LENGTH
+                    ],
+                    "venue_address": rec.get("venue_address", "")[:MAX_VENUE_LENGTH],
                     "category": category,
                     "is_free": rec.get("is_free", False),
                     "is_wheelchair_accessible": rec.get(
                         "is_wheelchair_accessible", False
                     ),
-                    "price_note": rec.get("price_note", ""),
+                    "price_note": rec.get("price_note", "")[:MAX_PRICE_NOTE_LENGTH],
                     "source_url": source_url,
                     "external_source": self.external_source,
                     "submitted_by": system_user,
