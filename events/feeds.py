@@ -3,6 +3,7 @@
 import re
 
 from django.contrib.syndication.views import Feed
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -36,7 +37,17 @@ def _upcoming_qs(
         if clean:
             qs = qs.filter(category__in=clean)
     if publisher_slugs:
-        qs = qs.filter(submitted_by__display_name_slug__in=publisher_slugs)
+        other = "other" in publisher_slugs
+        named = [s for s in publisher_slugs if s != "other"]
+        if other and named:
+            qs = qs.filter(
+                Q(submitted_by__display_name_slug__in=named)
+                | Q(submitted_by__is_system_account=False)
+            )
+        elif other:
+            qs = qs.filter(submitted_by__is_system_account=False)
+        else:
+            qs = qs.filter(submitted_by__display_name_slug__in=named)
     return qs
 
 

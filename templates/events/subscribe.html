@@ -48,6 +48,12 @@
               <span class="filter-chip">{{ pub.public_name }}</span>
             </label>
           {% endfor %}
+          {% if has_community_publishers %}
+            <label>
+              <input type="checkbox" name="publisher" value="other">
+              <span class="filter-chip">Other</span>
+            </label>
+          {% endif %}
         </div>
       </div>
       {% endif %}

@@ -541,4 +541,7 @@ class SubscribeView(TemplateView):
         ctx["publishers"] = User.objects.filter(pk__in=upcoming_publisher_ids).order_by(
             "display_name"
         )
+        ctx["has_community_publishers"] = User.objects.filter(
+            pk__in=upcoming_publisher_ids, is_system_account=False
+        ).exists()
         return ctx
