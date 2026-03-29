@@ -1,4 +1,5 @@
 import pytest
+from django.core.cache import cache
 
 
 @pytest.fixture(autouse=True)
@@ -16,3 +17,11 @@ def test_settings(settings):
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
+
+
+@pytest.fixture(autouse=True)
+def clear_rate_limit_cache():
+    """Clear rate limit cache before each test to prevent cross-test pollution."""
+    cache.clear()
+    yield
+    cache.clear()
