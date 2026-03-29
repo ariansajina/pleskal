@@ -24,11 +24,38 @@ from django.db import transaction
 
 from events.models import (
     MAX_PRICE_NOTE_LENGTH,
+    MAX_SOURCE_URL_LENGTH,
     MAX_TITLE_LENGTH,
     MAX_VENUE_LENGTH,
     Event,
     EventCategory,
 )
+
+
+def _validate_field_lengths(rec: dict, title_for_log: str) -> tuple[bool, str | None]:
+    """
+    Validate that string fields don't exceed their max_length constraints.
+    Returns (is_valid, error_message).
+    """
+    field_limits = {
+        "title": MAX_TITLE_LENGTH,
+        "venue_name": MAX_VENUE_LENGTH,
+        "venue_address": MAX_VENUE_LENGTH,
+        "price_note": MAX_PRICE_NOTE_LENGTH,
+        "source_url": MAX_SOURCE_URL_LENGTH,
+    }
+
+    for field, max_length in field_limits.items():
+        value = rec.get(field, "")
+        if isinstance(value, str) and len(value) > max_length:
+            return (
+                False,
+                f"Field '{field}' exceeds max length of {max_length} "
+                f"({len(value)} chars): {value[:100]}...",
+            )
+
+    return True, None
+
 
 # Map scraper category strings → EventCategory values (shared across all scrapers)
 CATEGORY_MAP = {
@@ -169,6 +196,17 @@ class BaseEventImportCommand(BaseCommand):
             # ── Upsert ────────────────────────────────────────────────────────
             for key, rec in incoming.items():
                 source_url, start_dt_utc = key
+                event_title = rec.get("title", "?")
+
+                # Validate field lengths first
+                is_valid, validation_error = _validate_field_lengths(rec, event_title)
+                if not is_valid:
+                    self.stderr.write(
+                        f"  SKIP (field length) {event_title}: {validation_error}"
+                    )
+                    skipped += 1
+                    continue
+
                 try:
                     start_dt = _parse_dt(rec["start_datetime"])
                     end_dt = (
@@ -177,9 +215,7 @@ class BaseEventImportCommand(BaseCommand):
                         else None
                     )
                 except ValueError as exc:
-                    self.stderr.write(
-                        f"  SKIP (bad datetime) {rec.get('title', '?')}: {exc}"
-                    )
+                    self.stderr.write(f"  SKIP (bad datetime) {event_title}: {exc}")
                     skipped += 1
                     continue
 
@@ -188,20 +224,18 @@ class BaseEventImportCommand(BaseCommand):
                 )
 
                 fields = {
-                    "title": rec["title"][:MAX_TITLE_LENGTH],
+                    "title": rec["title"],
                     "description": rec.get("description", ""),
                     "start_datetime": start_dt,
                     "end_datetime": end_dt,
-                    "venue_name": rec.get("venue_name", self.default_venue_name)[
-                        :MAX_VENUE_LENGTH
-                    ],
-                    "venue_address": rec.get("venue_address", "")[:MAX_VENUE_LENGTH],
+                    "venue_name": rec.get("venue_name", self.default_venue_name),
+                    "venue_address": rec.get("venue_address", ""),
                     "category": category,
                     "is_free": rec.get("is_free", False),
                     "is_wheelchair_accessible": rec.get(
                         "is_wheelchair_accessible", False
                     ),
-                    "price_note": rec.get("price_note", "")[:MAX_PRICE_NOTE_LENGTH],
+                    "price_note": rec.get("price_note", ""),
                     "source_url": source_url,
                     "external_source": self.external_source,
                     "submitted_by": system_user,
@@ -215,13 +249,22 @@ class BaseEventImportCommand(BaseCommand):
                         if dry_run:
                             self.stdout.write(f"  UPDATE  {rec['title'][:60]}")
                         else:
-                            for k, v in fields.items():
-                                setattr(event, k, v)
-                            event.save()
-                            self._maybe_update_image(event, rec, skip_images)
-                            self.stdout.write(
-                                self.style.SUCCESS(f"  UPDATED  {rec['title'][:60]}")
-                            )
+                            try:
+                                for k, v in fields.items():
+                                    setattr(event, k, v)
+                                event.save()
+                                self._maybe_update_image(event, rec, skip_images)
+                                self.stdout.write(
+                                    self.style.SUCCESS(
+                                        f"  UPDATED  {rec['title'][:60]}"
+                                    )
+                                )
+                            except Exception as exc:
+                                self.stderr.write(
+                                    f"  FAILED (update) {event_title}: {exc}"
+                                )
+                                skipped += 1
+                                continue
                         updated += 1
                     else:
                         skipped += 1
@@ -229,12 +272,17 @@ class BaseEventImportCommand(BaseCommand):
                     if dry_run:
                         self.stdout.write(f"  CREATE  {rec['title'][:60]}")
                     else:
-                        event = Event(**fields)
-                        event.save()
-                        self._maybe_update_image(event, rec, skip_images)
-                        self.stdout.write(
-                            self.style.SUCCESS(f"  CREATED  {rec['title'][:60]}")
-                        )
+                        try:
+                            event = Event(**fields)
+                            event.save()
+                            self._maybe_update_image(event, rec, skip_images)
+                            self.stdout.write(
+                                self.style.SUCCESS(f"  CREATED  {rec['title'][:60]}")
+                            )
+                        except Exception as exc:
+                            self.stderr.write(f"  FAILED (create) {event_title}: {exc}")
+                            skipped += 1
+                            continue
                     created += 1
 
             # ── Stale deletion ────────────────────────────────────────────────

@@ -13,6 +13,7 @@ from .validators import validate_url_scheme
 MAX_TITLE_LENGTH = 250
 MAX_VENUE_LENGTH = 200
 MAX_PRICE_NOTE_LENGTH = 200
+MAX_SOURCE_URL_LENGTH = 200
 
 
 class EventCategory(models.TextChoices):
@@ -50,6 +51,7 @@ class Event(models.Model):
     is_wheelchair_accessible = models.BooleanField(default=False)
     price_note = models.CharField(max_length=MAX_PRICE_NOTE_LENGTH, blank=True)
     source_url = models.URLField(
+        max_length=MAX_SOURCE_URL_LENGTH,
         blank=True,
         validators=[validate_url_scheme],
     )
