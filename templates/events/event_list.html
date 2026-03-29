@@ -55,7 +55,7 @@
             <div class="filter-panel__group">
                 <span class="filter-panel__group-label">Date range</span>
                 <div style="display:flex;gap:var(--space-2);align-items:center;">
-                    <input type="date" name="date_from" value="{{ date_from|default:today }}" class="form-input" style="width:auto;">
+                    <input type="date" name="date_from" value="{% if show_past %}{{ date_from }}{% else %}{{ date_from|default:today }}{% endif %}" class="form-input" style="width:auto;">
                     <span class="text-sm text-muted">–</span>
                     <input type="date" name="date_to" value="{{ date_to }}" class="form-input" style="width:auto;">
                 </div>
