@@ -4,6 +4,7 @@ import datetime
 
 from scrapers.sydhavnteater import (
     CATEGORY_MAP,
+    _extract_where,
     build_records,
     is_upcoming,
     parse_description,
@@ -228,6 +229,21 @@ def test_build_records_is_free_with_ticket_link():
 def test_build_records_default_venue():
     records = build_records(_make_event(stage=[]))
     assert records[0]["venue_name"] == "Sydhavn Teater"
+
+
+def test_build_records_where_overrides_stage():
+    sections = [{"data": [{"titleEnglish": "Where", "textEnglish": "Valbyparken"}]}]
+    records = build_records(_make_event(sections=sections))
+    assert records[0]["venue_name"] == "Valbyparken"
+
+
+def test_extract_where_returns_empty_when_missing():
+    assert _extract_where(_make_event()) == ""
+
+
+def test_extract_where_case_insensitive():
+    sections = [{"data": [{"titleEnglish": "WHERE", "textEnglish": "Somewhere"}]}]
+    assert _extract_where(_make_event(sections=sections)) == "Somewhere"
 
 
 def test_build_records_unknown_category_defaults_to_other():

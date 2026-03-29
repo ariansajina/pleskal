@@ -168,6 +168,16 @@ def _extract_when(event: dict) -> str:
     return ""
 
 
+def _extract_where(event: dict) -> str:
+    """Return the English 'Where' string from the dataTable sections, or ''."""
+    for section in event.get("sections") or []:
+        rows = section.get("data") or []
+        for row in rows:
+            if (row or {}).get("titleEnglish", "").strip().lower() == "where":
+                return (row.get("textEnglish") or "").strip()
+    return ""
+
+
 def _parse_time(token: str) -> datetime.time | None:
     """
     Parse a time token like '20.00', '18:00', '4.00 pm', '4 pm' into a
@@ -422,6 +432,9 @@ def build_records(event: dict) -> list[dict]:
 
     stages = event.get("stage") or []
     venue_name = stages[0]["title"] if stages else "Sydhavn Teater"
+    where_str = _extract_where(event)
+    if where_str:
+        venue_name = where_str
 
     categories = event.get("category") or []
     raw_category = categories[0]["title"].lower() if categories else ""
