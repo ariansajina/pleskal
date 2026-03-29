@@ -32,4 +32,25 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     syncActiveState();
+
+    // When switching past/upcoming, clear or restore date_from so it doesn't
+    // accidentally activate the date-range filter and bypass the toggle.
+    var pastRadios = form.querySelectorAll('[name="past"]');
+    pastRadios.forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            var dateFromInput = form.querySelector('[name="date_from"]');
+            var dateToInput = form.querySelector('[name="date_to"]');
+            if (this.value === '1') {
+                // Switching to past: clear date range so it stays inactive
+                dateFromInput.value = '';
+                dateToInput.value = '';
+            } else {
+                // Switching to upcoming: restore today as the lower bound
+                if (!dateFromInput.value) {
+                    dateFromInput.value = form.dataset.today || '';
+                }
+            }
+            syncActiveState();
+        });
+    });
 });
