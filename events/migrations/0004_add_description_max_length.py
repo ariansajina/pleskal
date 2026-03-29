@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='event',
             name='description',
-            field=models.TextField(blank=True, max_length=1500),
+            field=models.TextField(blank=True, max_length=2000),
         ),
     ]

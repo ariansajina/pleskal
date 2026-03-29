@@ -26,7 +26,7 @@ class Event(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     slug = models.SlugField(max_length=250, unique=True, editable=False)
     title = models.CharField(max_length=200)
-    description = models.TextField(blank=True, max_length=1500)
+    description = models.TextField(blank=True, max_length=2000)
     image = models.ImageField(
         upload_to="events/",
         blank=True,

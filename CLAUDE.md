@@ -235,7 +235,7 @@ Extends `AbstractBaseUser` + `PermissionsMixin`, UUID primary key, email-based a
 | `email` | Required, unique; used as `USERNAME_FIELD` |
 | `display_name` | Optional, max 100 chars; shown in public UI |
 | `display_name_slug` | Auto-generated unique slug (from display_name or email prefix) |
-| `bio` | Markdown, 1500 chars max |
+| `bio` | Markdown, 2000 chars max |
 | `website` | Optional URL |
 | `is_active` | Boolean, default True |
 | `is_staff` | Boolean, default False |

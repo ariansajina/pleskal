@@ -12,6 +12,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="user",
             name="bio",
-            field=models.TextField(blank=True, max_length=1500),
+            field=models.TextField(blank=True, max_length=2000),
         ),
     ]

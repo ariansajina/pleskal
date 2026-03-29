@@ -22,7 +22,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     display_name = models.CharField(blank=True, max_length=100)
     display_name_slug = models.SlugField(max_length=110, unique=True, blank=True)
-    bio = models.TextField(blank=True, max_length=1500)
+    bio = models.TextField(blank=True, max_length=2000)
     website = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
