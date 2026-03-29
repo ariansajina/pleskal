@@ -8,7 +8,66 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from scrapers.base import build_arg_parser, get_soup, scrape_url_list, write_output
+from scrapers.base import (
+    build_arg_parser,
+    get_crawl_delay,
+    get_soup,
+    make_session,
+    scrape_url_list,
+    write_output,
+)
+
+# ── make_session ─────────────────────────────────────────────────────────────
+
+
+def test_make_session_returns_session():
+    session = make_session()
+    assert isinstance(session, requests.Session)
+
+
+def test_make_session_has_retry_adapter():
+    session = make_session()
+    adapter = session.get_adapter("https://example.com")
+    assert adapter is not None
+    assert adapter.max_retries.total == 3
+
+
+# ── get_crawl_delay ───────────────────────────────────────────────────────────
+
+
+def test_get_crawl_delay_returns_float_when_set():
+    with patch("scrapers.base.urllib.robotparser.RobotFileParser") as mock_rfp_cls:
+        mock_rfp = MagicMock()
+        mock_rfp.crawl_delay.return_value = 2
+        mock_rfp_cls.return_value = mock_rfp
+
+        result = get_crawl_delay("https://example.com")
+
+    assert result == 2.0
+    assert isinstance(result, float)
+
+
+def test_get_crawl_delay_returns_none_when_not_set():
+    with patch("scrapers.base.urllib.robotparser.RobotFileParser") as mock_rfp_cls:
+        mock_rfp = MagicMock()
+        mock_rfp.crawl_delay.return_value = None
+        mock_rfp_cls.return_value = mock_rfp
+
+        result = get_crawl_delay("https://example.com")
+
+    assert result is None
+
+
+def test_get_crawl_delay_returns_none_on_error():
+    with patch("scrapers.base.urllib.robotparser.RobotFileParser") as mock_rfp_cls:
+        mock_rfp = MagicMock()
+        mock_rfp.read.side_effect = OSError("connection refused")
+        mock_rfp_cls.return_value = mock_rfp
+
+        result = get_crawl_delay("https://example.com")
+
+    assert result is None
+
 
 # ── get_soup ──────────────────────────────────────────────────────────────────
 

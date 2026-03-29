@@ -738,3 +738,152 @@ class TestCategoryScope:
         assert Event.objects.filter(
             source_url=self.FUTURE_WORKSHOP["source_url"]
         ).exists(), "Workshop event must not be deleted by regular importer"
+
+
+# ===========================================================================
+# import_kbhdanser tests
+# ===========================================================================
+
+KBHDANSER_SAMPLE_EVENT = {
+    "source_url": "https://kbhdanser.dk/en/chroniques/",
+    "start_datetime": "2030-05-21T17:30:00+00:00",
+    "end_datetime": None,
+    "title": "Chroniques",
+    "description": "A captivating performance by Peeping Tom.",
+    "venue_name": "Østre Gasværk Teater",
+    "venue_address": "Nyborggade 17, 2100 København Ø",
+    "category": "performance",
+    "is_free": False,
+    "is_wheelchair_accessible": False,
+    "price_note": "See ticket link for pricing",
+    "image_url": "",
+}
+
+
+@pytest.mark.django_db
+class TestImportKbhdanserErrors:
+    def test_missing_file_raises(self, tmp_path):
+        with pytest.raises(CommandError, match="File not found"):
+            call_command("import_kbhdanser", str(tmp_path / "missing.json"))
+
+    def test_invalid_json_raises(self, tmp_path):
+        f = tmp_path / "bad.json"
+        f.write_text("not valid json", encoding="utf-8")
+        with pytest.raises(CommandError, match="Invalid JSON"):
+            call_command("import_kbhdanser", str(f))
+
+    def test_non_list_json_raises(self, tmp_path):
+        f = tmp_path / "bad.json"
+        f.write_text('{"key": "val"}', encoding="utf-8")
+        with pytest.raises(CommandError, match="top-level list"):
+            call_command("import_kbhdanser", str(f))
+
+
+@pytest.mark.django_db
+class TestImportKbhdanserCRUD:
+    def test_creates_new_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([KBHDANSER_SAMPLE_EVENT], f)
+        call_command("import_kbhdanser", str(f))
+        assert Event.objects.filter(external_source="kbhdanser").count() == 1
+        event = Event.objects.get(external_source="kbhdanser")
+        assert event.title == "Chroniques"
+        assert event.venue_name == "Østre Gasværk Teater"
+
+    def test_updates_changed_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([KBHDANSER_SAMPLE_EVENT], f)
+        call_command("import_kbhdanser", str(f))
+
+        updated = {**KBHDANSER_SAMPLE_EVENT, "title": "Chroniques Updated"}
+        _write_json([updated], f)
+        call_command("import_kbhdanser", str(f))
+
+        assert Event.objects.filter(external_source="kbhdanser").count() == 1
+        assert (
+            Event.objects.get(external_source="kbhdanser").title == "Chroniques Updated"
+        )
+
+    def test_unchanged_event_is_skipped(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([KBHDANSER_SAMPLE_EVENT], f)
+        call_command("import_kbhdanser", str(f))
+        call_command("import_kbhdanser", str(f))
+        assert Event.objects.filter(external_source="kbhdanser").count() == 1
+
+    def test_deletes_stale_events(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([KBHDANSER_SAMPLE_EVENT], f)
+        call_command("import_kbhdanser", str(f))
+        assert Event.objects.filter(external_source="kbhdanser").count() == 1
+
+        _write_json([], f)
+        call_command("import_kbhdanser", str(f))
+        assert Event.objects.filter(external_source="kbhdanser").count() == 0
+
+    def test_no_delete_preserves_stale_events(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([KBHDANSER_SAMPLE_EVENT], f)
+        call_command("import_kbhdanser", str(f))
+
+        _write_json([], f)
+        call_command("import_kbhdanser", str(f), no_delete=True)
+        assert Event.objects.filter(external_source="kbhdanser").count() == 1
+
+    def test_dry_run_does_not_create(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([KBHDANSER_SAMPLE_EVENT], f)
+        call_command("import_kbhdanser", str(f), dry_run=True)
+        assert Event.objects.filter(external_source="kbhdanser").count() == 0
+
+    def test_multiple_performances_same_event_url(self, tmp_path):
+        """Multiple performances (same source_url, different start_datetime) are all created."""
+        perf2 = {
+            **KBHDANSER_SAMPLE_EVENT,
+            "start_datetime": "2030-05-22T17:30:00+00:00",
+        }
+        f = tmp_path / "events.json"
+        _write_json([KBHDANSER_SAMPLE_EVENT, perf2], f)
+        call_command("import_kbhdanser", str(f))
+        assert Event.objects.filter(external_source="kbhdanser").count() == 2
+
+
+# ===========================================================================
+# import_toastercph tests
+# ===========================================================================
+
+TOASTERCPH_SAMPLE_EVENT = {
+    "source_url": "https://toastercph.dk/event/test-event",
+    "start_datetime": "2030-06-01T18:00:00+02:00",
+    "end_datetime": None,
+    "title": "Test Toaster Event",
+    "description": "A test toastercph event",
+    "venue_name": "Toaster CPH",
+    "venue_address": "",
+    "category": "performance",
+    "is_free": False,
+    "is_wheelchair_accessible": False,
+    "price_note": "",
+    "image_url": "",
+}
+
+
+@pytest.mark.django_db
+class TestImportToastercphCRUD:
+    def test_creates_new_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([TOASTERCPH_SAMPLE_EVENT], f)
+        call_command("import_toastercph", str(f))
+        assert Event.objects.filter(external_source="toastercph").count() == 1
+        event = Event.objects.get(external_source="toastercph")
+        assert event.title == "Test Toaster Event"
+
+    def test_missing_file_raises(self, tmp_path):
+        with pytest.raises(CommandError, match="File not found"):
+            call_command("import_toastercph", str(tmp_path / "missing.json"))
+
+    def test_dry_run_does_not_create(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([TOASTERCPH_SAMPLE_EVENT], f)
+        call_command("import_toastercph", str(f), dry_run=True)
+        assert Event.objects.filter(external_source="toastercph").count() == 0

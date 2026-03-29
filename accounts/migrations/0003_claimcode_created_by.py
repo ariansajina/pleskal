@@ -6,15 +6,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0002_configure_site'),
+        ("accounts", "0002_configure_site"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='claimcode',
-            name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_claim_codes', to=settings.AUTH_USER_MODEL),
+            model_name="claimcode",
+            name="created_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="created_claim_codes",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
     ]
