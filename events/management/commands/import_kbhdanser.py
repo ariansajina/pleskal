@@ -16,8 +16,7 @@ from events.management.commands.base_import import BaseEventImportCommand
 
 class Command(BaseEventImportCommand):
     help = (
-        "Ingest kbhdanser.dk events from a JSON file produced by "
-        "scrapers/kbhdanser.py"
+        "Ingest kbhdanser.dk events from a JSON file produced by scrapers/kbhdanser.py"
     )
     external_source = "kbhdanser"
     default_json_file = "kbhdanser_events.json"
