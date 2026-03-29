@@ -4,6 +4,7 @@ import datetime
 
 from scrapers.sydhavnteater import (
     CATEGORY_MAP,
+    CPH_TZ,
     _extract_where,
     build_records,
     is_upcoming,
@@ -278,12 +279,12 @@ def test_build_records_five_day_range_with_simple_time():
 
 
 def test_build_records_two_times_same_day():
-    # "at 16.00 & 18.00" → 1 record per day, price_note has both times
+    # "at 16.00 & 18.00" → 1 record per day, start_datetime uses the first time
     sections = [{"data": [{"titleEnglish": "When", "textEnglish": "at 16.00 & 18.00"}]}]
     records = build_records(_make_event(sections=sections))
     assert len(records) == 1
-    assert "16" in records[0]["price_note"]
-    assert "18" in records[0]["price_note"]
+    start = datetime.datetime.fromisoformat(records[0]["start_datetime"])
+    assert start.astimezone(CPH_TZ).hour == 16
 
 
 def test_build_records_weekly_schedule_filters_days():

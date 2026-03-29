@@ -22,6 +22,7 @@ import markdownify
 import requests
 from bs4 import BeautifulSoup, Tag
 
+from events.models import MAX_PRICE_NOTE_LENGTH, MAX_VENUE_LENGTH
 from scrapers.base import (
     build_arg_parser,
     get_crawl_delay,
@@ -254,7 +255,7 @@ def scrape_detail(url: str, session: requests.Session) -> dict | None:
     # ── Venue / address ───────────────────────────────────────────────────────
     place_text = _get_info_row_value(info_div, "place")
     venue_name = "HAUT scene"
-    venue_address = place_text[:200]
+    venue_address = place_text[:MAX_VENUE_LENGTH]
 
     # ── Description ───────────────────────────────────────────────────────────
     # The description lives in .section-event-research, identified by a
@@ -304,7 +305,7 @@ def scrape_detail(url: str, session: requests.Session) -> dict | None:
     booking_div = soup.select_one("div.booking-info .w-richtext")
     if booking_div:
         booking_text = booking_div.get_text(" ", strip=True)
-        price_note = booking_text[:200]
+        price_note = booking_text[:MAX_PRICE_NOTE_LENGTH]
         lower = booking_text.lower()
         if re.search(
             r"free admission|free entry|gratis|free of charge|no charge", lower

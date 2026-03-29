@@ -333,47 +333,15 @@ def _extract_description(soup: BeautifulSoup) -> str:
     return "\n\n".join(paragraphs)
 
 
-def _extract_performances(
-    soup: BeautifulSoup,
-    event_url: str,
-) -> list[dict]:
+def _extract_performances(soup: BeautifulSoup) -> list[dict]:
     """
     Extract performance blocks from a detail page.
 
-    Each block contains: venue_name, venue_address, dates (list of
-    {date, time}), ticket_url.
+    Each block contains: venue_name, venue_address, dates (list of {date, time}).
 
     Returns a flat list of performance dicts, one per date/time entry.
     """
-    # Gather all text from the page for date extraction.
-    # We walk through the page looking for venue headings followed by date lines
-    # and ticket links.
     full_text = soup.get_text("\n")
-
-    # First, collect all ticket links
-    ticket_urls: list[str] = []
-    for a in soup.find_all("a", href=True):
-        href = str(a["href"])
-        link_text = a.get_text(strip=True).lower()
-        if (
-            "billet" in link_text
-            or "ticket" in link_text
-            or "køb" in link_text
-            or re.search(
-                r"billet\.(gasvaerket|kongeligeteater)\.dk|billetlugen\.dk"
-                r"|musikhuset\.dk/kalender",
-                href,
-            )
-        ):
-            ticket_urls.append(href)
-    # Deduplicate while preserving order
-    seen_tickets: set[str] = set()
-    unique_tickets: list[str] = []
-    for t in ticket_urls:
-        if t not in seen_tickets:
-            seen_tickets.add(t)
-            unique_tickets.append(t)
-    ticket_urls = unique_tickets
 
     # Parse all dates from the page text
     date_time_pairs = parse_dates(full_text)
@@ -384,19 +352,16 @@ def _extract_performances(
     if not date_time_pairs:
         return []
 
-    # Try to identify venue blocks by finding known venue names in the text.
-    # We'll look for lines that match known venues.
     performances: list[dict] = []
 
     # Split text into lines and scan for venue headers + associated dates
     lines = [line.strip() for line in full_text.split("\n") if line.strip()]
 
-    # Build a structure: list of (venue_raw, [date_time_pairs], ticket_url)
+    # Build a structure: list of (venue_raw, [date_time_pairs])
     # by scanning through lines.
     venue_blocks: list[dict] = []
     current_venue: str | None = None
     current_dates: list[tuple[datetime.date, datetime.time | None]] = []
-    current_ticket: str | None = None
 
     def _is_venue_line(line: str) -> bool:
         """Heuristic: line matches a known venue or is ALL CAPS location."""
@@ -411,16 +376,9 @@ def _extract_performances(
         if _is_venue_line(line):
             # Save previous block if it has dates
             if current_venue and current_dates:
-                venue_blocks.append(
-                    {
-                        "venue": current_venue,
-                        "dates": current_dates,
-                        "ticket": current_ticket,
-                    }
-                )
+                venue_blocks.append({"venue": current_venue, "dates": current_dates})
             current_venue = line
             current_dates = []
-            current_ticket = None
             continue
 
         # Check if line contains a date
@@ -429,66 +387,32 @@ def _extract_performances(
             for d, t in pairs:
                 if d >= today:
                     current_dates.append((d, t))
-            continue
-
-        # Check if line contains a ticket URL signal
-        for tu in ticket_urls:
-            if tu in line or line in tu:
-                current_ticket = tu
-                break
 
     # Flush last block
     if current_venue and current_dates:
-        venue_blocks.append(
-            {
-                "venue": current_venue,
-                "dates": current_dates,
-                "ticket": current_ticket,
-            }
-        )
+        venue_blocks.append({"venue": current_venue, "dates": current_dates})
 
     # If we found venue blocks, use them; otherwise use all dates under a
     # single default venue.
     if venue_blocks:
-        # Distribute ticket URLs across blocks if we have more blocks than tickets
-        for i, block in enumerate(venue_blocks):
-            if block["ticket"] is None and ticket_urls:
-                block["ticket"] = ticket_urls[min(i, len(ticket_urls) - 1)]
-
         for block in venue_blocks:
             venue_display, venue_address = lookup_venue(block["venue"])
-            ticket_url = block["ticket"] or ""
-            price_note = (
-                f"See ticket link for pricing: {ticket_url}"
-                if ticket_url
-                else "See ticket link for pricing"
-            )
             for d, t in block["dates"]:
                 performances.append(
                     {
                         "venue_name": venue_display,
                         "venue_address": venue_address or "",
                         "start_datetime": make_dt(d, t).isoformat(),
-                        "ticket_url": ticket_url,
-                        "price_note": price_note,
                     }
                 )
     else:
-        # Fallback: no venue blocks found — use all dates with a generic ticket URL
-        ticket_url = ticket_urls[0] if ticket_urls else ""
-        price_note = (
-            f"See ticket link for pricing: {ticket_url}"
-            if ticket_url
-            else "See ticket link for pricing"
-        )
+        # Fallback: no venue blocks found — use all dates with no venue
         for d, t in date_time_pairs:
             performances.append(
                 {
                     "venue_name": "",
                     "venue_address": "",
                     "start_datetime": make_dt(d, t).isoformat(),
-                    "ticket_url": ticket_url,
-                    "price_note": price_note,
                 }
             )
 
@@ -570,7 +494,7 @@ def scrape_detail(
         image_url = card.get("image_url", "")
 
     # Performances
-    performances = _extract_performances(soup, detail_url)
+    performances = _extract_performances(soup)
     if not performances:
         log.info("No future performances found for %s — skipping", detail_url)
         return []
@@ -588,7 +512,7 @@ def scrape_detail(
                 "category": "performance",
                 "is_free": False,
                 "is_wheelchair_accessible": False,
-                "price_note": perf["price_note"],
+                "price_note": "",
                 "source_url": detail_url,
                 "external_source": EXTERNAL_SOURCE,
                 "image_url": image_url,

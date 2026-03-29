@@ -470,13 +470,6 @@ def build_records(event: dict) -> list[dict]:
 
         if times:
             start_dt = _dt_at_time(current, times[0])
-            if len(times) > 1:
-                formatted = " & ".join(
-                    t.strftime("%H:%M").replace(":00", ".00") for t in times
-                )
-                time_note = f"Showtime: {formatted}"
-            else:
-                time_note = ""
         else:
             # Midnight fallback
             start_dt = datetime.datetime(
@@ -487,7 +480,6 @@ def build_records(event: dict) -> list[dict]:
                 0,
                 tzinfo=CPH_TZ,
             ).astimezone(datetime.UTC)
-            time_note = ""
 
         records.append(
             {
@@ -500,7 +492,7 @@ def build_records(event: dict) -> list[dict]:
                 "category": category,
                 "is_free": is_free,
                 "is_wheelchair_accessible": False,
-                "price_note": time_note,
+                "price_note": "",
                 "source_url": source_url,
                 "external_source": EXTERNAL_SOURCE,
                 "image_url": image_url,

@@ -446,7 +446,7 @@ def test_extract_performances_future_dates_included(mock_dt):
       <a href="https://billet.gasvaerket.dk/da/buyingflow/tickets/30755/">KØB BILLET</a>
     </body></html>
     """
-    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/chroniques/")
+    perfs = _extract_performances(_soup(html))
     assert len(perfs) >= 2
     start_dates = [p["start_datetime"][:10] for p in perfs]
     assert "2026-05-21" in start_dates
@@ -468,48 +468,8 @@ def test_extract_performances_past_dates_excluded(mock_dt):
       <p>11. januar 2026. kl. 19:30</p>
     </body></html>
     """
-    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/broken-theater/")
+    perfs = _extract_performances(_soup(html))
     assert perfs == []
-
-
-@patch("scrapers.kbhdanser.datetime")
-def test_extract_performances_ticket_url_captured(mock_dt):
-    mock_dt.date.today.return_value = _FIXED_TODAY
-    mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
-    mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
-    mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
-    mock_dt.UTC = datetime.UTC
-
-    ticket_url = "https://billet.gasvaerket.dk/da/buyingflow/tickets/30755/"
-    html = f"""
-    <html><body>
-      <p>ØSTRE GASVÆRK TEATER</p>
-      <p>21. maj 2026. kl. 19:30</p>
-      <a href="{ticket_url}">KØB BILLET</a>
-    </body></html>
-    """
-    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/chroniques/")
-    assert len(perfs) >= 1
-    assert any(p["ticket_url"] == ticket_url for p in perfs)
-
-
-@patch("scrapers.kbhdanser.datetime")
-def test_extract_performances_price_note_set(mock_dt):
-    mock_dt.date.today.return_value = _FIXED_TODAY
-    mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
-    mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
-    mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
-    mock_dt.UTC = datetime.UTC
-
-    html = """
-    <html><body>
-      <p>GAMLE SCENE</p>
-      <p>26. september 2026. kl. 20:00</p>
-    </body></html>
-    """
-    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/afanador/")
-    assert len(perfs) >= 1
-    assert "See ticket link for pricing" in perfs[0]["price_note"]
 
 
 @patch("scrapers.kbhdanser.datetime")
@@ -526,7 +486,7 @@ def test_extract_performances_venue_address_looked_up(mock_dt):
       <p>21. maj 2026. kl. 19:30</p>
     </body></html>
     """
-    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/chroniques/")
+    perfs = _extract_performances(_soup(html))
     assert len(perfs) >= 1
     assert perfs[0]["venue_address"] == "Nyborggade 17, 2100 København Ø"
 
@@ -827,25 +787,22 @@ def test_extract_performances_fallback_when_no_venue_blocks(mock_dt):
     mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
     mock_dt.UTC = datetime.UTC
 
-    # No venue line — just future dates and a ticket link
     html = """
     <html><body>
       <h1>Mysterious Show</h1>
       <p>21. maj 2026. kl. 19:30</p>
       <p>22. maj 2026. kl. 19:30</p>
-      <a href="https://billet.gasvaerket.dk/da/buyingflow/tickets/99/">KØB BILLET</a>
     </body></html>
     """
-    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/mystery/")
+    perfs = _extract_performances(_soup(html))
     assert len(perfs) >= 2
     assert perfs[0]["venue_name"] == ""
     assert perfs[0]["venue_address"] == ""
-    assert "See ticket link for pricing" in perfs[0]["price_note"]
 
 
 @patch("scrapers.kbhdanser.datetime")
-def test_extract_performances_fallback_no_ticket(mock_dt):
-    """Fallback path with no ticket URL sets price_note without URL."""
+def test_extract_performances_fallback_single_date(mock_dt):
+    """Fallback path with a single date returns one record."""
     mock_dt.date.today.return_value = _FIXED_TODAY
     mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
     mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
@@ -857,37 +814,9 @@ def test_extract_performances_fallback_no_ticket(mock_dt):
       <p>21. maj 2026. kl. 19:30</p>
     </body></html>
     """
-    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/show/")
+    perfs = _extract_performances(_soup(html))
     assert len(perfs) == 1
-    assert perfs[0]["price_note"] == "See ticket link for pricing"
-    assert perfs[0]["ticket_url"] == ""
-
-
-# ── _extract_performances (ticket URL in text line) ───────────────────────────
-
-
-@patch("scrapers.kbhdanser.datetime")
-def test_extract_performances_ticket_url_matched_from_text_line(mock_dt):
-    """Ticket URL appearing as a text line is matched in the venue-block scan."""
-    mock_dt.date.today.return_value = _FIXED_TODAY
-    mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
-    mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
-    mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
-    mock_dt.UTC = datetime.UTC
-
-    ticket_url = "https://billet.gasvaerket.dk/da/buyingflow/tickets/30755/"
-    # The <a> tag text is the URL itself, so it appears as a text line in
-    # get_text() output and matches the ticket URL in the venue-block scan.
-    html = f"""
-    <html><body>
-      <p>ØSTRE GASVÆRK TEATER</p>
-      <p>21. maj 2026. kl. 19:30</p>
-      <a href="{ticket_url}">{ticket_url}</a>
-    </body></html>
-    """
-    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/chroniques/")
-    assert len(perfs) >= 1
-    assert perfs[0]["ticket_url"] == ticket_url
+    assert "start_datetime" in perfs[0]
 
 
 # ── scrape() ─────────────────────────────────────────────────────────────────
@@ -912,7 +841,7 @@ _SAMPLE_RECORD = {
     "category": "performance",
     "is_free": False,
     "is_wheelchair_accessible": False,
-    "price_note": "See ticket link for pricing",
+    "price_note": "",
     "source_url": "https://kbhdanser.dk/chroniques/",
     "external_source": "kbhdanser",
     "image_url": "https://kbhdanser.dk/wp-content/uploads/chroniques.webp",
