@@ -9,7 +9,7 @@ from django.utils.text import slugify
 
 from .validators import validate_url_scheme
 
-# Field length constraints
+# Field length constraints; need to makemigrations if this is updated
 MAX_TITLE_LENGTH = 250
 MAX_VENUE_LENGTH = 200
 MAX_PRICE_NOTE_LENGTH = 200
