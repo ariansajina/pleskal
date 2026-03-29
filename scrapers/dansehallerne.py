@@ -256,7 +256,12 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
     category = map_category(raw_type)
     venue_name, address = parse_venue_address(meta.get("venue", ""))
 
-    title = meta.get("title", "") or meta.get("artist", "")
+    title = meta.get("title", "")
+    artist = meta.get("artist", "")
+    if title and artist:
+        title = f"{title} by {artist}"
+    elif not title:
+        title = artist
     if not title:
         log.warning("No title found at %s", url)
         return []

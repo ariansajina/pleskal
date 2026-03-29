@@ -92,7 +92,12 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
     image_url = parse_image_url(soup)
     venue_name, address = parse_venue_address(meta.get("venue", ""))
 
-    title = meta.get("title", "") or meta.get("artist", "")
+    title = meta.get("title", "")
+    artist = meta.get("artist", "")
+    if title and artist:
+        title = f"{title} by {artist}"
+    elif not title:
+        title = artist
     if not title:
         log.warning("No title found at %s", url)
         return []
