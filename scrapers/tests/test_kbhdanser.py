@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import sys
 import zoneinfo
 from unittest.mock import MagicMock, patch
 
@@ -17,8 +18,10 @@ from scrapers.kbhdanser import (
     _parse_english_dates,
     collect_event_cards,
     lookup_venue,
+    main,
     make_dt,
     parse_dates,
+    scrape,
     scrape_detail,
 )
 
@@ -690,3 +693,352 @@ def test_scrape_detail_uses_card_image_as_fallback(mock_dt):
     assert (
         records[0]["image_url"] == "https://kbhdanser.dk/wp-content/uploads/card.webp"
     )
+
+
+@patch("scrapers.kbhdanser.datetime")
+def test_scrape_detail_en_page_fetch_error_falls_back_to_danish(mock_dt):
+    """When fetching the EN page raises HTTPError, fall back to the Danish page."""
+    mock_dt.date.today.return_value = _FIXED_TODAY
+    mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+    mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
+    mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
+    mock_dt.UTC = datetime.UTC
+
+    danish_html = """
+    <html><body>
+      <a href="https://kbhdanser.dk/en/show/">EN</a>
+      <h1>Show DA</h1>
+      <p>ØSTRE GASVÆRK TEATER</p>
+      <p>21. maj 2026. kl. 19:30</p>
+    </body></html>
+    """
+    session = MagicMock()
+    resp_ok = MagicMock()
+    resp_ok.text = danish_html
+    resp_ok.raise_for_status.return_value = None
+    resp_err = MagicMock()
+    resp_err.raise_for_status.side_effect = requests.HTTPError("503")
+    # First call (Danish page) succeeds; second (EN page) fails
+    session.get.side_effect = [resp_ok, resp_err]
+
+    card = {
+        "title": "Show",
+        "artists": "",
+        "detail_url": "https://kbhdanser.dk/show/",
+        "image_url": "",
+    }
+    records = scrape_detail(card, session, delay=0)
+    # Should still return records using the successfully fetched Danish page
+    assert len(records) >= 1
+    assert records[0]["title"] == "Show DA"
+    assert records[0]["source_url"] == "https://kbhdanser.dk/show/"
+
+
+# ── lookup_venue (loop branch) ────────────────────────────────────────────────
+
+
+def test_lookup_venue_loop_substring_match():
+    """A name that's a substring of a known venue key hits the loop path."""
+    name, address = lookup_venue("Gasværk")
+    # "gasværk" is contained in the key "østre gasværk teater"
+    assert address is not None
+    assert "Nyborggade" in address
+
+
+# ── Date parser edge cases (ValueError paths) ─────────────────────────────────
+
+
+def test_parse_danish_date_invalid_day_skipped():
+    """Day 32 matches the regex but fails datetime.date() — should be skipped."""
+    results = _parse_danish_dates("32. maj 2026")
+    assert results == []
+
+
+def test_parse_english_date_invalid_day_skipped():
+    """February 30th matches the regex but fails datetime.date() — skipped."""
+    results = _parse_english_dates("February 30th, 2026")
+    assert results == []
+
+
+# ── collect_event_cards (extra branch coverage) ───────────────────────────────
+
+
+def test_collect_event_cards_external_link_excluded():
+    """Links to external domains are excluded."""
+    html = """
+    <html><body>
+      <a href="https://external.com/show/"><h1>External Show</h1></a>
+      <a href="https://kbhdanser.dk/local/"><h1>Local Show</h1></a>
+    </body></html>
+    """
+    cards = collect_event_cards(_soup(html))
+    titles = [c["title"] for c in cards]
+    assert "External Show" not in titles
+    assert "Local Show" in titles
+
+
+def test_collect_event_cards_whitespace_only_h1_excluded():
+    """An h1 containing only whitespace is treated as empty title and skipped."""
+    html = """
+    <html><body>
+      <a href="https://kbhdanser.dk/show/"><h1>   </h1></a>
+      <a href="https://kbhdanser.dk/valid/"><h1>Valid Show</h1></a>
+    </body></html>
+    """
+    cards = collect_event_cards(_soup(html))
+    urls = [c["detail_url"] for c in cards]
+    assert "https://kbhdanser.dk/show/" not in urls
+    assert "https://kbhdanser.dk/valid/" in urls
+
+
+# ── _extract_description (credit-line skip) ───────────────────────────────────
+
+
+def test_extract_description_skips_credit_role_lines():
+    """Paragraphs matching 'Role: name' pattern (credits) are excluded."""
+    html = """
+    <html><body>
+      <p>Direction: Some Director working on this amazing production of dance.</p>
+      <p>Choreography: Another Person creating this beautiful movement piece.</p>
+      <p>A captivating performance that explores the boundaries of contemporary dance.</p>
+    </body></html>
+    """
+    desc = _extract_description(_soup(html))
+    assert "Direction:" not in desc
+    assert "Choreography:" not in desc
+    assert "captivating performance" in desc
+
+
+# ── _extract_performances (no-venue fallback) ────────────────────────────────
+
+
+@patch("scrapers.kbhdanser.datetime")
+def test_extract_performances_fallback_when_no_venue_blocks(mock_dt):
+    """When no venue lines are found, all future dates are returned under empty venue."""
+    mock_dt.date.today.return_value = _FIXED_TODAY
+    mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+    mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
+    mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
+    mock_dt.UTC = datetime.UTC
+
+    # No venue line — just future dates and a ticket link
+    html = """
+    <html><body>
+      <h1>Mysterious Show</h1>
+      <p>21. maj 2026. kl. 19:30</p>
+      <p>22. maj 2026. kl. 19:30</p>
+      <a href="https://billet.gasvaerket.dk/da/buyingflow/tickets/99/">KØB BILLET</a>
+    </body></html>
+    """
+    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/mystery/")
+    assert len(perfs) >= 2
+    assert perfs[0]["venue_name"] == ""
+    assert perfs[0]["venue_address"] == ""
+    assert "See ticket link for pricing" in perfs[0]["price_note"]
+
+
+@patch("scrapers.kbhdanser.datetime")
+def test_extract_performances_fallback_no_ticket(mock_dt):
+    """Fallback path with no ticket URL sets price_note without URL."""
+    mock_dt.date.today.return_value = _FIXED_TODAY
+    mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+    mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
+    mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
+    mock_dt.UTC = datetime.UTC
+
+    html = """
+    <html><body>
+      <p>21. maj 2026. kl. 19:30</p>
+    </body></html>
+    """
+    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/show/")
+    assert len(perfs) == 1
+    assert perfs[0]["price_note"] == "See ticket link for pricing"
+    assert perfs[0]["ticket_url"] == ""
+
+
+# ── _extract_performances (ticket URL in text line) ───────────────────────────
+
+
+@patch("scrapers.kbhdanser.datetime")
+def test_extract_performances_ticket_url_matched_from_text_line(mock_dt):
+    """Ticket URL appearing as a text line is matched in the venue-block scan."""
+    mock_dt.date.today.return_value = _FIXED_TODAY
+    mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+    mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
+    mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
+    mock_dt.UTC = datetime.UTC
+
+    ticket_url = "https://billet.gasvaerket.dk/da/buyingflow/tickets/30755/"
+    # The <a> tag text is the URL itself, so it appears as a text line in
+    # get_text() output and matches the ticket URL in the venue-block scan.
+    html = f"""
+    <html><body>
+      <p>ØSTRE GASVÆRK TEATER</p>
+      <p>21. maj 2026. kl. 19:30</p>
+      <a href="{ticket_url}">{ticket_url}</a>
+    </body></html>
+    """
+    perfs = _extract_performances(_soup(html), "https://kbhdanser.dk/chroniques/")
+    assert len(perfs) >= 1
+    assert perfs[0]["ticket_url"] == ticket_url
+
+
+# ── scrape() ─────────────────────────────────────────────────────────────────
+
+_HOMEPAGE_WITH_CARDS = """
+<html><body>
+  <a href="https://kbhdanser.dk/chroniques/">
+    <img src="https://kbhdanser.dk/wp-content/uploads/chroniques.webp">
+    <h1>Chroniques</h1>
+    <h2>Peeping Tom</h2>
+  </a>
+</body></html>
+"""
+
+_SAMPLE_RECORD = {
+    "title": "Chroniques",
+    "description": "A great show.",
+    "start_datetime": "2026-05-21T17:30:00+00:00",
+    "end_datetime": None,
+    "venue_name": "Østre Gasværk Teater",
+    "venue_address": "Nyborggade 17, 2100 København Ø",
+    "category": "performance",
+    "is_free": False,
+    "is_wheelchair_accessible": False,
+    "price_note": "See ticket link for pricing",
+    "source_url": "https://kbhdanser.dk/chroniques/",
+    "external_source": "kbhdanser",
+    "image_url": "https://kbhdanser.dk/wp-content/uploads/chroniques.webp",
+}
+
+
+def _make_scrape_mocks(home_html: str, detail_records: list[dict]):
+    """Return (mock_session, mock_get_soup, mock_scrape_detail, mock_crawl_delay)."""
+    mock_session = MagicMock()
+    home_soup = BeautifulSoup(home_html, "lxml")
+
+    def fake_get_soup(url, session):
+        return home_soup
+
+    return mock_session, fake_get_soup, detail_records
+
+
+@patch("scrapers.kbhdanser.time")
+@patch("scrapers.kbhdanser.scrape_detail")
+@patch("scrapers.kbhdanser.get_soup")
+@patch("scrapers.kbhdanser.get_crawl_delay", return_value=None)
+@patch("scrapers.kbhdanser.make_session")
+def test_scrape_returns_events(
+    mock_make_session, mock_crawl_delay, mock_get_soup, mock_scrape_detail, mock_time
+):
+    mock_session = MagicMock()
+    mock_make_session.return_value = mock_session
+    mock_get_soup.return_value = BeautifulSoup(_HOMEPAGE_WITH_CARDS, "lxml")
+    mock_scrape_detail.return_value = [_SAMPLE_RECORD]
+
+    result = scrape(delay=0)
+
+    assert len(result) == 1
+    assert result[0]["title"] == "Chroniques"
+    mock_scrape_detail.assert_called_once()
+
+
+@patch("scrapers.kbhdanser.get_soup")
+@patch("scrapers.kbhdanser.get_crawl_delay", return_value=None)
+@patch("scrapers.kbhdanser.make_session")
+def test_scrape_homepage_http_error_returns_empty(
+    mock_make_session, mock_crawl_delay, mock_get_soup
+):
+    mock_make_session.return_value = MagicMock()
+    mock_get_soup.side_effect = requests.HTTPError("500")
+
+    result = scrape(delay=0)
+    assert result == []
+
+
+@patch("scrapers.kbhdanser.get_soup")
+@patch("scrapers.kbhdanser.get_crawl_delay", return_value=None)
+@patch("scrapers.kbhdanser.make_session")
+def test_scrape_no_cards_returns_empty(
+    mock_make_session, mock_crawl_delay, mock_get_soup
+):
+    mock_make_session.return_value = MagicMock()
+    # Homepage has no event cards (no <a> with <h1>)
+    mock_get_soup.return_value = BeautifulSoup(
+        "<html><body><p>No events</p></body></html>", "lxml"
+    )
+
+    result = scrape(delay=0)
+    assert result == []
+
+
+@patch("scrapers.kbhdanser.time")
+@patch("scrapers.kbhdanser.scrape_detail")
+@patch("scrapers.kbhdanser.get_soup")
+@patch("scrapers.kbhdanser.get_crawl_delay", return_value=2.0)
+@patch("scrapers.kbhdanser.make_session")
+def test_scrape_crawl_delay_overrides_default(
+    mock_make_session, mock_crawl_delay, mock_get_soup, mock_scrape_detail, mock_time
+):
+    """robots.txt crawl-delay of 2.0s overrides the 0s default passed in."""
+    mock_make_session.return_value = MagicMock()
+    mock_get_soup.return_value = BeautifulSoup(_HOMEPAGE_WITH_CARDS, "lxml")
+    mock_scrape_detail.return_value = [_SAMPLE_RECORD]
+
+    scrape(delay=0)
+
+    # scrape_detail should have been called with the larger delay
+    _, kwargs = mock_scrape_detail.call_args
+    assert kwargs.get("delay", 0) == 2.0 or mock_scrape_detail.call_args[0][2] == 2.0
+
+
+@patch("scrapers.kbhdanser.time")
+@patch("scrapers.kbhdanser.scrape_detail")
+@patch("scrapers.kbhdanser.get_soup")
+@patch("scrapers.kbhdanser.get_crawl_delay", return_value=None)
+@patch("scrapers.kbhdanser.make_session")
+def test_scrape_sleeps_between_cards(
+    mock_make_session, mock_crawl_delay, mock_get_soup, mock_scrape_detail, mock_time
+):
+    """time.sleep is called between cards (not before the first)."""
+    homepage_with_two_cards = """
+    <html><body>
+      <a href="https://kbhdanser.dk/show-one/"><h1>Show One</h1></a>
+      <a href="https://kbhdanser.dk/show-two/"><h1>Show Two</h1></a>
+    </body></html>
+    """
+    mock_make_session.return_value = MagicMock()
+    mock_get_soup.return_value = BeautifulSoup(homepage_with_two_cards, "lxml")
+    mock_scrape_detail.return_value = []
+
+    scrape(delay=1.0)
+
+    # sleep called exactly once (between the two cards)
+    mock_time.sleep.assert_called_once_with(1.0)
+
+
+# ── main() ────────────────────────────────────────────────────────────────────
+
+
+@patch("scrapers.kbhdanser.write_output")
+@patch("scrapers.kbhdanser.scrape", return_value=[_SAMPLE_RECORD])
+def test_main_calls_scrape_and_write_output(mock_scrape, mock_write):
+    with patch.object(sys, "argv", ["kbhdanser.py"]):
+        main()
+
+    mock_scrape.assert_called_once()
+    mock_write.assert_called_once()
+    events_arg, output_arg, dry_run_arg = mock_write.call_args[0]
+    assert events_arg == [_SAMPLE_RECORD]
+    assert dry_run_arg is False
+
+
+@patch("scrapers.kbhdanser.write_output")
+@patch("scrapers.kbhdanser.scrape", return_value=[])
+def test_main_dry_run_flag(mock_scrape, mock_write):
+    with patch.object(sys, "argv", ["kbhdanser.py", "--dry-run"]):
+        main()
+
+    _, _, dry_run_arg = mock_write.call_args[0]
+    assert dry_run_arg is True
