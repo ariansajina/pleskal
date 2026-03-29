@@ -22,6 +22,7 @@
                    class="btn btn--ghost btn--sm"
                    hx-get="?{% if base_query_string %}{{ base_query_string }}&{% endif %}page={{ page_obj.previous_page_number }}"
                    hx-target="#event-list"
+                   hx-swap="innerHTML show:#event-list:top"
                    hx-push-url="true">
                     &larr; Prev
                 </a>
@@ -36,6 +37,7 @@
                    class="btn btn--ghost btn--sm"
                    hx-get="?{% if base_query_string %}{{ base_query_string }}&{% endif %}page={{ page_obj.next_page_number }}"
                    hx-target="#event-list"
+                   hx-swap="innerHTML show:#event-list:top"
                    hx-push-url="true">
                     Next &rarr;
                 </a>
