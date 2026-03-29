@@ -250,10 +250,11 @@ class BaseEventImportCommand(BaseCommand):
                             self.stdout.write(f"  UPDATE  {rec['title'][:60]}")
                         else:
                             try:
-                                for k, v in fields.items():
-                                    setattr(event, k, v)
-                                event.save()
-                                self._maybe_update_image(event, rec, skip_images)
+                                with transaction.atomic():
+                                    for k, v in fields.items():
+                                        setattr(event, k, v)
+                                    event.save()
+                                    self._maybe_update_image(event, rec, skip_images)
                                 self.stdout.write(
                                     self.style.SUCCESS(
                                         f"  UPDATED  {rec['title'][:60]}"
@@ -273,9 +274,10 @@ class BaseEventImportCommand(BaseCommand):
                         self.stdout.write(f"  CREATE  {rec['title'][:60]}")
                     else:
                         try:
-                            event = Event(**fields)
-                            event.save()
-                            self._maybe_update_image(event, rec, skip_images)
+                            with transaction.atomic():
+                                event = Event(**fields)
+                                event.save()
+                                self._maybe_update_image(event, rec, skip_images)
                             self.stdout.write(
                                 self.style.SUCCESS(f"  CREATED  {rec['title'][:60]}")
                             )
