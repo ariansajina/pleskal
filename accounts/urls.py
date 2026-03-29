@@ -6,6 +6,7 @@ from .views import (
     AccountProfileView,
     ChangePasswordView,
     EditProfileView,
+    MyInvitesView,
     PublisherProfileView,
     RateLimitedLoginView,
     RateLimitedPasswordResetView,
@@ -68,6 +69,11 @@ urlpatterns = [
         "profile/edit/",
         EditProfileView.as_view(),
         name="edit_profile",
+    ),
+    path(
+        "invites/",
+        MyInvitesView.as_view(),
+        name="my_invites",
     ),
     path(
         "publishers/<slug:slug>/",

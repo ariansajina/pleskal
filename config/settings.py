@@ -50,6 +50,8 @@ SITE_DOMAIN = env("SITE_DOMAIN", default="pleskal.dk")
 SITE_NAME = env("SITE_NAME", default="pleskal")
 
 MAX_UPCOMING_EVENTS_PER_USER = env.int("MAX_UPCOMING_EVENTS_PER_USER", default=100)
+CLAIM_CODES_PER_BATCH = env.int("CLAIM_CODES_PER_BATCH", default=3)
+CLAIM_CODE_EXPIRY_DAYS = env.int("CLAIM_CODE_EXPIRY_DAYS", default=30)
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

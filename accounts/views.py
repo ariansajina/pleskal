@@ -1,11 +1,13 @@
 import logging
+from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, logout, update_session_auth_hash
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
@@ -18,7 +20,7 @@ from .forms import (
     CustomAuthenticationForm,
     ProfileForm,
 )
-from .models import ClaimCode
+from .models import ClaimCode, generate_claim_code
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -264,3 +266,74 @@ class ClaimRegisterView(View):
             "link before logging in.",
         )
         return redirect("login")
+
+
+class MyInvitesView(LoginRequiredMixin, View):
+    def _get_filter_and_codes(self, request):
+        now = timezone.now()
+        active_filter = request.GET.get("filter", "all")
+        qs = ClaimCode.objects.filter(created_by=request.user).order_by("-created_at")
+
+        if active_filter == "active":
+            qs = qs.filter(claimed_at__isnull=True, expires_at__gt=now)
+        elif active_filter == "claimed":
+            qs = qs.filter(claimed_at__isnull=False)
+        elif active_filter == "expired":
+            qs = qs.filter(expires_at__lte=now, claimed_at__isnull=True)
+
+        return active_filter, qs
+
+    def _can_generate(self, user):
+        now = timezone.now()
+        return not ClaimCode.objects.filter(
+            created_by=user,
+            created_at__year=now.year,
+            created_at__month=now.month,
+        ).exists()
+
+    def get(self, request):
+        active_filter, codes = self._get_filter_and_codes(request)
+        context = {
+            "codes": codes,
+            "active_filter": active_filter,
+            "can_generate": self._can_generate(request.user),
+            "batch_size": settings.CLAIM_CODES_PER_BATCH,
+            "expiry_days": settings.CLAIM_CODE_EXPIRY_DAYS,
+        }
+
+        if request.headers.get("HX-Request"):
+            return render(
+                request, "accounts/partials/invite_list_results.html", context
+            )
+        return render(request, "accounts/my_invites.html", context)
+
+    def post(self, request):
+        if not self._can_generate(request.user):
+            messages.warning(
+                request,
+                "You have already generated invite codes this month. "
+                "Your allowance resets on the 1st of next month.",
+            )
+            return redirect("my_invites")
+
+        batch_size = settings.CLAIM_CODES_PER_BATCH
+        expires_at = timezone.now() + timedelta(days=settings.CLAIM_CODE_EXPIRY_DAYS)
+
+        codes = []
+        max_retries = batch_size * 10
+        attempts = 0
+        while len(codes) < batch_size and attempts < max_retries:
+            attempts += 1
+            code = generate_claim_code()
+            try:
+                ClaimCode.objects.create(
+                    code=code,
+                    expires_at=expires_at,
+                    created_by=request.user,
+                )
+                codes.append(code)
+            except IntegrityError:
+                continue
+
+        messages.success(request, f"Generated {len(codes)} invite codes.")
+        return redirect("my_invites")

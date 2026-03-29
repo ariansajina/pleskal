@@ -1,0 +1,32 @@
+{% load tz %}
+{% if codes %}
+    <div class="invite-list">
+        {% for code in codes %}
+            <div class="card" style="padding:var(--space-4);margin-bottom:var(--space-3);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-2);">
+                <span style="font-family:monospace;font-size:1.1rem;letter-spacing:0.15em;font-weight:600;">
+                    {{ code.code }}
+                </span>
+                <span style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;">
+                    {% if code.is_claimed %}
+                        <span class="badge badge--social" style="font-size:var(--text-xs);">Claimed</span>
+                    {% elif code.is_expired %}
+                        <span class="badge badge--performance" style="font-size:var(--text-xs);">Expired</span>
+                    {% else %}
+                        <span class="badge badge--free" style="font-size:var(--text-xs);">Active</span>
+                    {% endif %}
+                    <span class="text-sm text-muted">
+                        Expires {{ code.expires_at|date:"M j, Y" }}
+                    </span>
+                </span>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="text-base text-muted text-center" style="padding:var(--space-8) 0;">
+        {% if active_filter == 'all' %}
+            You haven't generated any invite codes yet.
+        {% else %}
+            No {{ active_filter }} invite codes.
+        {% endif %}
+    </p>
+{% endif %}

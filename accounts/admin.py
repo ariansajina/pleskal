@@ -43,9 +43,16 @@ class GenerateCodesForm(forms.Form):
 
 @admin.register(ClaimCode)
 class ClaimCodeAdmin(admin.ModelAdmin):
-    list_display = ("code", "expires_at", "is_claimed_icon", "claimed_by", "claimed_at")
+    list_display = (
+        "code",
+        "created_by",
+        "expires_at",
+        "is_claimed_icon",
+        "claimed_by",
+        "claimed_at",
+    )
     list_filter = ("claimed_at", "expires_at")
-    readonly_fields = ("code", "created_at", "claimed_at", "claimed_by")
+    readonly_fields = ("code", "created_at", "claimed_at", "claimed_by", "created_by")
     search_fields = ("code",)
 
     @admin.display(boolean=True, description="Claimed")
