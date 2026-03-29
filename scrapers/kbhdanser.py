@@ -291,17 +291,30 @@ def _extract_description(soup: BeautifulSoup) -> str:
     """
     Extract the main description paragraphs from a detail page.
 
-    Heuristics:
-    - Collect text from <p> tags in the upper body area.
-    - Skip very short paragraphs (< 40 chars) and those that look like
-      credits (role labels) or bio snippets.
+    Walks all <p> and accordion-title <div> tags in document order and stops
+    once a <div class="e-n-accordion-item-title-text"> whose text contains
+    "read more" is encountered — those accordion sections hold bios and
+    credits, not the event description.
+
+    Additional filters:
+    - Skip very short paragraphs (< 40 chars).
+    - Skip credit/role lines (short label: value patterns).
+    - Skip lines with birth years (bio markers like "°1997, KOR").
     - Deduplicate identical paragraphs.
     """
     seen: set[str] = set()
     paragraphs: list[str] = []
 
-    for p in soup.find_all("p"):
-        text = p.get_text(" ", strip=True)
+    for tag in soup.find_all(["p", "div"]):
+        if tag.name == "div" and "e-n-accordion-item-title-text" in (tag.get("class") or []):
+            if "read more" in tag.get_text(strip=True).lower():
+                break
+            continue
+
+        if tag.name != "p":
+            continue
+
+        text = tag.get_text(" ", strip=True)
         if len(text) < 40:
             continue
         # Skip credit/role lines (short label: value patterns)
@@ -310,7 +323,6 @@ def _extract_description(soup: BeautifulSoup) -> str:
         # Skip lines with birth years (bio markers like "°1997, KOR")
         if re.search(r"°\d{4}", text):
             continue
-        # Deduplicate
         if text in seen:
             continue
         seen.add(text)
@@ -481,6 +493,30 @@ def _extract_performances(
     return performances
 
 
+def _fetch_press_image(slug: str, session: requests.Session) -> str:
+    """
+    Fetch the first image URL from the pressemateriale page for *slug*.
+
+    URL pattern: https://kbhdanser.dk/<slug>-pressemateriale/
+    Returns an empty string if the page is unavailable or has no image.
+    """
+    press_url = f"{BASE_URL}/{slug}-pressemateriale/"
+    try:
+        press_soup = get_soup(press_url, session)
+    except requests.HTTPError:
+        return ""
+    for a in press_soup.find_all("a", href=True):
+        if a.get("download") is not None:
+            return str(a["href"])
+    return ""
+
+
+def _slug_from_url(url: str) -> str:
+    """Extract the event slug from a detail URL (Danish or English variant)."""
+    path = url.rstrip("/").split("/")
+    return path[-1] if path else ""
+
+
 def scrape_detail(
     card: dict,
     session: requests.Session,
@@ -517,13 +553,19 @@ def scrape_detail(
     # Description
     description = _extract_description(soup)
 
-    # Image — prefer a larger image from the detail page over the card thumbnail
-    image_url = card.get("image_url", "")
-    hero_img = soup.find("img", src=re.compile(r"^https://"))
-    if hero_img:
-        src = str(hero_img.get("src", ""))
-        if src.startswith("https://") and "kbhdanser.dk" in src:
-            image_url = src
+    # Image — try the pressemateriale page first (highest quality),
+    # fall back to a hero image on the detail page, then the card thumbnail.
+    slug = _slug_from_url(detail_url)
+    time.sleep(delay)
+    image_url = _fetch_press_image(slug, session)
+    if not image_url:
+        hero_img = soup.find("img", src=re.compile(r"^https://"))
+        if hero_img:
+            src = str(hero_img.get("src", ""))
+            if src.startswith("https://") and "kbhdanser.dk" in src:
+                image_url = src
+    if not image_url:
+        image_url = card.get("image_url", "")
 
     # Performances
     performances = _extract_performances(soup, detail_url)
