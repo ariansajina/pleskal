@@ -21,6 +21,7 @@ import datetime
 import logging
 import re
 import time
+import urllib.parse
 import zoneinfo
 
 import requests
@@ -96,6 +97,12 @@ ENGLISH_MONTHS: dict[str, int] = {
 }
 
 log = logging.getLogger(__name__)
+
+
+def _strip_query(url: str) -> str:
+    """Return *url* with query string and fragment removed."""
+    parts = urllib.parse.urlsplit(url)
+    return urllib.parse.urlunsplit(parts._replace(query="", fragment=""))
 
 
 # ── Venue helpers ─────────────────────────────────────────────────────────────
@@ -231,7 +238,7 @@ def collect_event_cards(soup: BeautifulSoup) -> list[dict]:
     seen_urls: set[str] = set()
 
     for a in soup.find_all("a", href=True):
-        href = str(a["href"])
+        href = _strip_query(str(a["href"]))
         # Event card links are absolute URLs to /slug or /slug/ on the same domain
         if not href.startswith(BASE_URL + "/"):
             continue
@@ -281,7 +288,7 @@ def _find_english_url(soup: BeautifulSoup, detail_url: str) -> str | None:
     for a in soup.find_all("a", href=True):
         text = a.get_text(strip=True).upper()
         if text == "EN":
-            href = str(a["href"])
+            href = _strip_query(str(a["href"]))
             if href.startswith(BASE_URL + "/en/"):
                 return href
     return None

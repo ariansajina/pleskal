@@ -320,7 +320,12 @@ def scrape_detail(
         log.warning("Could not parse date %r for %s — skipping", date_raw, url)
         return []
 
-    title = card.get("title_raw") or ""
+    title = re.sub(
+        r"\s+offered in collaboration\b.*",
+        "",
+        card.get("title_raw") or "",
+        flags=re.IGNORECASE,
+    ).strip()
     if not title:
         log.warning("No title for %s — skipping", url)
         return []
