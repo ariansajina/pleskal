@@ -298,7 +298,9 @@ def scrape_detail(
     description = ""
     desc_div = soup.find("div", class_="description")
     if isinstance(desc_div, Tag):
-        description = markdownify.markdownify(str(desc_div), heading_style="ATX").strip()
+        description = markdownify.markdownify(
+            str(desc_div), heading_style="ATX"
+        ).strip()
 
     # ── Free / price ──────────────────────────────────────────────────────────
     full_text = soup.get_text(" ", strip=True)
