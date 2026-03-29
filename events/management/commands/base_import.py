@@ -12,13 +12,12 @@ deletion.  Subclasses only need to declare three class attributes:
 """
 
 import datetime
+import io
 import json
 import os
-import tempfile
 import urllib.request
 from pathlib import Path
 
-from django.core.files import File
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
@@ -334,18 +333,12 @@ class BaseEventImportCommand(BaseCommand):
             return
 
         filename, data = result
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=Path(filename).suffix
-        ) as tmp:
-            tmp.write(data)
-            tmp_path = tmp.name
-
         try:
-            with open(tmp_path, "rb") as f:
-                event.image.save(filename, File(f), save=True)  # type: ignore
+            from events.images import validate_and_process
+
+            processed = validate_and_process(io.BytesIO(data))
+            event.image.save(processed.name, processed, save=True)  # type: ignore
         except Exception as exc:
             self.stderr.write(
                 f"    Image save failed for {str(event.title)[:40]}: {exc}"
             )
-        finally:
-            os.unlink(tmp_path)
