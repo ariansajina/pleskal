@@ -153,6 +153,27 @@ class EventListView(RateLimitMixin, View):
         if categories:
             qs = qs.filter(category__in=categories)
 
+        # --- Filter: publisher (multi-value) ---
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        publisher_slugs = request.GET.getlist("publisher")
+        if publisher_slugs:
+            system_user_ids = User.objects.filter(
+                is_system_account=True,
+                display_name_slug__in=[s for s in publisher_slugs if s != "other"],
+            ).values_list("id", flat=True)
+
+            q = Q()
+            if any(s != "other" for s in publisher_slugs):
+                q |= Q(submitted_by__in=system_user_ids)
+            if "other" in publisher_slugs:
+                all_system_ids = User.objects.filter(
+                    is_system_account=True
+                ).values_list("id", flat=True)
+                q |= ~Q(submitted_by__in=all_system_ids)
+            qs = qs.filter(q)
+
         # --- Filter: date range ---
         date_from = request.GET.get("date_from")
         date_to = request.GET.get("date_to")
@@ -184,19 +205,35 @@ class EventListView(RateLimitMixin, View):
                 | Q(submitted_by__display_name__icontains=search_query)
             )
 
-        return qs, categories, date_from, date_to, search_query, date_range_active
+        return (
+            qs,
+            categories,
+            publisher_slugs,
+            date_from,
+            date_to,
+            search_query,
+            date_range_active,
+        )
 
     def get(self, request):
+        from django.contrib.auth import get_user_model
         from django.shortcuts import render
 
+        User = get_user_model()
         expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
         qs = Event.objects.filter(
             start_datetime__gte=expiry_cutoff, is_draft=False
         ).select_related("submitted_by")
 
-        qs, categories, date_from, date_to, search_query, date_range_active = (
-            self._apply_filters(qs, request)
-        )
+        (
+            qs,
+            categories,
+            publisher_slugs,
+            date_from,
+            date_to,
+            search_query,
+            date_range_active,
+        ) = self._apply_filters(qs, request)
 
         # --- Counts for upcoming/past toggle (computed after other filters) ---
         now = timezone.now()
@@ -227,12 +264,17 @@ class EventListView(RateLimitMixin, View):
         base_query_string = params.urlencode()
 
         quick_date_ranges = _get_quick_date_ranges()
+        system_publishers = User.objects.filter(is_system_account=True).order_by(
+            "display_name"
+        )
         ctx = {
             "page_obj": page_obj,
             "base_query_string": base_query_string,
             "events": page_obj.object_list,
             "category_choices": EventCategory.choices,
             "selected_categories": categories,
+            "system_publishers": system_publishers,
+            "selected_publishers": publisher_slugs,
             "show_past": show_past,
             "date_from": date_from or "",
             "date_to": date_to or "",

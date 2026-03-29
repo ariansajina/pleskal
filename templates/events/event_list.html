@@ -51,6 +51,25 @@
                 </div>
             </div>
 
+            {# Publisher #}
+            <div class="filter-panel__group">
+                <span class="filter-panel__group-label">Publisher</span>
+                <div class="filter-checkboxes">
+                    {% for publisher in system_publishers %}
+                        <label>
+                            <input type="checkbox" name="publisher" value="{{ publisher.display_name_slug }}"
+                                   {% if publisher.display_name_slug in selected_publishers %}checked{% endif %}>
+                            <span class="filter-chip">{{ publisher.public_name }}</span>
+                        </label>
+                    {% endfor %}
+                    <label>
+                        <input type="checkbox" name="publisher" value="other"
+                               {% if "other" in selected_publishers %}checked{% endif %}>
+                        <span class="filter-chip">Other</span>
+                    </label>
+                </div>
+            </div>
+
             {# Date range #}
             <div class="filter-panel__group">
                 <span class="filter-panel__group-label">Date range</span>

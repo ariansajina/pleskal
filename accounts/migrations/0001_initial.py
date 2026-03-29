@@ -8,11 +8,22 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def configure_site(apps, schema_editor):
+    Site = apps.get_model("sites", "Site")
+    domain = getattr(settings, "SITE_DOMAIN", "localhost")
+    name = getattr(settings, "SITE_NAME", domain)
+    Site.objects.update_or_create(
+        id=settings.SITE_ID,
+        defaults={"domain": domain, "name": name},
+    )
+
+
 class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
         ("auth", "0012_alter_user_first_name_max_length"),
+        ("sites", "0002_alter_domain_unique"),
     ]
 
     operations = [
@@ -111,9 +122,20 @@ class Migration(migrations.Migration):
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="created_claim_codes",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
                 "db_table": "accounts_claimcode",
             },
         ),
+        migrations.RunPython(configure_site, migrations.RunPython.noop),
     ]

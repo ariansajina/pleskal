@@ -430,6 +430,129 @@ class TestEventListView:
         assert str(e1.title).encode() in resp.content
         assert str(e2.title).encode() in resp.content
 
+    def test_publisher_filter_by_single_system_user(self, client):
+        """Filter by a single system user shows only their events."""
+        system_user = UserFactory.create(
+            is_system_account=True, display_name="Dansehallerne"
+        )
+        regular_user = UserFactory.create()
+        system_event = EventFactory.create(submitted_by=system_user)
+        regular_event = EventFactory.create(submitted_by=regular_user)
+        resp = client.get(
+            reverse("event_list") + f"?publisher={system_user.display_name_slug}"
+        )
+        assert str(system_event.title).encode() in resp.content
+        assert str(regular_event.title).encode() not in resp.content
+
+    def test_publisher_filter_by_multiple_system_users(self, client):
+        """Filter by multiple system users shows events from all selected publishers."""
+        user1 = UserFactory.create(is_system_account=True, display_name="Dansehallerne")
+        user2 = UserFactory.create(is_system_account=True, display_name="HAUT")
+        user3 = UserFactory.create(is_system_account=True, display_name="Sydhavn")
+        event1 = EventFactory.create(submitted_by=user1)
+        event2 = EventFactory.create(submitted_by=user2)
+        event3 = EventFactory.create(submitted_by=user3)
+        resp = client.get(
+            reverse("event_list")
+            + f"?publisher={user1.display_name_slug}&publisher={user2.display_name_slug}"
+        )
+        assert str(event1.title).encode() in resp.content
+        assert str(event2.title).encode() in resp.content
+        assert str(event3.title).encode() not in resp.content
+
+    def test_publisher_filter_other_shows_non_system_events(self, client):
+        """Filter by 'other' shows only events not submitted by system users."""
+        system_user = UserFactory.create(
+            is_system_account=True, display_name="Dansehallerne"
+        )
+        regular_user = UserFactory.create()
+        system_event = EventFactory.create(submitted_by=system_user)
+        regular_event = EventFactory.create(submitted_by=regular_user)
+        resp = client.get(reverse("event_list") + "?publisher=other")
+        assert str(system_event.title).encode() not in resp.content
+        assert str(regular_event.title).encode() in resp.content
+
+    def test_publisher_filter_other_includes_null_submitted_by(self, client):
+        """Filter by 'other' includes events with null submitted_by."""
+        system_user = UserFactory.create(
+            is_system_account=True, display_name="Dansehallerne"
+        )
+        event_no_submitter = EventFactory.create(submitted_by=None)
+        system_event = EventFactory.create(submitted_by=system_user)
+        resp = client.get(reverse("event_list") + "?publisher=other")
+        assert str(event_no_submitter.title).encode() in resp.content
+        assert str(system_event.title).encode() not in resp.content
+
+    def test_publisher_filter_combined_with_category(self, client):
+        """Publisher filter works when combined with category filter."""
+        system_user = UserFactory.create(is_system_account=True, display_name="HAUT")
+        workshop = EventFactory.create(submitted_by=system_user, category="workshop")
+        performance = EventFactory.create(
+            submitted_by=system_user, category="performance"
+        )
+        resp = client.get(
+            reverse("event_list")
+            + f"?publisher={system_user.display_name_slug}&category=workshop"
+        )
+        assert str(workshop.title).encode() in resp.content
+        assert str(performance.title).encode() not in resp.content
+
+    def test_publisher_filter_context_shows_selected_publishers(self, client):
+        """Context includes selected_publishers for template rendering."""
+        system_user = UserFactory.create(is_system_account=True, display_name="HAUT")
+        EventFactory.create(submitted_by=system_user)
+        resp = client.get(
+            reverse("event_list") + f"?publisher={system_user.display_name_slug}"
+        )
+        assert resp.context["selected_publishers"] == [system_user.display_name_slug]
+
+    def test_publisher_filter_context_shows_all_system_publishers(self, client):
+        """Context includes all system publishers for filter badge rendering."""
+        user1 = UserFactory.create(is_system_account=True, display_name="Dansehallerne")
+        user2 = UserFactory.create(is_system_account=True, display_name="HAUT")
+        regular_user = UserFactory.create()
+        EventFactory.create(submitted_by=user1)
+        EventFactory.create(submitted_by=user2)
+        EventFactory.create(submitted_by=regular_user)
+        resp = client.get(reverse("event_list"))
+        system_publishers = resp.context["system_publishers"]
+        assert len(system_publishers) == 2
+        assert user1 in system_publishers
+        assert user2 in system_publishers
+        assert regular_user not in system_publishers
+
+    def test_publisher_filter_pagination_preserves_selection(self, client):
+        """Pagination links preserve publisher filter params."""
+        system_user = UserFactory.create(is_system_account=True, display_name="HAUT")
+        EventFactory.create_batch(EVENTS_PER_PAGE + 1, submitted_by=system_user)
+        resp = client.get(
+            reverse("event_list") + f"?publisher={system_user.display_name_slug}"
+        )
+        assert resp.status_code == 200
+        # base_query_string should include the publisher filter
+        assert (
+            f"publisher={system_user.display_name_slug}"
+            in resp.context["base_query_string"]
+        )
+
+    def test_publisher_filter_with_other_and_system_user(self, client):
+        """Filter by both 'other' and a system user shows both types of events."""
+        system_user = UserFactory.create(is_system_account=True, display_name="HAUT")
+        regular_user = UserFactory.create()
+        system_event = EventFactory.create(submitted_by=system_user)
+        regular_event = EventFactory.create(submitted_by=regular_user)
+        other_system_user = UserFactory.create(
+            is_system_account=True, display_name="Dansehallerne"
+        )
+        other_system_event = EventFactory.create(submitted_by=other_system_user)
+        resp = client.get(
+            reverse("event_list")
+            + f"?publisher={system_user.display_name_slug}&publisher=other"
+        )
+        assert str(system_event.title).encode() in resp.content
+        assert str(regular_event.title).encode() in resp.content
+        assert str(other_system_event.title).encode() not in resp.content
+
 
 @pytest.mark.django_db
 class TestEventDetailView:

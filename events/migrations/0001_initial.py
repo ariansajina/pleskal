@@ -56,7 +56,7 @@ class Migration(migrations.Migration):
                 ),
                 ("slug", models.SlugField(editable=False, max_length=250, unique=True)),
                 ("title", models.CharField(max_length=200)),
-                ("description", models.TextField(blank=True, max_length=2000)),
+                ("description", models.TextField(blank=True, max_length=4000)),
                 (
                     "image",
                     models.ImageField(blank=True, null=True, upload_to="events/"),
