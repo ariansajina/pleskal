@@ -20,7 +20,7 @@ import zoneinfo
 
 import markdownify
 import requests
-from bs4 import Tag
+from bs4 import NavigableString, Tag
 
 from scrapers.base import (
     build_arg_parser,
@@ -229,9 +229,20 @@ def collect_listing_cards(session: requests.Session) -> list[dict]:
         if "/show/" not in detail_url and "/industry-event/" not in detail_url:
             continue
 
-        # Use separator=" " so title and artist span are joined with a space
-        title_raw = h2.get_text(" ", strip=True)
-
+        # h2 contains the event name as a text node and the artist in a <span>
+        artist_span = h2.find("span")
+        if isinstance(artist_span, Tag):
+            event_name = "".join(
+                s for s in h2.children if isinstance(s, NavigableString)
+            ).strip()
+            artist_name = artist_span.get_text(strip=True)
+            title_raw = (
+                f"{event_name} by {artist_name}"
+                if (event_name and artist_name)
+                else (event_name or artist_name)
+            )
+        else:
+            title_raw = h2.get_text(" ", strip=True)
         # Three <h5> tags inside div.info hold date, venue, series (in order)
         info_div = event_div.find("div", class_="info")
         h5s = (
@@ -321,7 +332,7 @@ def scrape_detail(
         return []
 
     title = re.sub(
-        r"\s+offered in collaboration\b.*",
+        r"\s+(?:by\s+)?offered in collaboration\b.*",
         "",
         card.get("title_raw") or "",
         flags=re.IGNORECASE,
