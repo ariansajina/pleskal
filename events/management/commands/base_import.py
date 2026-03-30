@@ -12,6 +12,7 @@ deletion.  Subclasses only need to declare three class attributes:
 """
 
 import datetime
+import hashlib
 import io
 import json
 import os
@@ -317,7 +318,12 @@ class BaseEventImportCommand(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Done.  {summary}"))
 
     def _maybe_update_image(self, event: Event, rec: dict, skip_images: bool) -> None:
-        """Download and attach the event image if it isn't already set."""
+        """Download and attach the event image if it isn't already set.
+
+        Images are stored with content-addressed filenames (events/img_<sha256>.webp)
+        so that multiple events importing the same source image share one file in
+        storage rather than storing independent copies.
+        """
         if skip_images:
             return
         image_url = rec.get("image_url", "")
@@ -332,12 +338,27 @@ class BaseEventImportCommand(BaseCommand):
             self.stderr.write(f"    Could not download image: {image_url}")
             return
 
-        filename, data = result
+        _filename, data = result
         try:
+            from django.core.files.base import ContentFile
+            from django.core.files.storage import default_storage
+
             from events.images import validate_and_process
 
             processed = validate_and_process(io.BytesIO(data))
-            event.image.save(processed.name, processed, save=True)  # type: ignore
+            content_bytes = processed.read()
+            hash_hex = hashlib.sha256(content_bytes).hexdigest()
+            storage_name = f"events/img_{hash_hex}.webp"
+
+            if default_storage.exists(storage_name):
+                event.image.name = storage_name
+                event.save(update_fields=["image"])
+            else:
+                saved_name = default_storage.save(
+                    storage_name, ContentFile(content_bytes, name=storage_name)
+                )
+                event.image.name = saved_name
+                event.save(update_fields=["image"])
         except Exception as exc:
             self.stderr.write(
                 f"    Image save failed for {str(event.title)[:40]}: {exc}"

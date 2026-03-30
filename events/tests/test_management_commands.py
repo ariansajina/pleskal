@@ -1,5 +1,6 @@
 """Tests for the import_dansehallerne, import_hautscene, and import_sydhavnteater management commands."""
 
+import io
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -8,6 +9,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from PIL import Image
 
 from events.management.commands.base_import import _download_image, _parse_dt
 from events.models import Event
@@ -887,3 +889,127 @@ class TestImportToastercphCRUD:
         _write_json([TOASTERCPH_SAMPLE_EVENT], f)
         call_command("import_toastercph", str(f), dry_run=True)
         assert Event.objects.filter(external_source="toastercph").count() == 0
+
+
+# ===========================================================================
+# Image deduplication (content-addressed storage in base_import)
+# ===========================================================================
+
+
+def _make_jpeg_bytes(color=(100, 150, 200)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (100, 100), color=color).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+@pytest.mark.django_db
+class TestImportImageDeduplication:
+    """Events sharing the same source image URL must share one file in storage."""
+
+    def test_two_events_with_same_image_url_share_one_file(self, settings, tmp_path):
+        settings.MEDIA_ROOT = tmp_path
+        image_bytes = _make_jpeg_bytes()
+
+        event1 = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/1",
+            "start_datetime": "2030-06-01T18:00:00+02:00",
+            "image_url": "https://example.com/shared.jpg",
+        }
+        event2 = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/2",
+            "start_datetime": "2030-06-02T18:00:00+02:00",
+            "image_url": "https://example.com/shared.jpg",
+        }
+        f = tmp_path / "events.json"
+        _write_json([event1, event2], f)
+
+        with patch(
+            "events.management.commands.base_import._download_image",
+            return_value=("shared.jpg", image_bytes),
+        ):
+            call_command("import_dansehallerne", str(f))
+
+        events = list(
+            Event.objects.filter(external_source="dansehallerne").order_by(
+                "start_datetime"
+            )
+        )
+        assert len(events) == 2
+        assert events[0].image.name, "First event should have an image"
+        assert events[1].image.name, "Second event should have an image"
+        assert events[0].image.name == events[1].image.name, (
+            "Both events must reference the same storage file"
+        )
+
+    def test_only_one_file_stored_for_shared_image(self, settings, tmp_path):
+        settings.MEDIA_ROOT = tmp_path
+        image_bytes = _make_jpeg_bytes()
+
+        event1 = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/1",
+            "start_datetime": "2030-06-01T18:00:00+02:00",
+            "image_url": "https://example.com/shared.jpg",
+        }
+        event2 = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/2",
+            "start_datetime": "2030-06-02T18:00:00+02:00",
+            "image_url": "https://example.com/shared.jpg",
+        }
+        f = tmp_path / "events.json"
+        _write_json([event1, event2], f)
+
+        with patch(
+            "events.management.commands.base_import._download_image",
+            return_value=("shared.jpg", image_bytes),
+        ):
+            call_command("import_dansehallerne", str(f))
+
+        stored_files = list((tmp_path / "events").iterdir())
+        assert len(stored_files) == 1, (
+            f"Expected 1 file in storage, found {len(stored_files)}: {stored_files}"
+        )
+
+    def test_different_images_stored_as_separate_files(self, settings, tmp_path):
+        settings.MEDIA_ROOT = tmp_path
+        image_bytes_a = _make_jpeg_bytes(color=(255, 0, 0))
+        image_bytes_b = _make_jpeg_bytes(color=(0, 0, 255))
+
+        event1 = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/1",
+            "start_datetime": "2030-06-01T18:00:00+02:00",
+            "image_url": "https://example.com/image_a.jpg",
+        }
+        event2 = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/2",
+            "start_datetime": "2030-06-02T18:00:00+02:00",
+            "image_url": "https://example.com/image_b.jpg",
+        }
+        f = tmp_path / "events.json"
+        _write_json([event1, event2], f)
+
+        side_effects = [
+            ("image_a.jpg", image_bytes_a),
+            ("image_b.jpg", image_bytes_b),
+        ]
+        with patch(
+            "events.management.commands.base_import._download_image",
+            side_effect=side_effects,
+        ):
+            call_command("import_dansehallerne", str(f))
+
+        events = list(
+            Event.objects.filter(external_source="dansehallerne").order_by(
+                "start_datetime"
+            )
+        )
+        assert events[0].image.name != events[1].image.name, (
+            "Events with different images must have different storage paths"
+        )
+        stored_files = list((tmp_path / "events").iterdir())
+        assert len(stored_files) == 2
