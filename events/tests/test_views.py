@@ -272,6 +272,55 @@ class TestEventCreateView:
         resp = client.get(reverse("event_create"))
         assert resp.status_code == 200
 
+    def test_image_preserved_on_validation_failure(self, client):
+        """Image uploaded in a failed form submission should be used on re-submission."""
+        user = UserFactory.create()
+        client.force_login(user)
+        img = _make_image_upload()
+
+        # First submission: valid image but invalid times (end before start)
+        resp = client.post(
+            reverse("event_create"),
+            {
+                "title": "Event With Image Issue",
+                "date": _future_dt(3).strftime("%Y-%m-%d"),
+                "start_time": "20:00",
+                "end_time": "19:00",  # Invalid: before start_time
+                "venue_name": "Theater",
+                "category": "performance",
+                "image": img,
+            },
+        )
+        assert resp.status_code == 200  # form re-rendered with errors
+        assert not Event.objects.filter(title="Event With Image Issue").exists()
+
+        # Verify the image is in session as pending_image
+        session = client.session
+        assert "pending_image" in session
+        assert session["pending_image"]["name"] == "test.jpg"
+
+        # Second submission: fixed times, no image re-selected
+        # The image should be used from session
+        resp = client.post(
+            reverse("event_create"),
+            {
+                "title": "Event With Image Issue",
+                "date": _future_dt(3).strftime("%Y-%m-%d"),
+                "start_time": "19:00",
+                "end_time": "20:00",  # Valid: after start_time
+                "venue_name": "Theater",
+                "category": "performance",
+                # No image field in second submission
+                "submit_action": "publish",
+            },
+        )
+        assert resp.status_code == 302  # redirect on success
+
+        # Verify the event was created with the preserved image
+        event = Event.objects.get(title="Event With Image Issue")
+        assert event.image  # Image should be present
+        assert event.image.storage.exists(event.image.name)
+
 
 @pytest.mark.django_db
 class TestEventListView:
@@ -662,6 +711,57 @@ class TestEventUpdateView:
         )
         event.refresh_from_db()
         assert event.slug == original_slug
+
+    def test_image_preserved_on_validation_failure(self, client):
+        """When editing, image uploaded in a failed form submission should be used on re-submission."""
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        client.force_login(user)
+        img = _make_image_upload()
+
+        local_start = timezone.localtime(event.start_datetime)
+
+        # First submission: valid image but invalid times (end before start)
+        resp = client.post(
+            reverse("event_edit", kwargs={"slug": event.slug}),
+            {
+                "title": event.title,
+                "date": local_start.strftime("%Y-%m-%d"),
+                "start_time": "20:00",
+                "end_time": "19:00",  # Invalid: before start_time
+                "venue_name": event.venue_name,
+                "category": event.category,
+                "image": img,
+            },
+        )
+        assert resp.status_code == 200  # form re-rendered with errors
+
+        # Verify the image is in session as pending_image
+        session = client.session
+        assert "pending_image" in session
+        assert session["pending_image"]["name"] == "test.jpg"
+
+        # Second submission: fixed times, no image re-selected
+        # The image should be used from session
+        resp = client.post(
+            reverse("event_edit", kwargs={"slug": event.slug}),
+            {
+                "title": event.title,
+                "date": local_start.strftime("%Y-%m-%d"),
+                "start_time": "19:00",
+                "end_time": "20:00",  # Valid: after start_time
+                "venue_name": event.venue_name,
+                "category": event.category,
+                "submit_action": "publish",
+                # No image field in second submission
+            },
+        )
+        assert resp.status_code == 302  # redirect on success
+
+        # Verify the event now has an image
+        event.refresh_from_db()
+        assert event.image  # Image should be present from pending_image
+        assert event.image.storage.exists(event.image.name)
 
 
 @pytest.mark.django_db

@@ -101,13 +101,30 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
         kwargs["creation"] = True
         return kwargs
 
+    def form_invalid(self, form):
+        # Preserve uploaded image in session for re-submission
+        image = self.request.FILES.get("image")
+        if image:
+            self.request.session["pending_image"] = {
+                "name": image.name,
+                "content": image.read().hex(),
+            }
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         event = form.save(commit=False)
         event.submitted_by = self.request.user
         event.is_draft = self.request.POST.get("submit_action") == "draft"
 
-        # Process uploaded image
+        # Process newly uploaded image or use pending image from failed submission
         image_file = form.cleaned_data.get("image")
+        if not image_file and "pending_image" in self.request.session:
+            from django.core.files.base import ContentFile
+
+            pending = self.request.session.pop("pending_image")
+            image_content = bytes.fromhex(pending["content"])
+            image_file = ContentFile(image_content, name=pending["name"])
+
         if image_file:
             processed = validate_and_process(image_file)
             event.image.save(processed.name, processed, save=False)
@@ -123,6 +140,8 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["page_title"] = "Submit an Event"
+        if "pending_image" in self.request.session:
+            ctx["pending_image"] = self.request.session["pending_image"]
         return ctx
 
 
@@ -353,6 +372,16 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
         kwargs["creation"] = False
         return kwargs
 
+    def form_invalid(self, form):
+        # Preserve uploaded image in session for re-submission
+        image = self.request.FILES.get("image")
+        if image:
+            self.request.session["pending_image"] = {
+                "name": image.name,
+                "content": image.read().hex(),
+            }
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         event = form.save(commit=False)
 
@@ -363,8 +392,15 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
             event.is_draft = False
         # If neither button was used (fallback), keep existing value.
 
-        # Process newly uploaded image
+        # Process newly uploaded image or use pending image from failed submission
         image_file = form.cleaned_data.get("image")
+        if not image_file and "pending_image" in self.request.session:
+            from django.core.files.base import ContentFile
+
+            pending = self.request.session.pop("pending_image")
+            image_content = bytes.fromhex(pending["content"])
+            image_file = ContentFile(image_content, name=pending["name"])
+
         if image_file and hasattr(image_file, "read"):
             processed = validate_and_process(image_file)
             event.image.save(processed.name, processed, save=False)
@@ -379,6 +415,8 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["page_title"] = "Edit Event"
+        if "pending_image" in self.request.session:
+            ctx["pending_image"] = self.request.session["pending_image"]
         return ctx
 
 
