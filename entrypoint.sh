@@ -1,24 +1,17 @@
 #!/bin/sh
-set -e
+set -ex
 
-echo "[entrypoint] Starting application..."
-echo "[entrypoint] Python version: $(python --version)"
-echo "[entrypoint] Gunicorn version: $(gunicorn --version)"
+echo "=== Starting entrypoint ==="
+echo "PORT=${PORT:-8000}"
+echo "Python: $(python --version)"
+echo "Gunicorn: $(gunicorn --version)"
 
-# Use PORT env var if set, otherwise default to 8000
 PORT="${PORT:-8000}"
-echo "[entrypoint] Using PORT: $PORT"
 
-# Run migrations
-echo "[entrypoint] Running database migrations..."
-uv run python manage.py migrate --noinput || {
-  echo "[entrypoint] Migration failed!"
-  exit 1
-}
+echo "=== Running migrations ==="
+python manage.py migrate --noinput
 
-echo "[entrypoint] Migrations completed successfully"
-echo "[entrypoint] Starting gunicorn..."
-
+echo "=== Starting gunicorn on port $PORT ==="
 exec gunicorn config.wsgi \
   --bind 0.0.0.0:"$PORT" \
   --workers 2 \
