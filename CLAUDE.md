@@ -30,7 +30,7 @@ Inspired by [dukop.dk](https://dukop.dk). Designed for low operational cost and 
 config/          # Django project settings, URLs, CSP middleware, rate limiting
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
 events/          # Dance events app (CRUD, feeds, image processing)
-scrapers/        # Data import scripts (dansehallerne, hautscene, sydhavnteater)
+scrapers/        # Data import scripts (dansehallerne, hautscene, sydhavnteater, kbhdanser, toastercph)
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX, logo)
 conftest.py      # pytest-django autouse fixtures (disables SSL, uses simple storage)
@@ -57,21 +57,23 @@ events/
     import_dansehallerne.py     # Dansehallerne events importer
     import_dansehallerne_workshops.py  # Dansehallerne workshops importer
     import_hautscene.py         # HAUT Scene importer
+    import_kbhdanser.py         # KBH Danser importer
     import_sydhavnteater.py     # Sydhavn Teater importer
+    import_toastercph.py        # Toaster CPH importer
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     weekly_digest.py            # Weekly digest email (feed analytics)
 
 accounts/
   models.py          # Custom User (UUID PK, display_name, display_name_slug) + ClaimCode
   managers.py        # UserManager (custom user manager)
-  views.py           # Login, password reset, profile, account deletion, claim flow
+  views.py           # Login, password reset, profile, account deletion, claim flow, invite management
   forms.py           # CustomAuthenticationForm, ProfileForm, ClaimCodeForm, ClaimRegisterForm
   hashers.py         # HmacPepperedArgon2PasswordHasher
   validators.py      # ZxcvbnPasswordValidator
-  signals.py         # Admin notification on new signup
+  signals.py         # Admin notification on new signup; Resend CRM contact sync on email verification
   urls.py            # Account URL patterns
   management/commands/
-    generate_claim_codes.py     # Generate invite codes (--count, --expires)
+    generate_claim_codes.py     # Generate invite codes (--count, --expires, --created-by)
     create_source_accounts.py   # Create system accounts from scrapers/sources.json
 
 config/
@@ -85,8 +87,10 @@ scrapers/
   dansehallerne.py             # Dansehallerne scraper
   dansehallerne_workshops.py   # Dansehallerne workshops scraper
   hautscene.py                 # HAUT Scene scraper
+  kbhdanser.py                 # KBH Danser scraper
   sydhavnteater.py             # Sydhavn Teater scraper
-  sources.json                 # Source account configuration (external_source, display_name, email)
+  toastercph.py                # Toaster CPH scraper
+  sources.json                 # Source account config for 5 scrapers (external_source, display_name, email)
 ```
 
 ## Commands
@@ -149,12 +153,16 @@ uv run python manage.py create_source_accounts
 uv run python manage.py import_dansehallerne
 uv run python manage.py import_dansehallerne_workshops
 uv run python manage.py import_hautscene
+uv run python manage.py import_kbhdanser
 uv run python manage.py import_sydhavnteater
+uv run python manage.py import_toastercph
 
 # Unified scraper (runs all sources; used by Railway cron)
-uv run python manage.py run_scrapers              # run all
+uv run python manage.py run_scrapers              # run all (6 sources)
 uv run python manage.py run_scrapers --dry-run    # preview only (no DB writes)
+uv run python manage.py run_scrapers --skip-images  # skip image downloads
 uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # subset
+# Individual scrapers can be disabled via env: SCRAPER_<NAME>_ENABLED=false
 
 # Weekly digest email
 uv run python manage.py weekly_digest
@@ -179,8 +187,9 @@ uv run python manage.py weekly_digest
   - `RateLimitMixin` — cache-based rate limiting, IP or user-keyed via `rate_limit_by_user = True`
   - `EventOwnerMixin` — restricts edit/delete/duplicate to event owner (raises 403)
 - **Custom User model:** UUID primary key, email-based authentication (`USERNAME_FIELD = "email"`, no username)
-- **No moderation workflow:** All submitted events are visible immediately
-- **Invite-only registration:** Users register via claim codes (`/claim/` flow), no open signup
+- **Draft events:** Events can be saved as drafts (`is_draft=True`) and are only visible to their owner; toggle via `EventToggleDraftView`
+- **No moderation workflow:** All published events are visible immediately
+- **Invite-only registration:** Users register via claim codes (`/claim/` flow), no open signup; logged-in users can generate batches of invite codes via `MyInvitesView` (limited by `CLAIM_CODES_PER_BATCH` per month)
 
 ### Naming
 
@@ -222,6 +231,7 @@ uv run python manage.py weekly_digest
 | Event update | 20 req/min per user |
 | Event delete | 20 req/min per user |
 | Event duplicate | 20 req/min per user |
+| Event toggle draft | 20 req/min per user |
 
 ## Models
 
@@ -255,6 +265,7 @@ Invite-only registration codes.
 | `expires_at` | Expiry datetime |
 | `claimed_at` | Nullable; set when used |
 | `claimed_by` | FK -> User, nullable |
+| `created_by` | FK -> User, nullable; the user who generated the code |
 
 Properties: `is_expired`, `is_claimed`, `is_valid`.
 
@@ -278,6 +289,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `source_url` | Optional, http/https only |
 | `external_source` | Optional (e.g. `"dansehallerne"`) |
 | `submitted_by` | FK -> User, nullable (SET_NULL on delete) |
+| `is_draft` | Boolean, default False; drafts are only visible to the owner |
 | `created_at`, `updated_at` | Auto timestamps |
 
 Method: `get_display_description()` prepends scraped event disclaimer if `external_source` is set.
@@ -294,6 +306,8 @@ Daily hit counter for feed analytics (used by weekly digest).
 
 Unique together: `(feed_type, date)`.
 
+Classmethod: `record(feed_type)` atomically increments the daily counter via `update_or_create`.
+
 ## Views Summary
 
 ### events/
@@ -306,16 +320,18 @@ Unique together: `(feed_type, date)`.
 | `EventUpdateView` | `/events/<slug>/edit/` | Owner only |
 | `EventDeleteView` | `/events/<slug>/delete/` | Owner only |
 | `EventDuplicateView` | `/events/<slug>/duplicate/` | Owner only |
+| `EventToggleDraftView` | `/events/<slug>/toggle-draft/` | Owner only |
 | `MyEventsView` | `/my-events/` | Login required (redirects to publisher profile) |
 | `SubscribeView` | `/subscribe/` | Public |
 | `EventICalFeed` | `/feed/events.ics` | Public |
 | `EventRSSFeed` | `/feed/events.rss` | Public |
 | `EventICalSingleView` | `/events/<slug>/calendar.ics` | Public |
 
-- Feeds support optional `?category=` filter and never expose submitter identity
+- Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity
 - Event list supports: category (multi-value), date range, is_free, is_wheelchair_accessible, search (title/venue/description/submitter)
 - Quick date filters: this_week, next_week, this_month, next_month
-- Max 50 upcoming events per user (enforced on create/duplicate)
+- Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting)
+- Draft events are hidden from public list/detail; only visible to the owner
 
 ### accounts/
 
@@ -330,6 +346,9 @@ Unique together: `(feed_type, date)`.
 | `AccountProfileView` | `/accounts/profile/` | Login required (redirects to own publisher profile) |
 | `ClaimCodeView` | `/claim/` | Public |
 | `ClaimRegisterView` | `/claim/register/` | Public (requires valid claim code in session) |
+| `MyInvitesView` | `/accounts/invites/` | Login required |
+
+- `MyInvitesView`: GET lists user's claim codes (filterable by all/active/claimed); POST generates a new batch (limited to `CLAIM_CODES_PER_BATCH` codes, expires in `CLAIM_CODE_EXPIRY_DAYS` days); supports HTMX partial swap
 
 ## Remote Session Requirements
 
