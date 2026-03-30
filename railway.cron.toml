@@ -1,6 +1,14 @@
 [build]
 buildCommand = "uv sync --no-dev"
 
-[deploy]
-startCommand = "python manage.py run_scrapers"
+[[crons]]
+name = "database-backup"
+schedule = "0 2 * * *"
+command = "python scripts/backup_db.py"
+restartPolicyType = "NEVER"
+
+[[crons]]
+name = "run-scrapers"
+schedule = "0 4 * * *"
+command = "python manage.py run_scrapers"
 restartPolicyType = "NEVER"
