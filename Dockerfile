@@ -41,5 +41,5 @@ EXPOSE 8000
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Default command
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+# Default command (Railway will override startCommand from railway.toml if needed)
+CMD ["sh", "-c", "gunicorn config.wsgi --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120 --log-level info"]
