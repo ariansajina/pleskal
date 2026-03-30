@@ -2,6 +2,10 @@
 
 {% block title %}My Profile – pleskal{% endblock %}
 
+{% block extra_head %}
+    {{ form.media }}
+{% endblock %}
+
 {% block content %}
 <div class="content-wrap">
     <div style="max-width:520px;">
@@ -33,7 +37,7 @@
             </div>
 
             <div>
-                <label for="id_bio" class="form-label">{{ form.bio.label }}</label>
+                <label for="id_bio" class="form-label">{{ form.bio.label }} <span class="form-help" style="text-transform:none;letter-spacing:0;">(<a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" rel="noopener noreferrer">Markdown</a> supported)</span></label>
                 {{ form.bio }}
                 {% if form.bio.help_text %}
                     <p class="form-help">{{ form.bio.help_text }}</p>
