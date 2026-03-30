@@ -41,5 +41,9 @@ EXPOSE 8000
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Default command (Railway will override startCommand from railway.toml if needed)
-CMD ["sh", "-c", "gunicorn config.wsgi --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120 --log-level info"]
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Use entrypoint for proper signal handling
+ENTRYPOINT ["/app/entrypoint.sh"]
