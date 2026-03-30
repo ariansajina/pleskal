@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-pleskal is a Django web application for a Copenhagen dance and performance arts calendar.
+pleskal is a Django web application for a Copenhagen dance and performance art calendar.
 
 Inspired by [dukop.dk](https://dukop.dk). Designed for low operational cost and complexity.
 

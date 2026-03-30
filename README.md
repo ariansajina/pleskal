@@ -3,7 +3,7 @@
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ariansajina_pleskal&metric=coverage)](https://sonarcloud.io/summary/new_code?id=ariansajina_pleskal)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ariansajina_pleskal&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ariansajina_pleskal)
 
-A hyperlocal community-maintained calendar for dance and performance arts events in Copenhagen.
+A hyperlocal community-maintained calendar for dance and performance art events in Copenhagen.
 
 Inspired by [dukop.dk](https://dukop.dk/en/).
 
