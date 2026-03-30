@@ -97,22 +97,6 @@ class TestMyInvitesViewGet:
         assert "CLMD1234" in content
         assert "NCLM1234" not in content
 
-    def test_filter_expired(self, logged_in_client, user):
-        ClaimCode.objects.create(
-            code="EXPD5678",
-            expires_at=timezone.now() - timedelta(hours=1),
-            created_by=user,
-        )
-        ClaimCode.objects.create(
-            code="ACTV5678",
-            expires_at=timezone.now() + timedelta(days=7),
-            created_by=user,
-        )
-        resp = logged_in_client.get("/accounts/invites/?filter=expired")
-        content = resp.content.decode()
-        assert "EXPD5678" in content
-        assert "ACTV5678" not in content
-
     def test_htmx_returns_partial(self, logged_in_client):
         resp = logged_in_client.get(
             "/accounts/invites/", headers={"HX-Request": "true"}

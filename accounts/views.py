@@ -278,8 +278,9 @@ class MyInvitesView(LoginRequiredMixin, View):
             qs = qs.filter(claimed_at__isnull=True, expires_at__gt=now)
         elif active_filter == "claimed":
             qs = qs.filter(claimed_at__isnull=False)
-        elif active_filter == "expired":
-            qs = qs.filter(expires_at__lte=now, claimed_at__isnull=True)
+        else:
+            # Hide expired, unclaimed codes from all view
+            qs = qs.exclude(claimed_at__isnull=True, expires_at__lte=now)
 
         return active_filter, qs
 
