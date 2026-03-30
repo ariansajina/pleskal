@@ -1,0 +1,6 @@
+[build]
+buildCommand = "uv sync --no-dev"
+
+[deploy]
+startCommand = "python scripts/backup_db.py"
+restartPolicyType = "NEVER"

@@ -1,0 +1,6 @@
+[build]
+buildCommand = "uv sync --no-dev"
+
+[deploy]
+startCommand = "python manage.py run_scrapers"
+restartPolicyType = "NEVER"
