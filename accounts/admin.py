@@ -1,6 +1,9 @@
+import csv
+
 from django import forms
 from django.contrib import admin, messages
 from django.db import IntegrityError
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
@@ -31,6 +34,41 @@ class UserAdmin(admin.ModelAdmin):
         ),
         ("Dates", {"fields": ("date_joined", "last_login")}),
     )
+
+    def get_urls(self):
+        custom_urls = [
+            path(
+                "export-csv/",
+                self.admin_site.admin_view(self.export_csv_view),
+                name="accounts_user_export_csv",
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
+    def export_csv_view(self, request):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="users.csv"'
+        writer = csv.writer(response)
+        writer.writerow(
+            ["id", "email", "display_name", "is_staff", "is_active", "date_joined"]
+        )
+        for user in User.objects.all().order_by("date_joined"):
+            writer.writerow(
+                [
+                    user.id,
+                    user.email,
+                    user.display_name,
+                    user.is_staff,
+                    user.is_active,
+                    user.date_joined,
+                ]
+            )
+        return response
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["export_csv_url"] = reverse("admin:accounts_user_export_csv")
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 class GenerateCodesForm(forms.Form):
@@ -66,8 +104,42 @@ class ClaimCodeAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.generate_codes_view),
                 name="accounts_claimcode_generate",
             ),
+            path(
+                "export-csv/",
+                self.admin_site.admin_view(self.export_csv_view),
+                name="accounts_claimcode_export_csv",
+            ),
         ]
         return custom_urls + super().get_urls()
+
+    def export_csv_view(self, request):
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="claim_codes.csv"'
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "code",
+                "created_by",
+                "created_at",
+                "expires_at",
+                "claimed_by",
+                "claimed_at",
+            ]
+        )
+        for obj in ClaimCode.objects.select_related(
+            "created_by", "claimed_by"
+        ).order_by("created_at"):
+            writer.writerow(
+                [
+                    obj.code,
+                    obj.created_by.email if obj.created_by else "",
+                    obj.created_at,
+                    obj.expires_at,
+                    obj.claimed_by.email if obj.claimed_by else "",
+                    obj.claimed_at,
+                ]
+            )
+        return response
 
     def generate_codes_view(self, request):
         generated_codes = None
@@ -114,4 +186,5 @@ class ClaimCodeAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         extra_context["generate_url"] = reverse("admin:accounts_claimcode_generate")
+        extra_context["export_csv_url"] = reverse("admin:accounts_claimcode_export_csv")
         return super().changelist_view(request, extra_context=extra_context)
