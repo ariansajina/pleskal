@@ -1,8 +1,11 @@
-FROM node:20-slim as node-builder
+FROM node:20-slim AS node-builder
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci && npm run css:build
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY static ./static
+RUN npm run css:build
 
 
 FROM python:3.14-slim
@@ -15,20 +18,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Copy project files
+# Copy project files (excluding node_modules and CSS output)
 COPY . .
 
-# Copy CSS build output from node-builder
-COPY --from=node-builder /app/static ./static
+# Copy compiled CSS from node-builder
+COPY --from=node-builder /app/static/css/output.css ./static/css/output.css
 
-# Install Python dependencies
+# Install Python dependencies with uv
 RUN pip install uv && uv sync --no-dev
 
-# Collect static files
-RUN python manage.py collectstatic --noinput
+# Collect static files (use uv run to access venv)
+RUN uv run python manage.py collectstatic --noinput
 
 # Expose port for web service
 EXPOSE 8000
 
 # Default command (can be overridden by Railway)
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+CMD ["uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
