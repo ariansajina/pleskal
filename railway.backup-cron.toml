@@ -1,5 +1,5 @@
 [build]
-buildCommand = "uv sync --no-dev"
+buildCommand = "apt-get update && apt-get install -y postgresql-client && uv sync --no-dev"
 
 [deploy]
 startCommand = "python scripts/backup_db.py"
