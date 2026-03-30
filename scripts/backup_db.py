@@ -19,8 +19,6 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timedelta
-from pathlib import Path
-from urllib.parse import urlparse
 
 try:
     import boto3
@@ -41,10 +39,11 @@ def dump_database(db_url: str) -> bytes:
     """Dump PostgreSQL database to bytes."""
     print("Dumping database...")
     try:
-        result = subprocess.run(
-            ["pg_dump", db_url],
+        result = subprocess.run(  # noqa: S603
+            ["pg_dump", db_url],  # noqa: S607
             capture_output=True,
             check=True,
+            shell=False,
             timeout=300,  # 5 minutes
         )
         return result.stdout
@@ -173,10 +172,14 @@ def main() -> None:
         # Dump, compress, upload
         dump_data = dump_database(db_url)
         compressed_dump = compress_dump(dump_data)
-        upload_to_r2(compressed_dump, r2_bucket, r2_access_key, r2_secret_key, r2_endpoint)
+        upload_to_r2(
+            compressed_dump, r2_bucket, r2_access_key, r2_secret_key, r2_endpoint
+        )
 
         # Cleanup old backups
-        cleanup_old_backups(r2_bucket, r2_access_key, r2_secret_key, r2_endpoint, retention_days)
+        cleanup_old_backups(
+            r2_bucket, r2_access_key, r2_secret_key, r2_endpoint, retention_days
+        )
 
         print("=" * 60)
         print("Backup completed successfully")
