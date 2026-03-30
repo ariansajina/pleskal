@@ -342,8 +342,12 @@ class TestSubscribeView:
         EventFactory.create(submitted_by=user_b)
         resp = client.get(reverse("subscribe"))
         slugs = [p.display_name_slug for p in resp.context["publishers"]]
-        assert user_a.display_name_slug in slugs
-        assert user_b.display_name_slug in slugs
+        # Regular users should not appear as individual publisher badges
+        # They're represented by the "Community" badge instead
+        assert user_a.display_name_slug not in slugs
+        assert user_b.display_name_slug not in slugs
+        # But has_community_publishers should be True
+        assert resp.context["has_community_publishers"] is True
 
     def test_includes_system_accounts_in_publishers(self, client):
         system_user = UserFactory.create(is_system_account=True)

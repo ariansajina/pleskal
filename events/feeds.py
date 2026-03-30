@@ -37,8 +37,8 @@ def _upcoming_qs(
         if clean:
             qs = qs.filter(category__in=clean)
     if publisher_slugs:
-        other = "other" in publisher_slugs
-        named = [s for s in publisher_slugs if s != "other"]
+        other = "community" in publisher_slugs
+        named = [s for s in publisher_slugs if s != "community"]
         if other and named:
             qs = qs.filter(
                 Q(submitted_by__display_name_slug__in=named)

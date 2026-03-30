@@ -576,9 +576,9 @@ class SubscribeView(TemplateView):
             .values_list("submitted_by_id", flat=True)
             .distinct()
         )
-        ctx["publishers"] = User.objects.filter(pk__in=upcoming_publisher_ids).order_by(
-            "display_name"
-        )
+        ctx["publishers"] = User.objects.filter(
+            pk__in=upcoming_publisher_ids, is_system_account=True
+        ).order_by("display_name")
         ctx["has_community_publishers"] = User.objects.filter(
             pk__in=upcoming_publisher_ids, is_system_account=False
         ).exists()
