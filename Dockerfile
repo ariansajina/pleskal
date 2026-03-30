@@ -23,7 +23,7 @@ WORKDIR /app
 
 # Copy dependency files and install with caching
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
     UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
 
 # Copy project files
@@ -33,7 +33,7 @@ COPY . .
 COPY --from=node-builder /app/static/css/output.css ./static/css/output.css
 
 # Install the project itself
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
     UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 uv sync --frozen --no-dev
 
 # Collect static files
