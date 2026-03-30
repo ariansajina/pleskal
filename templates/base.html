@@ -476,8 +476,6 @@
           About
         </a>
 
-        <span class="nav-divider"></span>
-
         {% if user.is_authenticated %}
           <a href="{% url 'account_profile' %}"
              class="nav-link {% if request.resolver_match.url_name == 'publisher_profile' and request.resolver_match.kwargs.slug == user.display_name_slug %}nav-link--active{% endif %}">
@@ -487,6 +485,11 @@
              class="nav-link {% if request.resolver_match.url_name == 'my_invites' %}nav-link--active{% endif %}">
             Invites
           </a>
+        {% endif %}
+
+        <span class="nav-divider"></span>
+
+        {% if user.is_authenticated %}
           <span style="display:inline-block;"><a href="{% url 'event_create' %}" class="nav-btn">Submit event</a></span>
           <form method="post" action="{% url 'logout' %}" style="display:inline-block;">
             {% csrf_token %}
