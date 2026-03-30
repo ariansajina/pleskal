@@ -10,6 +10,9 @@ RUN npm run css:build
 
 FROM python:3.14-slim
 
+# Copy uv binary from official distroless image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 # Install system dependencies including PostgreSQL client tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
@@ -18,20 +21,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Copy project files (excluding node_modules and CSS output)
+# Copy dependency files and install with caching
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
+
+# Copy project files
 COPY . .
 
 # Copy compiled CSS from node-builder
 COPY --from=node-builder /app/static/css/output.css ./static/css/output.css
 
-# Install Python dependencies with uv
-RUN pip install uv && uv sync --no-dev
+# Install the project itself
+RUN --mount=type=cache,target=/root/.cache/uv \
+    UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 uv sync --frozen --no-dev
 
-# Collect static files (use uv run to access venv)
+# Collect static files
 RUN uv run python manage.py collectstatic --noinput
 
 # Expose port for web service
 EXPOSE 8000
 
-# Default command (can be overridden by Railway)
-CMD ["uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+# Ensure the venv is in PATH
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Default command
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
