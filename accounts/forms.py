@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.forms import AuthenticationForm
 from django.utils.html import mark_safe
+from markdownx.widgets import MarkdownxWidget
 
 User = get_user_model()
 
@@ -23,9 +24,7 @@ class ProfileForm(forms.ModelForm):
             "display_name": forms.TextInput(
                 attrs={"class": "form-input", "maxlength": 100}
             ),
-            "bio": forms.Textarea(
-                attrs={"rows": 4, "maxlength": 2000, "class": "form-textarea"}
-            ),
+            "bio": MarkdownxWidget(attrs={"rows": 4, "maxlength": 2000}),
             "website": forms.URLInput(
                 attrs={"placeholder": "https://", "class": "form-input"}
             ),
