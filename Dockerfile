@@ -21,10 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files and install with caching
+# Copy dependency files and install
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
-    UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
+RUN UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
 
 # Copy project files
 COPY . .
@@ -32,12 +31,9 @@ COPY . .
 # Copy compiled CSS from node-builder
 COPY --from=node-builder /app/static/css/output.css ./static/css/output.css
 
-# Install the project itself
-RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
-    UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 uv sync --frozen --no-dev
-
-# Collect static files
-RUN uv run python manage.py collectstatic --noinput
+# Install the project itself and collect static files
+RUN UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 uv sync --frozen --no-dev && \
+    uv run python manage.py collectstatic --noinput
 
 # Expose port for web service
 EXPOSE 8000
