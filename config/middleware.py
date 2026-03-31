@@ -47,4 +47,5 @@ class ContentSecurityPolicyMiddleware:
             ]
         )
         response["Content-Security-Policy"] = csp
+        response["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response

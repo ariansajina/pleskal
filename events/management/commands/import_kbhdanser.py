@@ -21,3 +21,4 @@ class Command(BaseEventImportCommand):
     external_source = "kbhdanser"
     default_json_file = "kbhdanser_events.json"
     default_venue_name = "Østre Gasværk Teater"
+    allowed_image_domains = frozenset({"kbhdanser.dk"})

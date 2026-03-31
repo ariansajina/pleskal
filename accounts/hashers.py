@@ -100,7 +100,7 @@ class HmacPepperedArgon2PasswordHasher(Argon2PasswordHasher):
         params = argon2.extract_parameters(rest)
         variety, *_, b64salt, hash_ = rest.lstrip("$").split("$")
         b64salt += "=" * (-len(b64salt) % 4)
-        salt = __import__("base64").b64decode(b64salt).decode("latin1")
+        salt = base64.b64decode(b64salt).decode("latin1")
         return {
             "algorithm": self.algorithm,
             "hash": hash_,

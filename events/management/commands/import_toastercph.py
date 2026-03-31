@@ -22,3 +22,4 @@ class Command(BaseEventImportCommand):
     external_source = "toastercph"
     default_json_file = "toastercph_events.json"
     default_venue_name = "Toaster CPH"
+    allowed_image_domains = frozenset({"toastercph.dk"})
