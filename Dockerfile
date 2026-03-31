@@ -21,9 +21,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
+# Enable bytecode compilation
+ENV UV_COMPILE_BYTECODE=1
+
+# Copy from the cache instead of linking since it's a mounted volume
+ENV UV_LINK_MODE=copy
+
+# Omit development dependencies
+ENV UV_NO_DEV=1
+
+# Install the project's dependencies using the lockfile and settings
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
+
 # Copy dependency files and install
 COPY pyproject.toml uv.lock ./
-RUN UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-install-project
 
 # Copy project files
 COPY . .
@@ -32,11 +47,10 @@ COPY . .
 COPY --from=node-builder /app/static/css/output.css ./static/css/output.css
 
 # Install the project itself and collect static files
-RUN UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 uv sync --frozen --no-dev && \
-    uv run python manage.py collectstatic --noinput
-
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked
 
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:$PORT", "--workers", "2"]
+CMD ["/bin/bash", "-c", "gunicorn config.wsgi:application –bind 0.0.0.0:$PORT --workers 2"]
