@@ -289,6 +289,9 @@ class EventListView(RateLimitMixin, View):
         base_query_string = params.urlencode()
 
         quick_date_ranges = _get_quick_date_ranges()
+        today = datetime.date.today()
+        week_start = today - datetime.timedelta(days=today.weekday())
+        week_end = week_start + datetime.timedelta(days=6)
         system_publishers = User.objects.filter(is_system_account=True).order_by(
             "display_name"
         )
@@ -303,7 +306,9 @@ class EventListView(RateLimitMixin, View):
             "show_past": show_past,
             "date_from": date_from or "",
             "date_to": date_to or "",
-            "today": datetime.date.today().isoformat(),
+            "today": today.isoformat(),
+            "week_start": week_start,
+            "week_end": week_end,
             "date_range_active": date_range_active,
             "is_free": request.GET.get("is_free") == "1",
             "is_wheelchair_accessible": request.GET.get("is_wheelchair_accessible")
