@@ -10,10 +10,14 @@ environ.Env.read_env(BASE_DIR / ".env", overwrite=False)
 
 _secret_key = env("SECRET_KEY", default="django-insecure-dev-key-change-in-production")
 # Guard against deploying with the known-insecure dev key. Skipped during pytest
-# runs because pytest is already in sys.modules when settings are loaded.
+# runs because pytest is already in sys.modules when settings are loaded, and
+# during build-time management commands (collectstatic, migrate, etc).
+_build_time_commands = {"collectstatic", "migrate", "makemigrations"}
+_is_build_command = any(cmd in _sys.argv for cmd in _build_time_commands)
 if (
     not env("DEBUG")
     and "pytest" not in _sys.modules
+    and not _is_build_command
     and _secret_key.startswith("django-insecure-")
 ):
     from django.core.exceptions import ImproperlyConfigured
