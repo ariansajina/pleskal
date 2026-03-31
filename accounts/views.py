@@ -266,7 +266,7 @@ class ClaimRegisterView(View):
         messages.info(
             request,
             "Account created! Please check your email and click the verification "
-            "link before logging in.",
+            "link before logging in. If you can't find it, also check the spam folder.",
         )
         return redirect("login")
 
