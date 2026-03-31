@@ -30,11 +30,9 @@ ENV UV_LINK_MODE=copy
 # Omit development dependencies
 ENV UV_NO_DEV=1
 
-# Install the project's dependencies using the lockfile and settings
-RUN --mount=type=cache,target=/root/.cache/uv,id=cachekey=uv-cache \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project
+# Copy dependency files and install
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project
 
 # Copy project files
 COPY . .
@@ -43,8 +41,8 @@ COPY . .
 COPY --from=node-builder /app/static/css/output.css ./static/css/output.css
 
 # Install the project itself and collect static files
-RUN --mount=type=cache,target=/root/.cache/uv,id=cachekey=uv-cache \
-    uv sync --locked
+RUN uv sync --frozen --no-dev && \
+    uv run python manage.py collectstatic --noinput
 
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
