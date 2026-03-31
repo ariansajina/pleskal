@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
+ARG PORT
+
 # Copy dependency files and install
 COPY pyproject.toml uv.lock ./
 RUN UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
@@ -36,7 +38,7 @@ RUN UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 uv sync --frozen --no-dev && \
     uv run python manage.py collectstatic --noinput
 
 # Expose port for web service
-EXPOSE 8000
+EXPOSE ${PORT}
 
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
