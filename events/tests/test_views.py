@@ -443,6 +443,21 @@ class TestEventListView:
         assert b"Past Event In Range" in resp.content
         assert str(future_event.title).encode() in resp.content
 
+    def test_toggle_enabled_with_default_date(self, client):
+        """When date_from=today (default) and date_to is empty, the upcoming/past
+        toggle should be enabled (date_range_active=False) even though a date was
+        passed in the query params."""
+        import datetime
+
+        today = datetime.date.today().isoformat()
+        EventFactory.create(
+            start_datetime=timezone.now() + timezone.timedelta(days=3),
+        )
+        # Request with default date_from but no explicit date_to
+        resp = client.get(reverse("event_list") + f"?date_from={today}")
+        # Toggle should be enabled since this is the default date range
+        assert resp.context["date_range_active"] is False
+
     def test_search_matches_title(self, client):
         match = EventFactory(title="Tango Evening Special")
         no_match = EventFactory(title="Ballet Workshop")

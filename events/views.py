@@ -196,17 +196,23 @@ class EventListView(RateLimitMixin, View):
         # --- Filter: date range ---
         date_from = request.GET.get("date_from")
         date_to = request.GET.get("date_to")
+        today_str = datetime.date.today().isoformat()
         date_range_active = False
+
+        # Consider the date range "active" (non-default) only if:
+        # - date_to is set (any value other than empty), OR
+        # - date_from is set to something other than today
+        if date_to or (date_from and date_from != today_str):
+            date_range_active = True
+
         if date_from:
             d = _parse_date_safe(date_from)
             if d:
                 qs = qs.filter(start_datetime__date__gte=d)
-                date_range_active = True
         if date_to:
             d = _parse_date_safe(date_to)
             if d:
                 qs = qs.filter(start_datetime__date__lte=d)
-                date_range_active = True
 
         # --- Filter: free / wheelchair accessible ---
         if request.GET.get("is_free") == "1":
