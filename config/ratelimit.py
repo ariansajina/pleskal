@@ -20,17 +20,23 @@ def get_client_ip(request):
 
 def check_rate_limit(key, limit, window):
     """
-    Check and increment a rate limit counter atomically.
+    Check and increment a rate limit counter.
 
     Returns True if the request exceeds the limit, False if it is allowed.
     The counter is stored in Django's cache and expires after ``window`` seconds.
 
-    Uses cache.add() + cache.incr() to avoid the check-then-set race condition
-    present in a naive get/set pattern. Both operations are atomic on Redis.
+    Uses cache.add() + cache.incr() to reduce the check-then-set race window
+    present in a naive get/set pattern: add() is a conditional atomic set (no-op
+    if the key already exists), and incr() is an atomic increment.
+
+    Note: Django's default LocMemCache is per-process. On a multi-worker gunicorn
+    deployment, each worker maintains independent counters, so the effective limit
+    is multiplied by the number of workers. For strict enforcement, configure a
+    shared cache backend (e.g. database cache or Redis via django-redis).
     """
-    # cache.add() sets key=0 only if absent (atomic); returns True if it was set.
+    # cache.add() sets key=0 only if absent (atomic no-op if key exists).
     cache.add(key, 0, window)
-    count = cache.incr(key)  # atomic increment; always succeeds after add
+    count = cache.incr(key)  # atomic increment
     return count > limit
 
 
