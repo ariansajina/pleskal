@@ -21,9 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-ARG PORT
-ENV PORT=${PORT}
-
 # Copy dependency files and install
 COPY pyproject.toml uv.lock ./
 RUN UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
@@ -42,7 +39,4 @@ RUN UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 uv sync --frozen --no-dev && \
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Expose port for web service
-EXPOSE ${PORT}
-
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:${PORT}", "--workers", "2"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:$PORT", "--workers", "2"]
