@@ -19,7 +19,7 @@ from .forms import EventForm
 from .images import validate_and_process
 from .models import Event, EventCategory
 
-EVENTS_PER_PAGE = 20
+EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
 MAX_UPCOMING_EVENTS_PER_USER = settings.MAX_UPCOMING_EVENTS_PER_USER
 
