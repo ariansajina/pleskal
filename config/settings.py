@@ -1,3 +1,4 @@
+import sys as _sys
 from pathlib import Path
 
 import environ
@@ -7,7 +8,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(DEBUG=(bool, False))
 environ.Env.read_env(BASE_DIR / ".env", overwrite=False)
 
-SECRET_KEY = env("SECRET_KEY", default="django-insecure-dev-key-change-in-production")
+_secret_key = env("SECRET_KEY", default="django-insecure-dev-key-change-in-production")
+# Guard against deploying with the known-insecure dev key. Skipped during pytest
+# runs because pytest is already in sys.modules when settings are loaded.
+if (
+    not env("DEBUG")
+    and "pytest" not in _sys.modules
+    and _secret_key.startswith("django-insecure-")
+):
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set to a secure random value in production. "
+        'Generate one with: python -c "import secrets; print(secrets.token_hex(50))"'
+    )
+SECRET_KEY = _secret_key
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 
@@ -251,7 +266,7 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         integrations=[DjangoIntegration(middleware_spans=True)],
         traces_sample_rate=0.2,
-        send_default_pii=True,
+        send_default_pii=False,
     )
 
 # Security (production only)
@@ -261,9 +276,12 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SECURE_HSTS_SECONDS = 31_536_000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # 1 week
     CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = True
 
 # Debug toolbar (development only)
 

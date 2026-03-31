@@ -56,15 +56,28 @@ class TestGetClientIp:
         request = rf.get("/", REMOTE_ADDR="1.2.3.4")
         assert get_client_ip(request) == "1.2.3.4"
 
-    def test_prefers_x_forwarded_for(self, rf):
+    def test_uses_rightmost_x_forwarded_for(self, rf):
+        # Reads the rightmost entry (added by the trusted proxy) to prevent
+        # IP spoofing via attacker-controlled leftmost entries.
         from config.ratelimit import get_client_ip
 
         request = rf.get(
             "/",
             HTTP_X_FORWARDED_FOR="9.8.7.6, 1.2.3.4",
-            REMOTE_ADDR="1.2.3.4",
+            REMOTE_ADDR="5.5.5.5",
         )
-        assert get_client_ip(request) == "9.8.7.6"
+        assert get_client_ip(request) == "1.2.3.4"
+
+    def test_spoofed_x_forwarded_for_is_ignored(self, rf):
+        # Attacker adds extra leftmost entries; we should not use those.
+        from config.ratelimit import get_client_ip
+
+        request = rf.get(
+            "/",
+            HTTP_X_FORWARDED_FOR="attacker-controlled, 1.2.3.4",
+            REMOTE_ADDR="5.5.5.5",
+        )
+        assert get_client_ip(request) == "1.2.3.4"
 
 
 # ---------------------------------------------------------------------------

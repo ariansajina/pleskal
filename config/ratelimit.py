@@ -5,28 +5,33 @@ from django.http import HttpResponse
 
 
 def get_client_ip(request):
-    """Extract client IP from request, respecting X-Forwarded-For."""
+    """Extract client IP from request, respecting X-Forwarded-For.
+
+    Reads the *rightmost* entry from X-Forwarded-For, which is the address
+    appended by the last trusted proxy (e.g. Railway's load balancer).
+    The leftmost entry is client-supplied and trivially spoofable.
+    Falls back to REMOTE_ADDR when the header is absent.
+    """
     x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if x_forwarded_for:
-        return x_forwarded_for.split(",")[0].strip()
+        return x_forwarded_for.split(",")[-1].strip()
     return request.META.get("REMOTE_ADDR", "127.0.0.1")
 
 
 def check_rate_limit(key, limit, window):
     """
-    Check and increment a rate limit counter.
+    Check and increment a rate limit counter atomically.
 
     Returns True if the request exceeds the limit, False if it is allowed.
     The counter is stored in Django's cache and expires after ``window`` seconds.
+
+    Uses cache.add() + cache.incr() to avoid the check-then-set race condition
+    present in a naive get/set pattern. Both operations are atomic on Redis.
     """
-    current = cache.get(key)
-    if current is None:
-        cache.set(key, 1, window)
-        return False
-    if current >= limit:
-        return True
-    cache.incr(key)
-    return False
+    # cache.add() sets key=0 only if absent (atomic); returns True if it was set.
+    cache.add(key, 0, window)
+    count = cache.incr(key)  # atomic increment; always succeeds after add
+    return count > limit
 
 
 class RateLimitMixin:

@@ -914,13 +914,13 @@ class TestImportImageDeduplication:
             **SAMPLE_EVENT,
             "source_url": "https://dansehallerne.dk/event/1",
             "start_datetime": "2030-06-01T18:00:00+02:00",
-            "image_url": "https://example.com/shared.jpg",
+            "image_url": "https://dansehallerne.dk/shared.jpg",
         }
         event2 = {
             **SAMPLE_EVENT,
             "source_url": "https://dansehallerne.dk/event/2",
             "start_datetime": "2030-06-02T18:00:00+02:00",
-            "image_url": "https://example.com/shared.jpg",
+            "image_url": "https://dansehallerne.dk/shared.jpg",
         }
         f = tmp_path / "events.json"
         _write_json([event1, event2], f)
@@ -951,13 +951,13 @@ class TestImportImageDeduplication:
             **SAMPLE_EVENT,
             "source_url": "https://dansehallerne.dk/event/1",
             "start_datetime": "2030-06-01T18:00:00+02:00",
-            "image_url": "https://example.com/shared.jpg",
+            "image_url": "https://dansehallerne.dk/shared.jpg",
         }
         event2 = {
             **SAMPLE_EVENT,
             "source_url": "https://dansehallerne.dk/event/2",
             "start_datetime": "2030-06-02T18:00:00+02:00",
-            "image_url": "https://example.com/shared.jpg",
+            "image_url": "https://dansehallerne.dk/shared.jpg",
         }
         f = tmp_path / "events.json"
         _write_json([event1, event2], f)
@@ -982,13 +982,13 @@ class TestImportImageDeduplication:
             **SAMPLE_EVENT,
             "source_url": "https://dansehallerne.dk/event/1",
             "start_datetime": "2030-06-01T18:00:00+02:00",
-            "image_url": "https://example.com/image_a.jpg",
+            "image_url": "https://dansehallerne.dk/image_a.jpg",
         }
         event2 = {
             **SAMPLE_EVENT,
             "source_url": "https://dansehallerne.dk/event/2",
             "start_datetime": "2030-06-02T18:00:00+02:00",
-            "image_url": "https://example.com/image_b.jpg",
+            "image_url": "https://dansehallerne.dk/image_b.jpg",
         }
         f = tmp_path / "events.json"
         _write_json([event1, event2], f)

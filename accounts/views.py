@@ -175,6 +175,9 @@ class ClaimCodeView(RateLimitMixin, View):
 
         code_value = form.cleaned_data["code"]
         invalid_msg = "Invalid or expired code."
+
+        # Unify the code path so "code not found" and "code found but invalid"
+        # produce the same response and similar timing, reducing timing side-channels.
         try:
             claim_code = ClaimCode.objects.get(code__iexact=code_value)
         except ClaimCode.DoesNotExist:

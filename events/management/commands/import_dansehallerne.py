@@ -27,3 +27,4 @@ class Command(BaseEventImportCommand):
     default_json_file = "dansehallerne_events.json"
     default_venue_name = "Dansehallerne"
     category_scope = ["performance", "talk", "openpractice", "social", "other"]
+    allowed_image_domains = frozenset({"dansehallerne.dk"})

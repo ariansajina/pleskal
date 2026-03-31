@@ -22,3 +22,5 @@ class Command(BaseEventImportCommand):
     external_source = "sydhavnteater"
     default_json_file = "sydhavnteater_events.json"
     default_venue_name = "Sydhavn Teater"
+    # Subdomain matching covers cms.sydhavnteater.dk (Craft CMS image CDN).
+    allowed_image_domains = frozenset({"sydhavnteater.dk"})

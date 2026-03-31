@@ -102,6 +102,12 @@ class BaseEventImportCommand(BaseCommand):
         external_source   – the value stored in Event.external_source
         default_json_file – default argument for the positional json_file arg
         default_venue_name – fallback venue name when the record omits it
+
+    Subclasses should also define:
+        allowed_image_domains – frozenset of hostnames (e.g. "example.dk") from
+            which this importer is permitted to download images. Subdomains are
+            accepted automatically (e.g. "example.dk" also allows
+            "images.example.dk"). An empty frozenset blocks all image downloads.
     """
 
     external_source: str
@@ -111,6 +117,9 @@ class BaseEventImportCommand(BaseCommand):
     # Use this when multiple importers share the same external_source but cover
     # different categories (e.g. dansehallerne vs dansehallerne_workshops).
     category_scope: list[str] | None = None
+    # Allowlist of domains from which images may be downloaded (SSRF mitigation).
+    # Subclasses must declare this explicitly; no downloads are performed when empty.
+    allowed_image_domains: frozenset[str] = frozenset()
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -331,6 +340,24 @@ class BaseEventImportCommand(BaseCommand):
             return
         # Don't re-download if the event already has an image
         if event.image.name:
+            return
+
+        # SSRF mitigation: only download from explicitly allowed domains.
+        if self.allowed_image_domains:
+            from urllib.parse import urlparse
+
+            host = urlparse(image_url).hostname or ""
+            if not any(
+                host == d or host.endswith("." + d) for d in self.allowed_image_domains
+            ):
+                self.stderr.write(
+                    f"    Blocked image from non-allowlisted domain '{host}': {image_url}"
+                )
+                return
+        else:
+            self.stderr.write(
+                f"    No allowed_image_domains set for {self.external_source}; skipping image"
+            )
             return
 
         result = _download_image(image_url)
