@@ -11,23 +11,10 @@
       <h1 class="page-hero__title page-hero__title--sm">Confirm your email</h1>
     </div>
 
-    {% if confirmation %}
-      {% if can_confirm %}
-        <p class="text-muted text-base" style="margin:var(--space-6) 0;">
-          Please confirm that <a href="mailto:{{ confirmation.email_address.email }}" class="link-accent">{{ confirmation.email_address.email }}</a> is your email address.
-        </p>
-        <form method="post">
-          {% csrf_token %}
-          {{ redirect_field }}
-          <button type="submit" class="btn btn--primary" style="width:100%;justify-content:center;">
-            Confirm email address
-          </button>
-        </form>
-      {% else %}
-        <div class="alert alert--error" style="margin-top:var(--space-6);">
-          Unable to confirm <strong>{{ confirmation.email_address.email }}</strong> — it is already confirmed by a different account.
-        </div>
-      {% endif %}
+    {% if confirmation and not can_confirm %}
+      <div class="alert alert--error" style="margin-top:var(--space-6);">
+        Unable to confirm <strong>{{ confirmation.email_address.email }}</strong> — it is already confirmed by a different account.
+      </div>
     {% else %}
       <div class="alert alert--warning" style="margin-top:var(--space-6);">
         This confirmation link has expired or is invalid.

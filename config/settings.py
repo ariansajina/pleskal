@@ -251,6 +251,9 @@ ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_PREVENT_ENUMERATION = True
 # Disable allauth's own signup — registration is handled by the claim-code flow.
 ACCOUNT_ALLOW_REGISTRATION = False
+# Auto-confirm email on GET (no extra button click required).
+ACCOUNT_CONFIRM_EMAIL_ON_GET = True
+ACCOUNT_EMAIL_CONFIRMATION_ANONYMOUS_REDIRECT_URL = "/accounts/email-verified/"
 
 # django-axes (brute-force protection)
 

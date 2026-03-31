@@ -6,6 +6,7 @@ from .views import (
     AccountProfileView,
     ChangePasswordView,
     EditProfileView,
+    EmailVerifiedView,
     MyInvitesView,
     PublisherProfileView,
     RateLimitedLoginView,
@@ -13,6 +14,11 @@ from .views import (
 )
 
 urlpatterns = [
+    path(
+        "email-verified/",
+        EmailVerifiedView.as_view(),
+        name="email_verified",
+    ),
     path(
         "login/",
         RateLimitedLoginView.as_view(),

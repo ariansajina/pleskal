@@ -42,6 +42,11 @@ class AccountDeleteView(LoginRequiredMixin, View):
         return redirect("/")
 
 
+class EmailVerifiedView(View):
+    def get(self, request):
+        return render(request, "accounts/email_verified.html")
+
+
 class AccountProfileView(LoginRequiredMixin, View):
     """Redirects to the user's public profile page."""
 
