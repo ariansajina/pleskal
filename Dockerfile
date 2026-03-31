@@ -53,4 +53,4 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["/bin/bash", "-c", "gunicorn config.wsgi:application –bind 0.0.0.0:$PORT --workers 2"]
+CMD ["/bin/bash", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2"]
