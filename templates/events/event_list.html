@@ -111,7 +111,12 @@
             </div>
 
             <div class="filter-panel__group" style="justify-content:flex-end;align-self:flex-end;">
-              <a href="/" class="filter-chip">Clear filters</a>
+              <button type="button"
+                      onclick="document.getElementById('filter-form').reset()"
+                      hx-get="/"
+                      hx-target="#event-list"
+                      hx-push-url="true"
+                      class="filter-chip">Clear filters</button>
             </div>
 
         </div>
