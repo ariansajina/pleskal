@@ -13,24 +13,16 @@ FROM python:3.14-slim
 # Copy uv binary from official distroless image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install system dependencies for PostgreSQL client
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt \
-    apt update && \
+# Install PostgreSQL client 18 with PGDG repository
+RUN apt update && \
     apt install --no-install-recommends -y \
     apt-transport-https \
     ca-certificates \
     curl \
     gnupg \
-    lsb-release
-
-# Add the PostgreSQL PGDG apt repository
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list
-
-# Trust the PGDG GPG key
-RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
-
-# Install PostgreSQL client 18
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt \
+    lsb-release && \
+    echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg && \
     apt update && \
     apt install --no-install-recommends -y postgresql-client-18 && \
     rm -rf /var/lib/apt/lists/*
