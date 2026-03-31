@@ -15,7 +15,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Install system dependencies including PostgreSQL client tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    postgresql-client \
+    postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
