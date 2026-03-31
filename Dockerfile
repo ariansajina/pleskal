@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 ARG PORT
+ENV PORT=${PORT}
 
 # Copy dependency files and install
 COPY pyproject.toml uv.lock ./
