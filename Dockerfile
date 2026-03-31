@@ -38,15 +38,11 @@ COPY --from=node-builder /app/static/css/output.css ./static/css/output.css
 RUN UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 uv sync --frozen --no-dev && \
     uv run python manage.py collectstatic --noinput
 
-# Expose port for web service
-EXPOSE ${PORT}
 
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Copy entrypoint script
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# Expose port for web service
+EXPOSE ${PORT}
 
-# Use entrypoint for proper signal handling
-ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:${PORT}", "--workers", "2"]
