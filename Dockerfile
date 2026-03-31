@@ -31,7 +31,7 @@ ENV UV_LINK_MODE=copy
 ENV UV_NO_DEV=1
 
 # Install the project's dependencies using the lockfile and settings
-RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
+RUN --mount=type=cache,target=/root/.cache/uv,id=cachekey=uv-cache \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-install-project
@@ -43,7 +43,7 @@ COPY . .
 COPY --from=node-builder /app/static/css/output.css ./static/css/output.css
 
 # Install the project itself and collect static files
-RUN --mount=type=cache,target=/root/.cache/uv,id=uv-cache \
+RUN --mount=type=cache,target=/root/.cache/uv,id=cachekey=uv-cache \
     uv sync --locked
 
 # Ensure the venv is in PATH
