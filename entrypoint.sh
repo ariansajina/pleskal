@@ -8,11 +8,11 @@ echo "Gunicorn: $(gunicorn --version)"
 echo "=== Running migrations ==="
 python manage.py migrate --noinput
 
-echo "=== Starting gunicorn on port 8000 ==="
-# Railway sets PORT via startCommand substitution, but when running Docker directly,
-# we use 8000. Railway's startCommand will override the CMD anyway.
+PORT=${PORT:-8000}
+
+echo "=== Starting gunicorn on port $PORT ==="
 exec gunicorn config.wsgi \
-  --bind 0.0.0.0:8080 \
+  --bind 0.0.0.0:$PORT \
   --workers 2 \
   --timeout 120 \
   --log-level info \
