@@ -88,6 +88,7 @@ class ClaimCode(models.Model):
         blank=True,
         related_name="claim_codes",
     )
+    claimed_by_email = models.EmailField(blank=True, default="")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -95,6 +96,7 @@ class ClaimCode(models.Model):
         blank=True,
         related_name="created_claim_codes",
     )
+    created_by_email = models.EmailField(blank=True, default="")
 
     class Meta:
         db_table = "accounts_claimcode"

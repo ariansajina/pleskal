@@ -81,6 +81,31 @@ class TestClaimCodeModel:
         )
         assert str(code) == "STRG1234"
 
+    def test_created_by_email_preserved_on_creator_deletion(self):
+        creator = UserFactory.create(email="creator@example.com")
+        code = ClaimCode.objects.create(
+            code="CRTR1234",
+            expires_at=timezone.now() + timedelta(days=7),
+            created_by=creator,
+        )
+        creator.delete()
+        code.refresh_from_db()
+        assert code.created_by is None
+        assert code.created_by_email == "creator@example.com"
+
+    def test_claimed_by_email_preserved_on_claimer_deletion(self):
+        claimer = UserFactory.create(email="claimer@example.com")
+        code = ClaimCode.objects.create(
+            code="CLMR1234",
+            expires_at=timezone.now() + timedelta(days=7),
+            claimed_by=claimer,
+            claimed_at=timezone.now(),
+        )
+        claimer.delete()
+        code.refresh_from_db()
+        assert code.claimed_by is None
+        assert code.claimed_by_email == "claimer@example.com"
+
 
 @pytest.mark.django_db
 class TestGenerateClaimCodesCommand:

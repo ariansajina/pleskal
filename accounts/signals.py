@@ -4,8 +4,10 @@ from allauth.account.signals import email_confirmed
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
+
+from accounts.models import ClaimCode
 
 logger = logging.getLogger(__name__)
 
@@ -73,3 +75,17 @@ def notify_admins_on_new_user(sender, instance, created, **kwargs):
         recipient_list=admin_emails,
         fail_silently=True,
     )
+
+
+@receiver(pre_delete, sender=User)
+def preserve_claim_code_emails_on_user_delete(sender, instance, **kwargs):
+    """Capture user email in ClaimCode records before user deletion.
+
+    When a user is deleted, populate created_by_email and claimed_by_email
+    with the user's email address so the records remain informative.
+    """
+    user_email = instance.email
+    # Update claim codes where this user is the creator
+    ClaimCode.objects.filter(created_by=instance).update(created_by_email=user_email)
+    # Update claim codes where this user claimed the code
+    ClaimCode.objects.filter(claimed_by=instance).update(claimed_by_email=user_email)
