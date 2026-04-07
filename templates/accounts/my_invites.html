@@ -39,25 +39,18 @@
                 </button>
             {% endif %}
         </div>
-        <p class="text-sm text-muted">
+        <p class="text-sm text-muted" style="text-align:center;">
             You can generate {{ batch_size }} codes once per month, valid for {{ expiry_days }} days.
         </p>
         {% if not can_generate %}
-            <p class="text-sm text-muted" style="margin-top:var(--space-2);">
+            <p class="text-sm text-muted" style="margin-top:var(--space-2);text-align:center;">
                 Your allowance resets on the 1st of next month.
             </p>
         {% endif %}
     </div>
 
-    {# Filter tabs #}
-    <div class="page-tabs" style="margin-bottom:var(--space-6);">
-        <a href="?filter=all" hx-get="?filter=all" hx-target="#invite-list" class="page-tab {% if active_filter == 'all' %}active{% endif %}">All</a>
-        <a href="?filter=active" hx-get="?filter=active" hx-target="#invite-list" class="page-tab {% if active_filter == 'active' %}active{% endif %}">Active</a>
-        <a href="?filter=claimed" hx-get="?filter=claimed" hx-target="#invite-list" class="page-tab {% if active_filter == 'claimed' %}active{% endif %}">Claimed</a>
-    </div>
-
-    {# Code list #}
-    <div id="invite-list">
+    {# Filter tabs + code list (partial handles both so HTMX can update active tab) #}
+    <div id="invite-section">
         {% include "accounts/partials/invite_list_results.html" %}
     </div>
 

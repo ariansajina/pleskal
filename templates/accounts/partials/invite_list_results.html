@@ -1,4 +1,9 @@
 {% load tz %}
+<div class="page-tabs" style="margin-bottom:var(--space-6);">
+    <a href="?filter=all" hx-get="?filter=all" hx-target="#invite-section" class="page-tab {% if active_filter == 'all' %}active{% endif %}">All</a>
+    <a href="?filter=active" hx-get="?filter=active" hx-target="#invite-section" class="page-tab {% if active_filter == 'active' %}active{% endif %}">Active</a>
+    <a href="?filter=claimed" hx-get="?filter=claimed" hx-target="#invite-section" class="page-tab {% if active_filter == 'claimed' %}active{% endif %}">Claimed</a>
+</div>
 {% if codes %}
     <div class="invite-list">
         {% for code in codes %}
