@@ -24,20 +24,22 @@
 <div class="content-wrap">
 
     {# Generate section #}
-    <div style="margin-bottom:var(--space-8);text-align:center;">
-        {% if can_generate %}
-            <form method="post">
-                {% csrf_token %}
-                <button type="submit" class="btn btn--primary">
-                    Generate {{ batch_size }} invite codes
+    <div style="margin-bottom:var(--space-8);">
+        <div style="text-align:center;margin-bottom:var(--space-4);">
+            {% if can_generate %}
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn--primary">
+                        Generate {{ batch_size }} invite codes
+                    </button>
+                </form>
+            {% else %}
+                <button class="btn" disabled style="opacity:0.5;cursor:not-allowed;">
+                    Codes already generated this month
                 </button>
-            </form>
-        {% else %}
-            <button class="btn" disabled style="opacity:0.5;cursor:not-allowed;">
-                Codes already generated this month
-            </button>
-        {% endif %}
-        <p class="text-sm text-muted" style="margin-top:var(--space-2);">
+            {% endif %}
+        </div>
+        <p class="text-sm text-muted">
             You can generate {{ batch_size }} codes once per month, valid for {{ expiry_days }} days.
         </p>
         {% if not can_generate %}
