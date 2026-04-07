@@ -6,9 +6,19 @@
 <div class="page-hero">
     <div class="page-hero__ornrow">✦</div>
     <h1 class="page-hero__title page-hero__title--sm">Your Invite Codes</h1>
-    <p class="page-hero__sub">
-        Invite friends to join pleskal. You can generate {{ batch_size }} codes once per month, valid for {{ expiry_days }} days.
-    </p>
+    <div class="page-hero__sub">
+        <blockquote style="border-left:3px solid var(--color-border);padding-left:var(--space-4);margin:var(--space-4) 0;font-style:italic;">
+            "Community (…) is not the outcome of an act of authoritative foundation, nor a gift from nature or its gods, nor the result of management, planning and design, but the consequence of a conspiracy, a deliberate, mutual, somatic and gratuitous gift to each other."
+            <br><br>
+            <span style="font-style:normal;">— Ivan Illich, "The Cultivation of Conspiracy", 1998</span>
+        </blockquote>
+        <p style="margin-bottom:var(--space-3);">
+            You are here because someone conspired to invite you. You are invited to do the same. On a piece of paper, write down an invite code, together with a short text (1-3 sentences) for a score. This is your gratuitous gift. Give it to your invitee next time you meet them in person, with an invitation to explore it in their own time and space.
+        </p>
+        <p>
+            What unfolds is a communal work. Intimate yet never witnessed. A somatic enactment of a network. Strewn across time, space, and presence. A commons built by being performed.
+        </p>
+    </div>
 </div>
 
 <div class="content-wrap">
@@ -26,6 +36,11 @@
             <button class="btn" disabled style="opacity:0.5;cursor:not-allowed;">
                 Codes already generated this month
             </button>
+        {% endif %}
+        <p class="text-sm text-muted" style="margin-top:var(--space-2);">
+            You can generate {{ batch_size }} codes once per month, valid for {{ expiry_days }} days.
+        </p>
+        {% if not can_generate %}
             <p class="text-sm text-muted" style="margin-top:var(--space-2);">
                 Your allowance resets on the 1st of next month.
             </p>
