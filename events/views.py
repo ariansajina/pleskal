@@ -359,6 +359,8 @@ class EventDetailView(DetailView):
         context["google_calendar_url"] = (
             "https://calendar.google.com/calendar/render?" + urlencode(params)
         )
+        if event.image:
+            context["og_image_url"] = self.request.build_absolute_uri(event.image.url)
         return context
 
 

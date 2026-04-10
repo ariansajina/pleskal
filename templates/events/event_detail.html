@@ -3,6 +3,19 @@
 
 {% block title %}{{ event.title }} – pleskal{% endblock %}
 
+{% block og_tags %}
+<meta property="og:site_name" content="pleskal">
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{ event.title }} – pleskal">
+<meta property="og:description" content="{{ event.description|truncatechars:200 }}">
+<meta property="og:url" content="{{ request.build_absolute_uri }}">
+<meta name="twitter:card" content="{% if event.image %}summary_large_image{% else %}summary{% endif %}">
+{% if event.image %}
+<meta property="og:image" content="{{ og_image_url }}">
+<meta name="twitter:image" content="{{ og_image_url }}">
+{% endif %}
+{% endblock og_tags %}
+
 {% block extra_head %}
 <style>
 details summary::-webkit-details-marker { display: none; }
