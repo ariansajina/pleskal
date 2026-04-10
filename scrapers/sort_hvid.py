@@ -266,22 +266,13 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
         return None
 
     # ── Description ───────────────────────────────────────────────────────────
+    # Target .performance-content specifically to avoid:
+    #   - .mobile: a hidden duplicate of the full page used for mobile layout
+    #   - .newsletter: newsletter signup block
+    #   - .cmplz-cookiebanner: cookie consent widget (rendered in Danish)
     description = ""
-    # Collect <p> tags that are part of the main content (not nav/footer boilerplate).
-    # Sort/Hvid pages have meaningful paragraphs in the entry-content area or
-    # directly in the post body; grab all <p> under the first article/main/div
-    # with class containing "entry" or "content", falling back to the whole page.
-    content_el = (
-        soup.find("article")
-        or soup.find(class_=re.compile(r"entry|content|post"))
-        or soup
-    )
-    paragraphs = [
-        p.get_text(" ", strip=True)
-        for p in content_el.find_all("p")
-        if p.get_text(strip=True)
-    ]
-    if paragraphs:
+    content_el = soup.find(class_="performance-content")
+    if content_el:
         raw_html = "".join(
             str(p) for p in content_el.find_all("p") if p.get_text(strip=True)
         )
