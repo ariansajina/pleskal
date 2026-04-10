@@ -28,5 +28,11 @@
     "display_name": "KBH Danser",
     "email": "system.kbhdanser@pleskal.internal",
     "website": "https://kbhdanser.dk"
+  },
+  {
+    "external_source": "sort-hvid",
+    "display_name": "Sort/Hvid",
+    "email": "system.sort-hvid@pleskal.internal",
+    "website": "https://sort-hvid.dk"
   }
 ]

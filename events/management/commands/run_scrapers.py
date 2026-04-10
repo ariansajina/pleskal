@@ -28,6 +28,7 @@ from scrapers.dansehallerne_workshops import (
 )
 from scrapers.hautscene import scrape as scrape_hautscene
 from scrapers.kbhdanser import scrape as scrape_kbhdanser
+from scrapers.sort_hvid import scrape as scrape_sort_hvid
 from scrapers.sydhavnteater import scrape as scrape_sydhavnteater
 from scrapers.toastercph import scrape as scrape_toastercph
 
@@ -70,6 +71,12 @@ SCRAPERS = [
         {"delay": 1.5},
         "import_kbhdanser",
     ),
+    (
+        "sort_hvid",
+        scrape_sort_hvid,
+        {"delay": 0.5},
+        "import_sort_hvid",
+    ),
 ]
 
 
@@ -95,7 +102,7 @@ class Command(BaseCommand):
             help=(
                 "Run only the named scraper(s). Can be repeated. "
                 "Choices: dansehallerne, dansehallerne_workshops, "
-                "hautscene, kbhdanser, sydhavnteater, toastercph."
+                "hautscene, kbhdanser, sort_hvid, sydhavnteater, toastercph."
             ),
         )
 
