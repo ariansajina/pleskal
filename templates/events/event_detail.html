@@ -48,7 +48,7 @@ details[open] summary::after { content: ''; }
         {# Date / time #}
         <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
             <span><strong>{{ event.start_datetime|date:"l, j F Y" }}</strong></span>
-            {% if event.start_datetime.hour != 0 or event.start_datetime.minute != 0 %}
+            {% if event.start_datetime|date:"H:i" != "00:00" %}
                 <span style="opacity:0.4;">·</span>
                 <span>{{ event.start_datetime|date:"H:i" }}</span>
                 {% if event.end_datetime %}
