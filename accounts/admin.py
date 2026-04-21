@@ -17,6 +17,7 @@ class UserAdmin(admin.ModelAdmin):
     list_filter = ("is_staff", "is_active")
     search_fields = ("display_name", "email")
     readonly_fields = ("id", "date_joined", "last_login")
+    actions = ["resend_verification_email"]
     fieldsets = (
         (None, {"fields": ("id", "email", "password")}),
         ("Profile", {"fields": ("display_name", "bio", "website")}),
@@ -34,6 +35,30 @@ class UserAdmin(admin.ModelAdmin):
         ),
         ("Dates", {"fields": ("date_joined", "last_login")}),
     )
+
+    @admin.action(description="Resend verification email to selected users")
+    def resend_verification_email(self, request, queryset):
+        from allauth.account.models import EmailAddress
+
+        sent = 0
+        skipped = 0
+        for user in queryset:
+            email_address = EmailAddress.objects.filter(
+                user=user, verified=False
+            ).first()
+            if email_address is not None:
+                email_address.send_confirmation(request)
+                sent += 1
+            else:
+                skipped += 1
+
+        if sent:
+            messages.success(request, f"Sent {sent} verification email(s).")
+        if skipped:
+            messages.warning(
+                request,
+                f"Skipped {skipped} user(s) (already verified or no email record).",
+            )
 
     def get_urls(self):
         custom_urls = [

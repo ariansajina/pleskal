@@ -58,7 +58,7 @@ class User(AbstractBaseUser, PermissionsMixin):
             ):
                 candidate = f"{slug}-{counter}"
                 counter += 1
-            self.display_name_slug = candidate
+            self.display_name_slug = str(candidate)  # ty: ignore[invalid-assignment]
         super().save(*args, **kwargs)
 
     @property

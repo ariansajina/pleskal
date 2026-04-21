@@ -34,7 +34,7 @@ class TestSlugGeneration:
     def test_slug_immutable_on_save(self):
         event = EventFactory.create(title="Original Title")
         original_slug = event.slug
-        event.title = "Changed Title"
+        event.title = "Changed Title"  # ty: ignore[invalid-assignment]
         event.save()
         assert event.slug == original_slug
 
