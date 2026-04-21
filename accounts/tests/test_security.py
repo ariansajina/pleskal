@@ -110,3 +110,8 @@ class TestCSPHeader:
         resp = client.get(reverse("event_list"))
         csp = resp["Content-Security-Policy"]
         assert "unsafe-eval" not in csp
+
+    def test_csp_allows_openstreetmap_frame(self, client):
+        resp = client.get(reverse("event_list"))
+        csp = resp["Content-Security-Policy"]
+        assert "frame-src https://www.openstreetmap.org" in csp

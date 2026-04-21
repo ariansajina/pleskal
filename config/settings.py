@@ -198,6 +198,14 @@ SCRAPED_EVENT_DISCLAIMER = (
     "planning your visit/participation."
 )
 
+# Geocoding (OpenStreetMap / Nominatim)
+# Defaults to disabled in DEBUG so local dev never hits Nominatim unexpectedly.
+GEOCODING_ENABLED = env.bool("GEOCODING_ENABLED", default=not DEBUG)
+GEOCODING_USER_AGENT = env.str(
+    "GEOCODING_USER_AGENT",
+    default="pleskal/1.0 (https://pleskal.dk; hello.pleskal@proton.me)",
+)
+
 # Cloudflare R2 storage (production)
 if env("R2_BUCKET_NAME", default=None):
     STORAGES["default"] = {
