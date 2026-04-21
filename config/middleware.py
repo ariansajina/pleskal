@@ -13,6 +13,7 @@ class ContentSecurityPolicyMiddleware:
       - font-src 'self'
       - connect-src 'self'
       - frame-ancestors 'none' (also covered by X-Frame-Options: DENY)
+      - frame-src https://www.openstreetmap.org (OpenStreetMap embed on event detail)
       - base-uri 'self'
       - form-action 'self'
 
@@ -42,6 +43,7 @@ class ContentSecurityPolicyMiddleware:
                 "font-src 'self'",
                 "connect-src 'self'",
                 "frame-ancestors 'none'",
+                "frame-src https://www.openstreetmap.org",
                 "base-uri 'self'",
                 "form-action 'self'",
             ]

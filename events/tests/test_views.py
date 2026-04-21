@@ -665,6 +665,28 @@ class TestEventDetailView:
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         assert b"copy-link-btn" in resp.content
 
+    def test_show_map_button_absent_without_coordinates(self, client):
+        event = EventFactory.create(latitude=None, longitude=None)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"show-map-btn" not in resp.content
+        assert b'id="map-modal"' not in resp.content
+        assert b"show-map.js" not in resp.content
+
+    def test_show_map_button_present_with_coordinates(self, client):
+        event = EventFactory.create(latitude=55.6761, longitude=12.5683)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"show-map-btn" in resp.content
+        assert b"Show map" in resp.content
+        assert b'id="map-modal"' in resp.content
+        # The iframe src is populated by JS at click time, not in the HTML.
+        assert b'id="map-modal-iframe"' in resp.content
+        assert b"show-map.js" in resp.content
+
+    def test_show_map_button_absent_when_only_lat_set(self, client):
+        event = EventFactory.create(latitude=55.0, longitude=None)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"show-map-btn" not in resp.content
+
 
 @pytest.mark.django_db
 class TestMyEventsView:

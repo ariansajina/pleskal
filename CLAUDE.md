@@ -166,6 +166,11 @@ uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # su
 
 # Weekly digest email
 uv run python manage.py weekly_digest
+
+# Geocoding backfill for events that predate the OSM integration
+uv run python manage.py backfill_geocoding                  # all events without coords
+uv run python manage.py backfill_geocoding --dry-run        # print resolutions only
+uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 ```
 
 ## Code Conventions
@@ -215,7 +220,7 @@ uv run python manage.py weekly_digest
 - Image uploads: Pillow-validated (not Content-Type), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min IP lockout)
 - Rate limiting: custom cache-based (`config/ratelimit.py`); limits per endpoint listed below
-- CSP: `ContentSecurityPolicyMiddleware` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured)
+- CSP: `ContentSecurityPolicyMiddleware` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; auto-migrates legacy PBKDF2 hashes on login
 - Password strength: zxcvbn minimum score 2
 
@@ -288,11 +293,15 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `price_note` | Optional, max 200 chars |
 | `source_url` | Optional, http/https only |
 | `external_source` | Optional (e.g. `"dansehallerne"`) |
+| `latitude` | Optional float; populated at save time via OSM/Nominatim geocoding |
+| `longitude` | Optional float; populated alongside `latitude` |
 | `submitted_by` | FK -> User, nullable (SET_NULL on delete) |
 | `is_draft` | Boolean, default False; drafts are only visible to the owner |
 | `created_at`, `updated_at` | Auto timestamps |
 
 Method: `get_display_description()` prepends scraped event disclaimer if `external_source` is set.
+
+Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`.
 
 ### FeedHit (`events/models.py`)
 
@@ -404,6 +413,8 @@ See `.env.example` for the full list. Key variables:
 | `SITE_DOMAIN` | Site domain for allauth |
 | `SITE_NAME` | Site name for allauth |
 | `RAILWAY_PUBLIC_DOMAIN` | Auto-set by Railway |
+| `GEOCODING_ENABLED` | Toggle Nominatim calls in `Event.save()` (default: `false` in DEBUG, `true` otherwise) |
+| `GEOCODING_USER_AGENT` | User-Agent string sent to Nominatim (required by their policy) |
 
 ## Deployment
 

@@ -8,6 +8,9 @@ def test_settings(settings):
     settings.SECURE_SSL_REDIRECT = False
     # Provide a dummy pepper so tests work regardless of environment config.
     settings.PASSWORD_PEPPER = "ab" * 32
+    # Never hit Nominatim from the test suite. Tests that exercise the
+    # geocoding path should patch events.geocoding.geocode directly.
+    settings.GEOCODING_ENABLED = False
     # Use simple static storage so tests don't require a collected manifest.
     settings.STORAGES = {
         "default": {

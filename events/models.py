@@ -1,13 +1,16 @@
+import logging
 import secrets
 import uuid
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
 from .validators import validate_url_scheme
+
+logger = logging.getLogger(__name__)
 
 # Field length constraints; need to makemigrations if this is updated
 MAX_TITLE_LENGTH = 250
@@ -28,6 +31,7 @@ class EventCategory(models.TextChoices):
 
 class Event(models.Model):
     objects = models.Manager()
+    DoesNotExist: type[ObjectDoesNotExist]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     slug = models.SlugField(max_length=250, unique=True, editable=False)
@@ -56,6 +60,8 @@ class Event(models.Model):
         validators=[validate_url_scheme],
     )
     external_source = models.CharField(max_length=100, blank=True)
+    latitude = models.FloatField(blank=True, null=True)
+    longitude = models.FloatField(blank=True, null=True)
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -121,6 +127,17 @@ class Event(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    @property
+    def has_map_location(self) -> bool:
+        """True when the venue has been successfully geocoded to lat/lon."""
+        return self.latitude is not None and self.longitude is not None
+
+    def _build_geocode_query(self) -> str:
+        """Build the Nominatim query string for this event's venue."""
+        if self.venue_address:
+            return f"{self.venue_name}, {self.venue_address}, Copenhagen, Denmark"
+        return f"{self.venue_name}, Copenhagen, Denmark"
+
     def get_display_description(self):
         """Return description with scraped event disclaimer prepended."""
         from django.conf import settings
@@ -135,7 +152,55 @@ class Event(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = self._generate_unique_slug()
+        self._maybe_geocode_venue()
         super().save(*args, **kwargs)
+
+    def _maybe_geocode_venue(self) -> None:
+        """Populate latitude/longitude from Nominatim when the address changes.
+
+        Runs on insert, or on update when venue_name/venue_address changed since
+        the row was last saved. Failures are swallowed — geocoding must never
+        block saving an event.
+        """
+        if not getattr(settings, "GEOCODING_ENABLED", True):
+            return
+        if not self.venue_name:
+            return
+
+        needs_geocode = self._state.adding
+        if not needs_geocode:
+            try:
+                previous = Event.objects.only("venue_name", "venue_address").get(
+                    pk=self.pk
+                )
+            except Event.DoesNotExist:
+                needs_geocode = True
+            else:
+                needs_geocode = (
+                    previous.venue_name != self.venue_name
+                    or previous.venue_address != self.venue_address
+                )
+
+        if not needs_geocode:
+            return
+
+        from .geocoding import geocode
+
+        try:
+            result = geocode(self._build_geocode_query())
+        except Exception:  # pragma: no cover - defensive; geocode already swallows
+            logger.warning("Geocoding raised for event %s", self.pk, exc_info=True)
+            return
+
+        if result is None:
+            logger.info(
+                "Geocoding returned no result for event %s (%s)",
+                self.pk,
+                self.venue_name,
+            )
+            return
+
+        self.latitude, self.longitude = result
 
 
 class FeedHit(models.Model):

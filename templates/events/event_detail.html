@@ -100,6 +100,15 @@ details[open] summary::after { content: ''; }
                     <a href="{{ google_calendar_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Google Calendar &nearr;</a>
                 </div>
             </details>
+            {% if event.has_map_location %}
+                <button id="show-map-btn"
+                        class="btn btn--ghost btn--sm"
+                        type="button"
+                        data-lat="{{ event.latitude|stringformat:'f' }}"
+                        data-lon="{{ event.longitude|stringformat:'f' }}">
+                    Show map
+                </button>
+            {% endif %}
         </div>
 
         {# Event image #}
@@ -156,8 +165,25 @@ details[open] summary::after { content: ''; }
 
     </article>
 </div>
+
+{% if event.has_map_location %}
+    <div id="map-modal" class="map-modal" hidden role="dialog" aria-modal="true" aria-label="Map of {{ event.venue_name }}">
+        <div class="map-modal__backdrop" data-close></div>
+        <div class="map-modal__panel">
+            <iframe id="map-modal-iframe"
+                    title="OpenStreetMap of {{ event.venue_name }}"
+                    src=""
+                    loading="lazy"
+                    referrerpolicy="no-referrer"></iframe>
+            <button type="button" class="btn btn--primary map-modal__close" data-close>Close</button>
+        </div>
+    </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="{% static 'js/copy-link.js' %}"></script>
+{% if event.has_map_location %}
+    <script src="{% static 'js/show-map.js' %}"></script>
+{% endif %}
 {% endblock %}

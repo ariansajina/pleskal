@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -100,3 +101,98 @@ class TestEventValidation:
         user.delete()  # type: ignore
         event.refresh_from_db()
         assert event.submitted_by is None
+
+
+@pytest.mark.django_db
+class TestGeocodingOnSave:
+    """Event.save() geocodes the venue when the address changes (or on insert)."""
+
+    def test_geocoding_disabled_skips_call(self, settings):
+        settings.GEOCODING_ENABLED = False
+        with patch("events.geocoding.geocode") as mock_geocode:
+            event = EventFactory.create(venue_name="Dansehallerne")
+        mock_geocode.assert_not_called()
+        assert event.latitude is None
+        assert event.longitude is None
+
+    def test_insert_triggers_geocode_and_stores_coords(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch(
+            "events.geocoding.geocode", return_value=(55.6761, 12.5683)
+        ) as mock_geocode:
+            event = EventFactory.create(
+                venue_name="Dansehallerne", venue_address="Pasteursvej 20"
+            )
+        mock_geocode.assert_called_once()
+        query = mock_geocode.call_args[0][0]
+        assert "Dansehallerne" in query
+        assert "Pasteursvej 20" in query
+        assert "Copenhagen" in query
+        assert event.latitude == pytest.approx(55.6761)
+        assert event.longitude == pytest.approx(12.5683)
+
+    def test_insert_without_address_uses_venue_only_in_query(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch(
+            "events.geocoding.geocode", return_value=(55.0, 12.0)
+        ) as mock_geocode:
+            EventFactory.create(venue_name="HAUT", venue_address="")
+        query = mock_geocode.call_args[0][0]
+        assert query.startswith("HAUT,")
+        assert "Copenhagen" in query
+
+    def test_update_without_address_change_does_not_regeocode(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch(
+            "events.geocoding.geocode", return_value=(55.0, 12.0)
+        ) as mock_geocode:
+            event = EventFactory.create(venue_name="HAUT", venue_address="Skindergade")
+            assert mock_geocode.call_count == 1
+            event.title = "Renamed title"
+            event.save()
+        assert mock_geocode.call_count == 1
+
+    def test_update_with_venue_address_change_regeocodes(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch(
+            "events.geocoding.geocode", return_value=(55.0, 12.0)
+        ) as mock_geocode:
+            event = EventFactory.create(venue_name="HAUT", venue_address="Skindergade")
+            mock_geocode.return_value = (56.1, 13.2)
+            event.venue_address = "Nørrebrogade 1"
+            event.save()
+        assert mock_geocode.call_count == 2
+        assert event.latitude == pytest.approx(56.1)
+        assert event.longitude == pytest.approx(13.2)
+
+    def test_update_with_venue_name_change_regeocodes(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch(
+            "events.geocoding.geocode", return_value=(55.0, 12.0)
+        ) as mock_geocode:
+            event = EventFactory.create(venue_name="HAUT")
+            event.venue_name = "Dansehallerne"
+            event.save()
+        assert mock_geocode.call_count == 2
+
+    def test_geocode_returning_none_leaves_coords_unset(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch("events.geocoding.geocode", return_value=None):
+            event = EventFactory.create(venue_name="Unresolvable Place XYZ")
+        assert event.latitude is None
+        assert event.longitude is None
+
+    def test_geocode_raising_does_not_break_save(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch("events.geocoding.geocode", side_effect=RuntimeError("boom")):
+            event = EventFactory.create(venue_name="Whatever")
+        assert event.pk is not None
+        assert event.latitude is None
+
+    def test_has_map_location_property(self):
+        event = EventFactory.build(latitude=None, longitude=None)
+        assert event.has_map_location is False
+        event.latitude = 55.0
+        assert event.has_map_location is False
+        event.longitude = 12.0
+        assert event.has_map_location is True
