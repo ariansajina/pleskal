@@ -203,7 +203,7 @@ SCRAPED_EVENT_DISCLAIMER = (
 GEOCODING_ENABLED = env.bool("GEOCODING_ENABLED", default=not DEBUG)
 GEOCODING_USER_AGENT = env.str(
     "GEOCODING_USER_AGENT",
-    default="pleskal/1.0 (https://pleskal.dk; contact via github.com/ariansajina/pleskal)",
+    default="pleskal/1.0 (https://pleskal.dk; hello.pleskal@proton.me)",
 )
 
 # Cloudflare R2 storage (production)
