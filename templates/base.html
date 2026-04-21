@@ -445,6 +445,7 @@
     /* ─── MAP MODAL ────────────────────────────────────────── */
     .map-modal {
       position: fixed; inset: 0; z-index: 50;
+      height: 100vh; height: 100dvh;
       display: flex; align-items: center; justify-content: center;
     }
     .map-modal[hidden] { display: none; }
@@ -454,7 +455,9 @@
     }
     .map-modal__panel {
       position: relative;
-      width: min(90vw, 900px); max-height: 85vh;
+      width: min(90vw, 900px);
+      height: min(85vh, 900px); height: min(85dvh, 900px);
+      max-height: 100dvh;
       background: var(--surface); border: 1.5px solid var(--border);
       box-shadow: 6px 6px 0 var(--border-light);
       display: flex; flex-direction: column;
@@ -462,7 +465,7 @@
       gap: var(--space-2);
     }
     .map-modal__panel iframe {
-      width: 100%; flex: 1 1 auto; min-height: 60vh;
+      width: 100%; flex: 1 1 auto; min-height: 0;
       border: 1.5px solid var(--border);
       background: var(--surface);
     }
@@ -474,7 +477,6 @@
       .page-hero { padding: var(--space-8) var(--space-4) var(--space-6); }
       .filter-panel { gap: var(--space-3) var(--space-4); }
       .map-modal__panel { width: 95vw; }
-      .map-modal__panel iframe { min-height: 55vh; }
     }
   </style>
 
