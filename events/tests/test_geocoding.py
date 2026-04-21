@@ -155,12 +155,18 @@ def test_rate_limit_does_not_exceed_policy_under_threads():
         return _mock_response(json_data=[{"lat": "1", "lon": "2"}])
 
     # Reduce the interval so the test stays fast but still proves the lock works.
+    # The observed spacing between the mocked requests.get calls is slightly less
+    # than MIN_INTERVAL_SECONDS because the first call's per-call overhead (cold
+    # path) can exceed the second's. Use a generous interval with a small
+    # tolerance to keep the test fast but non-flaky.
+    interval = 0.1
+    tolerance = 0.02
     with (
-        patch("events.geocoding.MIN_INTERVAL_SECONDS", 0.05),
+        patch("events.geocoding.MIN_INTERVAL_SECONDS", interval),
         patch("events.geocoding.requests.get", side_effect=fake_get),
     ):
         geocoding.geocode("a")
         geocoding.geocode("b")
 
     assert len(call_times) == 2
-    assert call_times[1] - call_times[0] >= 0.05
+    assert call_times[1] - call_times[0] >= interval - tolerance

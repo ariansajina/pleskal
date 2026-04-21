@@ -125,8 +125,8 @@ class TestGeocodingOnSave:
             )
         mock_geocode.assert_called_once()
         query = mock_geocode.call_args[0][0]
-        assert "Dansehallerne" in query
-        assert "Pasteursvej 20" in query
+        assert query.startswith("Pasteursvej 20,")
+        assert "Dansehallerne" not in query
         assert "Copenhagen" in query
         assert event.latitude == pytest.approx(55.6761)
         assert event.longitude == pytest.approx(12.5683)

@@ -135,7 +135,7 @@ class Event(models.Model):
     def _build_geocode_query(self) -> str:
         """Build the Nominatim query string for this event's venue."""
         if self.venue_address:
-            return f"{self.venue_name}, {self.venue_address}, Copenhagen, Denmark"
+            return f"{self.venue_address}, Copenhagen, Denmark"
         return f"{self.venue_name}, Copenhagen, Denmark"
 
     def get_display_description(self):
