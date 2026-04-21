@@ -200,7 +200,7 @@ class Event(models.Model):
             )
             return
 
-        self.latitude, self.longitude = result
+        self.latitude, self.longitude = result  # ty: ignore[invalid-assignment]
 
 
 class FeedHit(models.Model):

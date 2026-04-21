@@ -148,7 +148,7 @@ class TestGeocodingOnSave:
         ) as mock_geocode:
             event = EventFactory.create(venue_name="HAUT", venue_address="Skindergade")
             assert mock_geocode.call_count == 1
-            event.title = "Renamed title"
+            event.title = "Renamed title"  # ty: ignore[invalid-assignment]
             event.save()
         assert mock_geocode.call_count == 1
 
@@ -159,7 +159,7 @@ class TestGeocodingOnSave:
         ) as mock_geocode:
             event = EventFactory.create(venue_name="HAUT", venue_address="Skindergade")
             mock_geocode.return_value = (56.1, 13.2)
-            event.venue_address = "Nørrebrogade 1"
+            event.venue_address = "Nørrebrogade 1"  # ty: ignore[invalid-assignment]
             event.save()
         assert mock_geocode.call_count == 2
         assert event.latitude == pytest.approx(56.1)
@@ -171,7 +171,7 @@ class TestGeocodingOnSave:
             "events.geocoding.geocode", return_value=(55.0, 12.0)
         ) as mock_geocode:
             event = EventFactory.create(venue_name="HAUT")
-            event.venue_name = "Dansehallerne"
+            event.venue_name = "Dansehallerne"  # ty: ignore[invalid-assignment]
             event.save()
         assert mock_geocode.call_count == 2
 
@@ -192,7 +192,7 @@ class TestGeocodingOnSave:
     def test_has_map_location_property(self):
         event = EventFactory.build(latitude=None, longitude=None)
         assert event.has_map_location is False
-        event.latitude = 55.0
+        event.latitude = 55.0  # ty: ignore[invalid-assignment]
         assert event.has_map_location is False
-        event.longitude = 12.0
+        event.longitude = 12.0  # ty: ignore[invalid-assignment]
         assert event.has_map_location is True
