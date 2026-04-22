@@ -687,6 +687,61 @@ class TestEventDetailView:
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         assert b"show-map-btn" not in resp.content
 
+    def test_og_type_is_event(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b'og:type" content="event"' in resp.content
+
+    def test_og_title_contains_event_title(self, client):
+        event = EventFactory.create(title="Tango Night")
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"Tango Night" in resp.content
+        assert b'og:title" content="Tango Night' in resp.content
+
+    def test_og_description_strips_markdown(self, client):
+        event = EventFactory.create(description="**Bold** and _italic_ text")
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        content = resp.content.decode()
+        marker = 'property="og:description" content="'
+        assert marker in content
+        desc_start = content.index(marker) + len(marker)
+        desc_value = content[desc_start : content.index('"', desc_start)]
+        assert "**" not in desc_value
+        assert "<strong>" not in desc_value
+        assert "Bold" in desc_value
+
+    def test_og_image_present_when_event_has_image(self, client):
+        import tempfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        with tempfile.NamedTemporaryFile(suffix=".webp", delete=False) as f:
+            img = Image.new("RGB", (100, 100), color="red")
+            img.save(f, format="WebP")
+            f.seek(0)
+            image_file = SimpleUploadedFile(
+                "test.webp", f.read(), content_type="image/webp"
+            )
+        event = EventFactory.create(image=image_file)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"og:image" in resp.content
+        assert b"twitter:image" in resp.content
+        assert b"summary_large_image" in resp.content
+
+    def test_og_image_absent_when_no_image(self, client):
+        event = EventFactory.create(image=None)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"og:image" not in resp.content
+        assert b"summary_large_image" not in resp.content
+        assert b'twitter:card" content="summary"' in resp.content
+
+    def test_og_url_is_absolute(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"og:url" in resp.content
+        assert f"/events/{event.slug}/".encode() in resp.content
+
 
 @pytest.mark.django_db
 class TestMyEventsView:
