@@ -1,0 +1,42 @@
+{{ pin_data|json_script:"event-map-pins" }}
+
+<div class="map-summary text-sm text-muted" style="display:flex;justify-content:space-between;gap:var(--space-3);align-items:baseline;">
+    <span>
+        {% if with_coords_count %}
+            {{ with_coords_count }} on map
+        {% else %}
+            No mapped events
+        {% endif %}
+    </span>
+    {% if without_coords_count %}
+        <a href="#no-map-location" class="link-accent text-sm">
+            +{{ without_coords_count }} without location
+        </a>
+    {% endif %}
+</div>
+
+{% if events_with_coords %}
+    <div class="event-list">
+        {% for event in events_with_coords %}
+            {% include "events/partials/event_card.html" with event=event %}
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="text-base text-muted text-center" style="padding:var(--space-6) 0;">
+        No upcoming events match these filters.
+    </p>
+{% endif %}
+
+{% if events_without_coords %}
+    <section id="no-map-location" style="margin-top:var(--space-6);">
+        <div class="section-rule">No map location</div>
+        <p class="text-sm text-muted" style="margin-bottom:var(--space-3);">
+            These events don't have coordinates yet, so they aren't pinned on the map.
+        </p>
+        <div class="event-list">
+            {% for event in events_without_coords %}
+                {% include "events/partials/event_card.html" with event=event %}
+            {% endfor %}
+        </div>
+    </section>
+{% endif %}

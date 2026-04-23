@@ -8,6 +8,7 @@ from .views import (
     EventDetailView,
     EventDuplicateView,
     EventListView,
+    EventMapView,
     EventToggleDraftView,
     EventUpdateView,
     MyEventsView,
@@ -17,6 +18,8 @@ from .views import (
 urlpatterns = [
     # Homepage / event listing
     path("", EventListView.as_view(), name="event_list"),
+    # Map view
+    path("map/", EventMapView.as_view(), name="event_map"),
     # Event submission
     path("events/submit/", EventCreateView.as_view(), name="event_create"),
     # Event detail
