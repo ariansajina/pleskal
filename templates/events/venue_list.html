@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Venues – pleskal{% endblock %}
+
+{% block content %}
+<div class="page-hero">
+    <div class="page-hero__ornrow">✦</div>
+    <h1 class="page-hero__title page-hero__title--sm">Venues</h1>
+    <p class="page-hero__sub">Browse Copenhagen's dance spaces by venue.</p>
+</div>
+
+<div class="content-wrap">
+    {% if venues %}
+        <ul class="event-list" style="list-style:none;padding:0;">
+            {% for venue in venues %}
+                <li style="margin-bottom:var(--space-3);">
+                    <a href="{% url 'venue_detail' venue.slug %}" class="card" style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-3) var(--space-4);">
+                        <span class="event-meta--venue" style="font-size:var(--text-lg);font-weight:600;">{{ venue.display_name }}</span>
+                        <span class="text-sm text-muted">{{ venue.count }} upcoming</span>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-base text-muted text-center" style="padding:var(--space-8) 0;">
+            No venues have upcoming events right now.
+        </p>
+    {% endif %}
+</div>
+{% endblock %}

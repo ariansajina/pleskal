@@ -61,7 +61,7 @@ details[open] summary::after { content: ''; }
 
         {# Venue #}
         <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
-            <span class="event-meta--venue">{{ event.venue_name }}</span>
+            <a href="{% url 'venue_detail' venue_slug %}" class="event-meta--venue link-accent">{{ event.venue_name }}</a>
             {% if event.venue_address %}
                 <span style="opacity:0.4;">·</span>
                 <span>{{ event.venue_address }}</span>

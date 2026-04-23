@@ -153,6 +153,90 @@ def _parse_date_safe(value):
         return None
 
 
+def _apply_event_filters(qs, request):
+    """Apply the shared event-list filter set to ``qs``.
+
+    Used by :class:`EventListView` and :class:`VenueDetailView`. Returns the
+    filtered queryset plus the parsed filter values for template context.
+    """
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+
+    User = get_user_model()
+
+    # --- Filter: category (multi-value) ---
+    categories = request.GET.getlist("category")
+    valid_categories = {c.value for c in EventCategory}
+    categories = [c for c in categories if c in valid_categories]
+    if categories:
+        qs = qs.filter(category__in=categories)
+
+    # --- Filter: publisher (multi-value) ---
+    publisher_slugs = request.GET.getlist("publisher")
+    if publisher_slugs:
+        system_user_ids = User.objects.filter(
+            is_system_account=True,
+            display_name_slug__in=[s for s in publisher_slugs if s != "other"],
+        ).values_list("id", flat=True)
+
+        q = Q()
+        if any(s != "other" for s in publisher_slugs):
+            q |= Q(submitted_by__in=system_user_ids)
+        if "other" in publisher_slugs:
+            all_system_ids = User.objects.filter(is_system_account=True).values_list(
+                "id", flat=True
+            )
+            q |= ~Q(submitted_by__in=all_system_ids)
+        qs = qs.filter(q)
+
+    # --- Filter: date range ---
+    date_from = request.GET.get("date_from")
+    date_to = request.GET.get("date_to")
+    today_str = datetime.date.today().isoformat()
+    date_range_active = False
+
+    # Consider the date range "active" (non-default) only if:
+    # - date_to is set (any value other than empty), OR
+    # - date_from is set to something other than today
+    if date_to or (date_from and date_from != today_str):
+        date_range_active = True
+
+    if date_from:
+        d = _parse_date_safe(date_from)
+        if d:
+            qs = qs.filter(start_datetime__date__gte=d)
+    if date_to:
+        d = _parse_date_safe(date_to)
+        if d:
+            qs = qs.filter(start_datetime__date__lte=d)
+
+    # --- Filter: free / wheelchair accessible ---
+    if request.GET.get("is_free") == "1":
+        qs = qs.filter(is_free=True)
+    if request.GET.get("is_wheelchair_accessible") == "1":
+        qs = qs.filter(is_wheelchair_accessible=True)
+
+    # --- Filter: search ---
+    search_query = request.GET.get("q", "").strip()
+    if search_query:
+        qs = qs.filter(
+            Q(title__icontains=search_query)
+            | Q(venue_name__icontains=search_query)
+            | Q(description__icontains=search_query)
+            | Q(submitted_by__display_name__icontains=search_query)
+        )
+
+    return (
+        qs,
+        categories,
+        publisher_slugs,
+        date_from,
+        date_to,
+        search_query,
+        date_range_active,
+    )
+
+
 class EventListView(RateLimitMixin, View):
     rate_limit_key = "event_list"
     rate_limit_limit = 20
@@ -163,82 +247,7 @@ class EventListView(RateLimitMixin, View):
     partial_template_name = "events/partials/event_list_results.html"
 
     def _apply_filters(self, qs, request):
-        from django.db.models import Q
-
-        # --- Filter: category (multi-value) ---
-        categories = request.GET.getlist("category")
-        valid_categories = {c.value for c in EventCategory}
-        categories = [c for c in categories if c in valid_categories]
-        if categories:
-            qs = qs.filter(category__in=categories)
-
-        # --- Filter: publisher (multi-value) ---
-        from django.contrib.auth import get_user_model
-
-        User = get_user_model()
-        publisher_slugs = request.GET.getlist("publisher")
-        if publisher_slugs:
-            system_user_ids = User.objects.filter(
-                is_system_account=True,
-                display_name_slug__in=[s for s in publisher_slugs if s != "other"],
-            ).values_list("id", flat=True)
-
-            q = Q()
-            if any(s != "other" for s in publisher_slugs):
-                q |= Q(submitted_by__in=system_user_ids)
-            if "other" in publisher_slugs:
-                all_system_ids = User.objects.filter(
-                    is_system_account=True
-                ).values_list("id", flat=True)
-                q |= ~Q(submitted_by__in=all_system_ids)
-            qs = qs.filter(q)
-
-        # --- Filter: date range ---
-        date_from = request.GET.get("date_from")
-        date_to = request.GET.get("date_to")
-        today_str = datetime.date.today().isoformat()
-        date_range_active = False
-
-        # Consider the date range "active" (non-default) only if:
-        # - date_to is set (any value other than empty), OR
-        # - date_from is set to something other than today
-        if date_to or (date_from and date_from != today_str):
-            date_range_active = True
-
-        if date_from:
-            d = _parse_date_safe(date_from)
-            if d:
-                qs = qs.filter(start_datetime__date__gte=d)
-        if date_to:
-            d = _parse_date_safe(date_to)
-            if d:
-                qs = qs.filter(start_datetime__date__lte=d)
-
-        # --- Filter: free / wheelchair accessible ---
-        if request.GET.get("is_free") == "1":
-            qs = qs.filter(is_free=True)
-        if request.GET.get("is_wheelchair_accessible") == "1":
-            qs = qs.filter(is_wheelchair_accessible=True)
-
-        # --- Filter: search ---
-        search_query = request.GET.get("q", "").strip()
-        if search_query:
-            qs = qs.filter(
-                Q(title__icontains=search_query)
-                | Q(venue_name__icontains=search_query)
-                | Q(description__icontains=search_query)
-                | Q(submitted_by__display_name__icontains=search_query)
-            )
-
-        return (
-            qs,
-            categories,
-            publisher_slugs,
-            date_from,
-            date_to,
-            search_query,
-            date_range_active,
-        )
+        return _apply_event_filters(qs, request)
 
     def get(self, request):
         from django.contrib.auth import get_user_model
@@ -359,6 +368,9 @@ class EventDetailView(DetailView):
         context["google_calendar_url"] = (
             "https://calendar.google.com/calendar/render?" + urlencode(params)
         )
+        from .venues import canonical_slug
+
+        context["venue_slug"] = canonical_slug(event.venue_name)
         if event.image:
             context["og_image_url"] = self.request.build_absolute_uri(event.image.url)
         return context
@@ -569,6 +581,124 @@ class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
         else:
             messages.success(request, "Event published.")
         return redirect("event_detail", slug=event.slug)
+
+
+class VenueIndexView(RateLimitMixin, View):
+    """Alphabetical index of venues with upcoming events."""
+
+    rate_limit_key = "event_list"
+    rate_limit_limit = 20
+    rate_limit_window = 60
+    rate_limit_methods = ["GET"]
+
+    template_name = "events/venue_list.html"
+
+    def get(self, request):
+        from django.shortcuts import render
+
+        from .venues import list_venues
+
+        venues = list_venues()
+        return render(request, self.template_name, {"venues": venues})
+
+
+class VenueDetailView(RateLimitMixin, View):
+    """Upcoming events at a specific venue, with the standard filter sidebar."""
+
+    rate_limit_key = "event_list"
+    rate_limit_limit = 20
+    rate_limit_window = 60
+    rate_limit_methods = ["GET"]
+
+    template_name = "events/venue_detail.html"
+    partial_template_name = "events/partials/event_list_results.html"
+
+    def get(self, request, slug):
+        from django.contrib.auth import get_user_model
+        from django.http import Http404
+        from django.shortcuts import render
+
+        from .venues import events_for_venue, find_venue
+
+        venue = find_venue(slug)
+        if venue is None:
+            raise Http404("Venue not found")
+
+        User = get_user_model()
+
+        qs = events_for_venue(venue.canonical, include_past=True).select_related(
+            "submitted_by"
+        )
+        # Cap to two years of history to match EventListView's behaviour.
+        expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
+        qs = qs.filter(start_datetime__gte=expiry_cutoff)
+
+        (
+            qs,
+            categories,
+            publisher_slugs,
+            date_from,
+            date_to,
+            search_query,
+            date_range_active,
+        ) = _apply_event_filters(qs, request)
+
+        now = timezone.now()
+        upcoming_count = qs.filter(start_datetime__gte=now).count()
+        past_count = qs.filter(start_datetime__lt=now).count()
+
+        show_past = request.GET.get("past") == "1"
+        if date_range_active:
+            qs = qs.order_by("start_datetime")
+        elif show_past:
+            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime")
+        else:
+            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
+
+        paginator = Paginator(qs, EVENTS_PER_PAGE)
+        page_number = request.GET.get("page", 1)
+        page_obj = paginator.get_page(page_number)
+
+        params = request.GET.copy()
+        params.pop("page", None)
+        base_query_string = params.urlencode()
+
+        quick_date_ranges = _get_quick_date_ranges()
+        today = datetime.date.today()
+        week_start = today - datetime.timedelta(days=today.weekday())
+        week_end = week_start + datetime.timedelta(days=6)
+        system_publishers = User.objects.filter(is_system_account=True).order_by(
+            "display_name"
+        )
+
+        ctx = {
+            "venue": venue,
+            "page_obj": page_obj,
+            "base_query_string": base_query_string,
+            "events": page_obj.object_list,
+            "category_choices": EventCategory.choices,
+            "selected_categories": categories,
+            "system_publishers": system_publishers,
+            "selected_publishers": publisher_slugs,
+            "show_past": show_past,
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+            "today": today.isoformat(),
+            "week_start": week_start,
+            "week_end": week_end,
+            "date_range_active": date_range_active,
+            "is_free": request.GET.get("is_free") == "1",
+            "is_wheelchair_accessible": request.GET.get("is_wheelchair_accessible")
+            == "1",
+            "search_query": search_query,
+            "upcoming_count": upcoming_count,
+            "past_count": past_count,
+            "quick_date_ranges": quick_date_ranges,
+        }
+
+        if request.headers.get("HX-Request"):
+            return render(request, self.partial_template_name, ctx)
+        return render(request, self.template_name, ctx)
 
 
 class SubscribeView(TemplateView):

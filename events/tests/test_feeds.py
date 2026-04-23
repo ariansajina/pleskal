@@ -325,6 +325,99 @@ class TestICalFeedFilters:
 
 
 @pytest.mark.django_db
+class TestFeedVenueFilter:
+    """`?venue=<slug>` filter on iCal and RSS feeds."""
+
+    def _venue_slug(self, name: str) -> str:
+        from events.venues import canonical_slug
+
+        return canonical_slug(name)
+
+    def test_rss_venue_filter(self, client):
+        here = EventFactory.create(title="At Dansehallerne", venue_name="Dansehallerne")
+        elsewhere = EventFactory.create(title="At HAUT", venue_name="HAUT Scene")
+
+        slug = self._venue_slug("Dansehallerne")
+        resp = client.get(reverse("event_rss_feed") + f"?venue={slug}")
+        assert str(here.title).encode() in resp.content
+        assert str(elsewhere.title).encode() not in resp.content
+
+    def test_ical_venue_filter(self, client):
+        here = EventFactory.create(title="At Dansehallerne", venue_name="Dansehallerne")
+        elsewhere = EventFactory.create(title="At HAUT", venue_name="HAUT Scene")
+
+        slug = self._venue_slug("Dansehallerne")
+        resp = client.get(reverse("event_ical_feed") + f"?venue={slug}")
+        assert str(here.title).encode() in resp.content
+        assert str(elsewhere.title).encode() not in resp.content
+
+    def test_rss_venue_filter_groups_canonical_variants(self, client):
+        upper = EventFactory.create(title="UpperCase", venue_name="Dansehallerne")
+        lower = EventFactory.create(title="lowercase", venue_name="dansehallerne")
+
+        slug = self._venue_slug("Dansehallerne")
+        resp = client.get(reverse("event_rss_feed") + f"?venue={slug}")
+        assert str(upper.title).encode() in resp.content
+        assert str(lower.title).encode() in resp.content
+
+    def test_ical_venue_filter_groups_canonical_variants(self, client):
+        upper = EventFactory.create(title="UpperCase", venue_name="Dansehallerne")
+        lower = EventFactory.create(title="lowercase", venue_name="dansehallerne")
+
+        slug = self._venue_slug("Dansehallerne")
+        resp = client.get(reverse("event_ical_feed") + f"?venue={slug}")
+        assert str(upper.title).encode() in resp.content
+        assert str(lower.title).encode() in resp.content
+
+    def test_rss_venue_filter_unknown_slug_returns_no_events(self, client):
+        EventFactory.create(venue_name="Dansehallerne")
+
+        resp = client.get(reverse("event_rss_feed") + "?venue=no-such-venue")
+        # Feed still returns 200 but with no items.
+        assert resp.status_code == 200
+        assert b"Dansehallerne" not in resp.content
+
+    def test_ical_venue_filter_combines_with_category(self, client):
+        match = EventFactory.create(
+            title="Workshop At D",
+            venue_name="Dansehallerne",
+            category="workshop",
+        )
+        wrong_cat = EventFactory.create(
+            title="Social At D",
+            venue_name="Dansehallerne",
+            category="social",
+        )
+        wrong_venue = EventFactory.create(
+            title="Workshop Elsewhere",
+            venue_name="HAUT Scene",
+            category="workshop",
+        )
+        slug = self._venue_slug("Dansehallerne")
+        resp = client.get(
+            reverse("event_ical_feed") + f"?venue={slug}&category=workshop"
+        )
+        assert str(match.title).encode() in resp.content
+        assert str(wrong_cat.title).encode() not in resp.content
+        assert str(wrong_venue.title).encode() not in resp.content
+
+    def test_rss_multi_venue_filter(self, client):
+        a = EventFactory.create(title="AtA", venue_name="Venue A")
+        b = EventFactory.create(title="AtB", venue_name="Venue B")
+        c = EventFactory.create(title="AtC", venue_name="Venue C")
+
+        url = (
+            reverse("event_rss_feed")
+            + f"?venue={self._venue_slug('Venue A')}"
+            + f"&venue={self._venue_slug('Venue B')}"
+        )
+        resp = client.get(url)
+        assert str(a.title).encode() in resp.content
+        assert str(b.title).encode() in resp.content
+        assert str(c.title).encode() not in resp.content
+
+
+@pytest.mark.django_db
 class TestSubscribeView:
     def test_returns_200(self, client):
         resp = client.get(reverse("subscribe"))

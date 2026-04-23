@@ -505,6 +505,10 @@
            class="nav-link {% if request.resolver_match.url_name == 'event_list' %}nav-link--active{% endif %}">
           Events
         </a>
+        <a href="{% url 'venue_list' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'venue_list' or request.resolver_match.url_name == 'venue_detail' %}nav-link--active{% endif %}">
+          Venues
+        </a>
         <a href="{% url 'subscribe' %}"
            class="nav-link {% if request.resolver_match.url_name == 'subscribe' %}nav-link--active{% endif %}">
           Subscribe

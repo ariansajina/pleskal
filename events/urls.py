@@ -12,6 +12,8 @@ from .views import (
     EventUpdateView,
     MyEventsView,
     SubscribeView,
+    VenueDetailView,
+    VenueIndexView,
 )
 
 urlpatterns = [
@@ -40,6 +42,9 @@ urlpatterns = [
         EventICalSingleView.as_view(),
         name="event_ical_single",
     ),
+    # Venues (derived from Event.venue_name; see events/venues.py)
+    path("venues/", VenueIndexView.as_view(), name="venue_list"),
+    path("venues/<slug:slug>/", VenueDetailView.as_view(), name="venue_detail"),
     # Feeds
     path("feed/events.ics", EventICalFeed.as_view(), name="event_ical_feed"),
     path("feed/events.rss", EventRSSFeed(), name="event_rss_feed"),

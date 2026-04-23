@@ -26,6 +26,7 @@ def _plain_text(markdown_text: str) -> str:
 def _upcoming_qs(
     categories: list[str] | None = None,
     publisher_slugs: list[str] | None = None,
+    venue_slugs: list[str] | None = None,
 ):
     qs = Event.objects.filter(
         start_datetime__gte=timezone.now(),
@@ -48,6 +49,18 @@ def _upcoming_qs(
             qs = qs.filter(submitted_by__is_system_account=False)
         else:
             qs = qs.filter(submitted_by__display_name_slug__in=named)
+    if venue_slugs:
+        from .venues import canonical_slug
+
+        wanted = set(venue_slugs)
+        raw_spellings = {
+            raw
+            for raw in Event.objects.filter(is_draft=False)
+            .values_list("venue_name", flat=True)
+            .distinct()
+            if canonical_slug(raw) in wanted
+        }
+        qs = qs.filter(venue_name__in=raw_spellings) if raw_spellings else qs.none()
     return qs
 
 
@@ -94,7 +107,12 @@ class EventRSSFeed(Feed):
             return _upcoming_qs()[:50]
         categories = req.GET.getlist("category")
         publisher_slugs = req.GET.getlist("publisher")
-        return _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)[:50]
+        venue_slugs = req.GET.getlist("venue")
+        return _upcoming_qs(
+            categories=categories,
+            publisher_slugs=publisher_slugs,
+            venue_slugs=venue_slugs,
+        )[:50]
 
     def item_title(self, item):
         return str(item.title)
@@ -123,7 +141,12 @@ class EventICalFeed(View):
         FeedHit.record(FeedHit.ICAL)
         categories = request.GET.getlist("category")
         publisher_slugs = request.GET.getlist("publisher")
-        queryset = _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)
+        venue_slugs = request.GET.getlist("venue")
+        queryset = _upcoming_qs(
+            categories=categories,
+            publisher_slugs=publisher_slugs,
+            venue_slugs=venue_slugs,
+        )
 
         cal = Calendar()
         cal.add("prodid", "-//Copenhagen Dance Calendar//EN")
