@@ -1,0 +1,30 @@
+{% load static %}{
+  "name": "pleskal",
+  "short_name": "pleskal",
+  "description": "Copenhagen's dance and performance art agenda.",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "background_color": "#F4F0E8",
+  "theme_color": "#3333CC",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "{% static 'icons/icon-192.png' %}",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "{% static 'icons/icon-512.png' %}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "{% static 'icons/icon-maskable-512.png' %}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import sys as _sys
+import time as _time
 from pathlib import Path
 
 import environ
@@ -311,6 +312,11 @@ if DEBUG:
         pass
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# PWA: cache-bust token injected into the service worker cache name.
+# On Railway, RAILWAY_GIT_COMMIT_SHA is set automatically. Falls back to a
+# build timestamp so local dev always gets a unique-enough token.
+DEPLOY_SHA = env("RAILWAY_GIT_COMMIT_SHA", default=None) or str(int(_time.time()))
 
 # Logging
 

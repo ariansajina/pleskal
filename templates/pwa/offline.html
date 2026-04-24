@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You're offline — pleskal</title>
+  <style>
+    :root {
+      --blue: #3333CC;
+      --cream: #E8E4D8;
+      --surface: #F4F0E8;
+      --ink: #1A1866;
+      --ink-muted: #3D3B8A;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background-color: var(--surface);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      background-image: radial-gradient(circle, rgba(51,51,204,0.10) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+    .card {
+      max-width: 420px;
+      width: 100%;
+      background: rgba(255,255,255,0.8);
+      border: 1.5px solid #CCCCEE;
+      padding: 2.5rem;
+      text-align: center;
+    }
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--blue);
+      margin-bottom: 1rem;
+    }
+    p {
+      font-size: 0.875rem;
+      color: var(--ink-muted);
+      line-height: 1.75;
+      margin-bottom: 1.5rem;
+    }
+    a {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.55rem 1.25rem;
+      border: 1.5px solid var(--blue);
+      color: var(--blue);
+      text-decoration: none;
+    }
+    a:hover { background: var(--blue); color: var(--cream); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>You're offline</h1>
+    <p>It looks like you've lost your connection. Check your network and try again, or go back to the home page if it's been cached.</p>
+    <a href="/">Back to pleskal</a>
+  </div>
+</body>
+</html>
