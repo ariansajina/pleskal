@@ -7,11 +7,11 @@ with :meth:`datetime.astimezone`, so Copenhagen-local times come out right
 across DST boundaries.
 """
 
-import re
 from datetime import UTC, datetime
 from typing import cast
 from urllib.parse import urlencode
 
+from .feeds import _plain_text
 from .models import Event
 
 
@@ -33,10 +33,7 @@ def _location(event: Event) -> str:
 
 def _plain_description(event: Event) -> str:
     """Strip markdown markup so calendar apps show readable plain text."""
-    text: str = str(event.description or "")
-    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-    text = re.sub(r"[*_`#>]", "", text)
-    return text.strip()
+    return _plain_text(str(event.description or ""))
 
 
 def _start_end(event: Event) -> tuple[datetime, datetime]:
