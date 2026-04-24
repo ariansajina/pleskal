@@ -9,7 +9,7 @@ across DST boundaries.
 
 from datetime import UTC, datetime
 from typing import cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, urlunparse
 
 from .feeds import _plain_text
 from .models import Event
@@ -77,8 +77,7 @@ def apple_calendar_url(absolute_ical_url: str) -> str:
     as the "subscribe / add to calendar" handoff. On non-Apple desktops the
     browser typically shows an OS handler dialog instead of a silent failure.
     """
-    if absolute_ical_url.startswith("https://"):
-        return "webcal://" + absolute_ical_url[len("https://") :]
-    if absolute_ical_url.startswith("http://"):
-        return "webcal://" + absolute_ical_url[len("http://") :]
+    parsed = urlparse(absolute_ical_url)
+    if parsed.scheme in {"http", "https"}:
+        return urlunparse(parsed._replace(scheme="webcal"))
     return absolute_ical_url
