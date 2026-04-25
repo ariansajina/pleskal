@@ -153,25 +153,33 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
         log.warning("Cannot parse date %r at %s", date_str, url)
         return []
 
+    # Workshops with multiple sessions are series. Single-session listings
+    # don't get a series — they behave as a normal event.
+    multi_session = len(ics_entries) > 1
+    series_key = url if multi_session else ""
+
     results = []
     for start_dt, end_dt in ics_entries:
-        results.append(
-            {
-                "title": title,
-                "description": description,
-                "start_datetime": start_dt.isoformat(),
-                "end_datetime": end_dt.isoformat() if end_dt else None,
-                "venue_name": venue_name,
-                "venue_address": address,
-                "category": "workshop",
-                "is_free": is_free,
-                "is_wheelchair_accessible": True,
-                "price_note": price_note,
-                "source_url": url,
-                "external_source": "dansehallerne",
-                "image_url": image_url,
-            }
-        )
+        record = {
+            "title": title,
+            "description": description,
+            "start_datetime": start_dt.isoformat(),
+            "end_datetime": end_dt.isoformat() if end_dt else None,
+            "venue_name": venue_name,
+            "venue_address": address,
+            "category": "workshop",
+            "is_free": is_free,
+            "is_wheelchair_accessible": True,
+            "price_note": price_note,
+            "source_url": url,
+            "external_source": "dansehallerne",
+            "image_url": image_url,
+        }
+        if series_key:
+            record["series_key"] = series_key
+            record["series_title"] = title
+            record["series_description"] = description
+        results.append(record)
 
     return results
 

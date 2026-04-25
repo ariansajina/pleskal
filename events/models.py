@@ -29,6 +29,93 @@ class EventCategory(models.TextChoices):
     OTHER = "other", "Other"
 
 
+class EventSeries(models.Model):
+    """A grouping of related events (e.g. a multi-week course or weekly practice).
+
+    Each session remains an independent Event so it can be edited or cancelled
+    individually; the series gives them a shared title/description and lets
+    users find sibling sessions.
+    """
+
+    objects = models.Manager()
+    DoesNotExist: type[ObjectDoesNotExist]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    slug = models.SlugField(max_length=250, unique=True, editable=False)
+    title = models.CharField(max_length=MAX_TITLE_LENGTH)
+    description = models.TextField(blank=True, max_length=4000)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="event_series",
+    )
+    external_source = models.CharField(max_length=100, blank=True)
+    external_key = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name_plural = "Event series"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["external_source", "external_key"],
+                condition=~models.Q(external_key=""),
+                name="unique_event_series_external_key",
+            ),
+        ]
+
+    def __str__(self):
+        return self.title
+
+    def _generate_unique_slug(self):
+        base_slug = slugify(self.title)[:MAX_TITLE_LENGTH]
+        if not base_slug:
+            base_slug = "series"
+        slug = base_slug
+        while EventSeries.objects.filter(slug=slug).exists():
+            suffix = secrets.token_hex(2)
+            slug = f"{base_slug}-{suffix}"
+        return slug
+
+    def clean(self):
+        if self.title and len(str(self.title)) < 3:
+            raise ValidationError({"title": "Title must be at least 3 characters."})
+
+    def get_display_description(self):
+        """Return description with scraped-series disclaimer prepended."""
+        if not self.external_source or not getattr(
+            settings, "SCRAPED_EVENT_DISCLAIMER", ""
+        ):
+            return self.description
+        disclaimer = settings.SCRAPED_EVENT_DISCLAIMER
+        if self.description:
+            return f"{disclaimer}\n\n{self.description}"
+        return disclaimer
+
+    @property
+    def has_visible_events(self) -> bool:
+        """True when at least one non-draft event exists in this series."""
+        return Event.objects.filter(series=self, is_draft=False).exists()
+
+    def upcoming_events(self):
+        return Event.objects.filter(
+            series=self, is_draft=False, start_datetime__gte=timezone.now()
+        ).order_by("start_datetime")
+
+    def past_events(self):
+        return Event.objects.filter(
+            series=self, is_draft=False, start_datetime__lt=timezone.now()
+        ).order_by("-start_datetime")
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = self._generate_unique_slug()
+        super().save(*args, **kwargs)
+
+
 class Event(models.Model):
     objects = models.Manager()
     DoesNotExist: type[ObjectDoesNotExist]
@@ -64,6 +151,13 @@ class Event(models.Model):
     longitude = models.FloatField(blank=True, null=True)
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="events",
+    )
+    series = models.ForeignKey(
+        EventSeries,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

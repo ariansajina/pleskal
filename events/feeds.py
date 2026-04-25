@@ -26,6 +26,7 @@ def _plain_text(markdown_text: str) -> str:
 def _upcoming_qs(
     categories: list[str] | None = None,
     publisher_slugs: list[str] | None = None,
+    series_slugs: list[str] | None = None,
 ):
     qs = Event.objects.filter(
         start_datetime__gte=timezone.now(),
@@ -48,6 +49,8 @@ def _upcoming_qs(
             qs = qs.filter(submitted_by__is_system_account=False)
         else:
             qs = qs.filter(submitted_by__display_name_slug__in=named)
+    if series_slugs:
+        qs = qs.filter(series__slug__in=series_slugs)
     return qs
 
 
@@ -94,7 +97,12 @@ class EventRSSFeed(Feed):
             return _upcoming_qs()[:50]
         categories = req.GET.getlist("category")
         publisher_slugs = req.GET.getlist("publisher")
-        return _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)[:50]
+        series_slugs = req.GET.getlist("series")
+        return _upcoming_qs(
+            categories=categories,
+            publisher_slugs=publisher_slugs,
+            series_slugs=series_slugs,
+        )[:50]
 
     def item_title(self, item):
         return str(item.title)
@@ -123,7 +131,12 @@ class EventICalFeed(View):
         FeedHit.record(FeedHit.ICAL)
         categories = request.GET.getlist("category")
         publisher_slugs = request.GET.getlist("publisher")
-        queryset = _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)
+        series_slugs = request.GET.getlist("series")
+        queryset = _upcoming_qs(
+            categories=categories,
+            publisher_slugs=publisher_slugs,
+            series_slugs=series_slugs,
+        )
 
         cal = Calendar()
         cal.add("prodid", "-//Copenhagen Dance Calendar//EN")

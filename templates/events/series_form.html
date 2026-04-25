@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title|default:"Event Series" }} – pleskal{% endblock %}
+
+{% block extra_head %}
+    {{ form.media }}
+{% endblock %}
+
+{% block content %}
+<div class="content-wrap">
+    <div style="max-width:600px;">
+        <h1 class="heading-page">{{ page_title|default:"Event Series" }}</h1>
+
+        <form method="post" class="form-stack" style="gap:var(--space-6);">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert--error">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div>
+                <label for="{{ form.title.id_for_label }}" class="form-label">
+                    Title <span class="form-required">*</span>
+                </label>
+                {{ form.title }}
+                {% if form.title.errors %}
+                    <p class="form-field-error">{{ form.title.errors|join:", " }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label for="{{ form.description.id_for_label }}" class="form-label">
+                    Description
+                </label>
+                {{ form.description }}
+                {% if form.description.errors %}
+                    <p class="form-field-error">{{ form.description.errors|join:", " }}</p>
+                {% endif %}
+            </div>
+
+            <div class="btn-row">
+                <button type="submit" class="btn btn--primary">Save series</button>
+                <a href="{% if form.instance.slug %}{% url 'series_detail' form.instance.slug %}{% else %}{% url 'event_list' %}{% endif %}" class="btn btn--ghost">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
