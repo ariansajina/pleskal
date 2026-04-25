@@ -46,6 +46,14 @@ details[open] summary::after { content: ''; }
             {{ event.title }}
         </h1>
 
+        {# Series context #}
+        {% if event.series %}
+            <div class="text-sm text-muted" style="margin-bottom:var(--space-4);">
+                Part of:
+                <a href="{% url 'series_detail' event.series.slug %}" class="link-accent" style="font-weight:600;">{{ event.series.title }}</a>
+            </div>
+        {% endif %}
+
         {# Date / time #}
         <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
             <span><strong>{{ event.start_datetime|date:"l, j F Y" }}</strong></span>
@@ -141,6 +149,22 @@ details[open] summary::after { content: ''; }
                 {% if event.external_source and not event.submitted_by %}
                     <span class="text-sm text-muted" style="margin-left:var(--space-3);">via {{ event.external_source }}</span>
                 {% endif %}
+            </div>
+        {% endif %}
+
+        {# Sibling sessions #}
+        {% if event.series and sibling_sessions %}
+            <hr class="rule">
+            <div style="margin-bottom:var(--space-6);">
+                <h2 class="heading-section">Other sessions in this series</h2>
+                <div class="event-list">
+                    {% for sibling in sibling_sessions %}
+                        {% include "events/partials/event_card.html" with event=sibling %}
+                    {% endfor %}
+                </div>
+                <p style="margin-top:var(--space-3);">
+                    <a href="{% url 'series_detail' event.series.slug %}" class="link-accent">View full series &rarr;</a>
+                </p>
             </div>
         {% endif %}
 

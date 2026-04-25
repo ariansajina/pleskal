@@ -3,7 +3,17 @@ from django.utils import timezone
 
 from accounts.tests.factories import UserFactory
 
-from ..models import Event, EventCategory
+from ..models import Event, EventCategory, EventSeries
+
+
+class EventSeriesFactory(factory.django.DjangoModelFactory[EventSeries]):
+    class Meta:
+        model = EventSeries
+        skip_postgeneration_save = True
+
+    title = factory.Sequence(lambda n: f"Dance Series {n}")
+    description = "A recurring dance series."
+    submitted_by = factory.SubFactory(UserFactory)
 
 
 class EventFactory(factory.django.DjangoModelFactory[Event]):
