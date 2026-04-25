@@ -462,9 +462,7 @@ def test_workshops_scraper_emits_series_key_for_multi_session():
         mock.patch(
             "scrapers.dansehallerne_workshops.parse_description", return_value="desc"
         ),
-        mock.patch(
-            "scrapers.dansehallerne_workshops.parse_image_url", return_value=""
-        ),
+        mock.patch("scrapers.dansehallerne_workshops.parse_image_url", return_value=""),
         mock.patch(
             "scrapers.dansehallerne_workshops.parse_venue_address",
             return_value=("Dansehallerne", "Pasteursvej 20"),
@@ -508,9 +506,7 @@ def test_workshops_scraper_omits_series_key_for_single_session():
         mock.patch(
             "scrapers.dansehallerne_workshops.parse_description", return_value="desc"
         ),
-        mock.patch(
-            "scrapers.dansehallerne_workshops.parse_image_url", return_value=""
-        ),
+        mock.patch("scrapers.dansehallerne_workshops.parse_image_url", return_value=""),
         mock.patch(
             "scrapers.dansehallerne_workshops.parse_venue_address",
             return_value=("Dansehallerne", ""),
@@ -523,5 +519,3 @@ def test_workshops_scraper_omits_series_key_for_single_session():
 
     assert len(results) == 1
     assert "series_key" not in results[0]
-
-
