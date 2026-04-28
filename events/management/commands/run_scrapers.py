@@ -11,6 +11,7 @@ Usage:
     python manage.py run_scrapers --only hautscene --only sydhavnteater
 """
 
+import datetime
 import json
 import logging
 import os
@@ -79,6 +80,14 @@ SCRAPERS = [
     ),
 ]
 
+# Per-scraper auto-disable dates (inclusive cutoff). Past this date the
+# scraper is skipped, same as setting SCRAPER_<NAME>_ENABLED=false. Use
+# this for one-off / festival sources that go stale after their run.
+SCRAPER_DISABLED_AFTER: dict[str, datetime.date] = {
+    # Toaster Festival 2026 ends 2026-05-03.
+    "toastercph": datetime.date(2026, 5, 3),
+}
+
 
 class Command(BaseCommand):
     help = "Run all scrapers and import events into the database."
@@ -145,6 +154,18 @@ class Command(BaseCommand):
                     self.style.WARNING(f"Skipping {name} ({env_key}=disabled)")
                 )
                 results.append((name, True, "disabled via env"))
+                continue
+
+            disabled_after = SCRAPER_DISABLED_AFTER.get(name)
+            if disabled_after and datetime.date.today() > disabled_after:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Skipping {name} (disabled after {disabled_after.isoformat()})"
+                    )
+                )
+                results.append(
+                    (name, True, f"disabled after {disabled_after.isoformat()}")
+                )
                 continue
 
             self.stdout.write("")
