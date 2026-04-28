@@ -153,6 +153,11 @@ def parse_date_raw(
                 results.append(parsed)
         return results
 
+    # Exhibitions / open-hours entries don't represent a single performance
+    # time — skip them.
+    if "during opening hours" in date_raw.lower():
+        return []
+
     # Date range "DD/M - DD/M …" — use the start date only
     range_m = re.match(r"(\d{1,2}/\d{1,2})\s*-\s*(\d{1,2}/\d{1,2})", date_raw)
     if range_m:
