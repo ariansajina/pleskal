@@ -175,6 +175,43 @@ def combine_dt(date: datetime.date, t: datetime.time) -> datetime.datetime:
 
 # ── Detail page ───────────────────────────────────────────────────────────────
 
+_DESCRIPTION_SELECTOR = "div.section-event-research, div.section-event-about"
+_ZWJ_LINE_RE = re.compile(r"^[\s​‌‍]+$", re.MULTILINE)
+_BLANK_LINES_RE = re.compile(r"\n{3,}")
+
+
+def _richtext_markdown(el: Tag | None) -> str:
+    """Convert a Webflow .w-richtext element to markdown, or '' if empty/hidden."""
+    if not el:
+        return ""
+    classes = el.get("class") or []
+    if "w-condition-invisible" in classes:
+        return ""
+    md = markdownify.markdownify(str(el), heading_style="ATX")
+    # Webflow uses zero-width joiners (U+200D) to render empty paragraphs;
+    # collapse those lines and any runs of blank lines they leave behind.
+    md = _ZWJ_LINE_RE.sub("", md)
+    md = _BLANK_LINES_RE.sub("\n\n", md)
+    return md.strip()
+
+
+def _section_markdown(section: Tag) -> str:
+    """Render one event-detail section (heading + lead + body) as markdown."""
+    heading_el = section.select_one(".section-tag")
+    heading = heading_el.get_text(strip=True) if heading_el else ""
+    lead = _richtext_markdown(section.select_one(".hero-text-content .w-richtext"))
+    body = _richtext_markdown(section.select_one(".body-text-container .w-richtext"))
+    if not (lead or body):
+        return ""
+    parts: list[str] = []
+    if heading:
+        parts.append(f"## {heading}")
+    if lead:
+        parts.append(lead)
+    if body:
+        parts.append(body)
+    return "\n\n".join(parts)
+
 
 def _get_info_row_value(info_div: Tag, label: str) -> str:
     """
@@ -258,40 +295,27 @@ def scrape_detail(url: str, session: requests.Session) -> dict | None:
     venue_address = place_text[:MAX_VENUE_LENGTH]
 
     # ── Description ───────────────────────────────────────────────────────────
-    # The description lives in .section-event-research, identified by a
-    # .section-tag heading that matches one of the known intro phrases.
-    DESCRIPTION_HEADINGS = {
-        "om eventet",
-        "the event",
-        "about the event",
-        "artistic research",
-        "the artistic research",
-        "the artistic researches",
-        "frame",
-        "artistic practice",
-        "the artistic practice",
-        "the artistic practice and research",
-        "the conversation",
-    }
-    description = ""
-    for section in soup.select(".section-event-research"):
-        tag_el = section.select_one(".section-tag")
-        if not tag_el:
-            continue
-        if tag_el.get_text(strip=True).lower() not in DESCRIPTION_HEADINGS:
-            continue
-        richtext = section.select_one(".w-richtext")
-        if richtext:
-            description = markdownify.markdownify(
-                str(richtext), heading_style="ATX"
-            ).strip()
-            break
+    # Detail pages have a hero (short tagline) plus zero or more body sections
+    # (".section-event-research" for artistic research, ".section-event-about"
+    # for the format/practice). Each contains an optional lead richtext in
+    # .hero-text-content and an optional long-form richtext in
+    # .body-text-container. We collect both, skipping the artists section.
+    description = "\n\n".join(
+        part
+        for part in (_section_markdown(s) for s in soup.select(_DESCRIPTION_SELECTOR))
+        if part
+    ).strip()
 
     # ── Image ─────────────────────────────────────────────────────────────────
     image_url = ""
-    hero_img = soup.select_one("img.hero-figure-image")
+    hero_scope = soup.select_one("figure.event-hero-figure") or soup
+    hero_img = hero_scope.select_one("img.hero-figure-image")
     if hero_img:
-        image_url = str(hero_img.get("src", ""))
+        image_url = str(hero_img.get("src", "") or "")
+    if not image_url:
+        video_el = hero_scope.select_one("[data-poster-url]")
+        if video_el:
+            image_url = str(video_el.get("data-poster-url", "") or "")
 
     # ── Category ──────────────────────────────────────────────────────────────
     category = "other"

@@ -21,4 +21,5 @@ class Command(BaseEventImportCommand):
     external_source = "hautscene"
     default_json_file = "hautscene_events.json"
     default_venue_name = "HAUT scene"
-    allowed_image_domains = frozenset({"hautscene.dk"})
+    # hautscene.dk is built on Webflow, which serves images from website-files.com.
+    allowed_image_domains = frozenset({"hautscene.dk", "website-files.com"})
