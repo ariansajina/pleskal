@@ -15,14 +15,14 @@ must never share `PASSWORD_PEPPER` (different DBs require different peppers) or
 
 ### Staging environment specifics
 
+- Only the web service is provisioned — there are no cron services in staging
 - `DEBUG=false` (mirror production behaviour)
 - `SENTRY_ENVIRONMENT=staging` so errors are tagged separately in Sentry
 - `RESEND_API_KEY` **unset** — emails fall back to the console backend so staging
   never sends mail to real users or syncs contacts to the Resend CRM segment
-- Scraper and backup cron services are paused. Run scrapers manually against
-  staging when needed:
+- Run scrapers manually against staging when testing scraper changes:
   ```bash
-  railway run --service <staging-web-service> python manage.py run_scrapers --dry-run
+  railway run --environment staging --service web python manage.py run_scrapers --dry-run
   ```
 - `SITE_DOMAIN` / `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` point at the staging
   Railway subdomain
@@ -113,14 +113,17 @@ scheduled Cron Job service in the **production** environment only.
    service. Required: `DATABASE_URL`, `SECRET_KEY`, `PASSWORD_PEPPER`.
    Optional: `R2_*` vars (if scraper images should upload to R2), `SENTRY_DSN`.
 
-The staging environment does **not** run this cron. Test scraper changes
-manually against staging:
+The staging environment has no scraper cron service. Test scraper changes
+manually against staging via the web service:
 
 ```bash
-railway run --service <staging-web-service> python manage.py run_scrapers --dry-run
-railway run --service <staging-web-service> python manage.py run_scrapers --only hautscene
-railway run --service <staging-web-service> python manage.py run_scrapers --skip-images
+railway run --environment staging --service web python manage.py run_scrapers --dry-run
+railway run --environment staging --service web python manage.py run_scrapers --only hautscene
+railway run --environment staging --service web python manage.py run_scrapers --skip-images
 ```
+
+If `railway run` fails to resolve `postgres.railway.internal`, use
+`railway shell` instead — internal DNS only works from inside Railway's network.
 
 ### Notes
 
