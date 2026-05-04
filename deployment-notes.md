@@ -56,6 +56,8 @@ must never share `PASSWORD_PEPPER` (different DBs require different peppers) or
 |---|---|
 | `RAILWAY_TOKEN` | Railway Account Settings → Tokens → project token, scoped to the production environment |
 | `RAILWAY_PROD_SERVICE_ID` | Production web service Settings page (UUID) |
+| `RAILWAY_PROD_SCRAPE_CRON_SERVICE_ID` | Production scrape-cron service Settings page (UUID) |
+| `RAILWAY_PROD_BACKUP_CRON_SERVICE_ID` | Production backup-cron service Settings page (UUID) |
 
 ### Required GitHub configuration
 

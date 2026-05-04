@@ -18,7 +18,17 @@ jobs:
       - name: Install Railway CLI
         run: bash <(curl -fsSL https://railway.com/install.sh)
 
-      - name: Deploy to Railway
+      - name: Deploy web service
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service ${{ secrets.RAILWAY_PROD_SERVICE_ID }} --detach
+
+      - name: Deploy scrape-cron service
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service ${{ secrets.RAILWAY_PROD_SCRAPE_CRON_SERVICE_ID }} --detach
+
+      - name: Deploy backup-cron service
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service ${{ secrets.RAILWAY_PROD_BACKUP_CRON_SERVICE_ID }} --detach
