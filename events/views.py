@@ -15,9 +15,9 @@ from django.views.generic.detail import DetailView
 
 from config.ratelimit import RateLimitMixin
 
-from .forms import EventForm
+from .forms import EventForm, EventSeriesForm
 from .images import validate_and_process
-from .models import Event, EventCategory
+from .models import Event, EventCategory, EventSeries
 
 EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
@@ -65,6 +65,19 @@ class EventOwnerMixin:
         return obj
 
 
+class EventSeriesOwnerMixin:
+    """Restrict access to the series owner. Returns 403 otherwise."""
+
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)  # type: ignore
+        user = self.request.user  # type: ignore
+        if obj.submitted_by != user:
+            from django.core.exceptions import PermissionDenied
+
+            raise PermissionDenied
+        return obj
+
+
 class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
     rate_limit_key = "event_create"
     rate_limit_limit = 20
@@ -99,6 +112,7 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["creation"] = True
+        kwargs["user"] = self.request.user
         return kwargs
 
     def form_invalid(self, form):
@@ -248,7 +262,7 @@ class EventListView(RateLimitMixin, View):
         expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
         qs = Event.objects.filter(
             start_datetime__gte=expiry_cutoff, is_draft=False
-        ).select_related("submitted_by")
+        ).select_related("submitted_by", "series")
 
         (
             qs,
@@ -277,8 +291,40 @@ class EventListView(RateLimitMixin, View):
         else:
             qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
 
+        # --- Series collapse ---
+        # Collapse multi-session series into a single representative event by
+        # default. Pass ?expand_series=1 to opt into the flat list. We collapse
+        # by keeping the earliest event (in current ordering) per series, then
+        # annotating the series-event count for the template.
+        expand_series = request.GET.get("expand_series") == "1"
+        collapsed_events = list(qs)
+        if not expand_series:
+            seen_series: set = set()
+            unique: list[Event] = []
+            series_counts: dict = {}
+            for event in collapsed_events:
+                series_pk = (
+                    getattr(event.series, "pk", None)
+                    if event.series is not None
+                    else None
+                )
+                if series_pk is None:
+                    unique.append(event)
+                    continue
+                series_counts[series_pk] = series_counts.get(series_pk, 0) + 1
+                if series_pk not in seen_series:
+                    seen_series.add(series_pk)
+                    unique.append(event)
+            for event in unique:
+                pk = getattr(event.series, "pk", None)
+                if pk is not None:
+                    event.series_event_count = series_counts.get(  # ty: ignore[unresolved-attribute]
+                        pk, 1
+                    )
+            collapsed_events = unique
+
         # --- Pagination ---
-        paginator = Paginator(qs, EVENTS_PER_PAGE)
+        paginator = Paginator(collapsed_events, EVENTS_PER_PAGE)
         page_number = request.GET.get("page", 1)
         page_obj = paginator.get_page(page_number)
 
@@ -317,6 +363,7 @@ class EventListView(RateLimitMixin, View):
             "upcoming_count": upcoming_count,
             "past_count": past_count,
             "quick_date_ranges": quick_date_ranges,
+            "expand_series": expand_series,
         }
 
         # HTMX: return only the results partial
@@ -361,6 +408,16 @@ class EventDetailView(DetailView):
         )
         if event.image:
             context["og_image_url"] = self.request.build_absolute_uri(event.image.url)
+        if event.series is not None:
+            context["sibling_sessions"] = (
+                Event.objects.filter(
+                    series=event.series,
+                    is_draft=False,
+                    start_datetime__gte=timezone.now(),
+                )
+                .exclude(pk=event.pk)
+                .order_by("start_datetime")[:5]
+            )
         return context
 
 
@@ -383,6 +440,7 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["creation"] = False
+        kwargs["user"] = self.request.user
         return kwargs
 
     def form_invalid(self, form):
@@ -486,6 +544,7 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
             return redirect("my_events")
         form = EventForm(
             creation=True,
+            user=request.user,
             initial={
                 "title": source.title,
                 "description": source.description,
@@ -496,6 +555,7 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
                 "is_wheelchair_accessible": source.is_wheelchair_accessible,
                 "price_note": source.price_note,
                 "source_url": source.source_url,
+                "series": source.series.pk if source.series is not None else None,
             },
         )
         return render(
@@ -516,7 +576,7 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
         self._check_owner(request, source)
         if self._check_event_limit(request):
             return redirect("my_events")
-        form = EventForm(request.POST, request.FILES, creation=True)
+        form = EventForm(request.POST, request.FILES, creation=True, user=request.user)
         if form.is_valid():
             event = form.save(commit=False)
             event.submitted_by = request.user
@@ -596,3 +656,109 @@ class SubscribeView(TemplateView):
             pk__in=upcoming_publisher_ids, is_system_account=False
         ).exists()
         return ctx
+
+
+# ---------------------------------------------------------------------------
+# EventSeries views
+# ---------------------------------------------------------------------------
+
+
+SERIES_FORM_TEMPLATE = "events/series_form.html"
+
+
+class EventSeriesDetailView(DetailView):
+    model = EventSeries
+    template_name = "events/series_detail.html"
+    slug_field = "slug"
+    slug_url_kwarg = "slug"
+    context_object_name = "series"
+
+    def get_object(self, queryset=None):
+        series = get_object_or_404(EventSeries, slug=self.kwargs["slug"])
+        # A series is visible iff it has at least one published (non-draft)
+        # event, OR the requesting user is the owner.
+        user = self.request.user
+        if user.is_authenticated and series.submitted_by_id == user.id:
+            return series
+        if not series.has_visible_events:
+            from django.http import Http404
+
+            raise Http404
+        return series
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        series = self.object
+        user = self.request.user
+        is_owner = user.is_authenticated and series.submitted_by_id == user.id
+        events_qs = series.events.all().order_by("start_datetime")
+        if not is_owner:
+            events_qs = events_qs.filter(is_draft=False)
+        now = timezone.now()
+        ctx["upcoming_events"] = events_qs.filter(start_datetime__gte=now)
+        ctx["past_events"] = events_qs.filter(start_datetime__lt=now).order_by(
+            "-start_datetime"
+        )
+        ctx["is_owner"] = is_owner
+        return ctx
+
+
+class EventSeriesCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
+    rate_limit_key = "series_create"
+    rate_limit_limit = 20
+    rate_limit_window = 3600
+    rate_limit_by_user = True
+
+    model = EventSeries
+    form_class = EventSeriesForm
+    template_name = SERIES_FORM_TEMPLATE
+
+    def form_valid(self, form):
+        series = form.save(commit=False)
+        series.submitted_by = self.request.user
+        series.save()
+        messages.success(self.request, "Series created.")
+        return redirect("series_detail", slug=series.slug)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["page_title"] = "Create Event Series"
+        return ctx
+
+
+class EventSeriesUpdateView(
+    RateLimitMixin, LoginRequiredMixin, EventSeriesOwnerMixin, UpdateView
+):
+    rate_limit_key = "series_update"
+    rate_limit_limit = 20
+    rate_limit_window = 60
+    rate_limit_by_user = True
+
+    model = EventSeries
+    form_class = EventSeriesForm
+    template_name = SERIES_FORM_TEMPLATE
+    slug_field = "slug"
+    slug_url_kwarg = "slug"
+
+    def form_valid(self, form):
+        series = form.save()
+        messages.success(self.request, "Series updated.")
+        return redirect("series_detail", slug=series.slug)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["page_title"] = "Edit Event Series"
+        return ctx
+
+
+class EventSeriesDeleteView(LoginRequiredMixin, EventSeriesOwnerMixin, DeleteView):
+    model = EventSeries
+    template_name = "events/series_confirm_delete.html"
+    success_url = reverse_lazy("event_list")
+    slug_field = "slug"
+    slug_url_kwarg = "slug"
+    context_object_name = "series"
+
+    def form_valid(self, form):
+        messages.success(self.request, "Series deleted. Sessions remain.")
+        return super().form_valid(form)

@@ -8,6 +8,10 @@ from .views import (
     EventDetailView,
     EventDuplicateView,
     EventListView,
+    EventSeriesCreateView,
+    EventSeriesDeleteView,
+    EventSeriesDetailView,
+    EventSeriesUpdateView,
     EventToggleDraftView,
     EventUpdateView,
     MyEventsView,
@@ -19,6 +23,19 @@ urlpatterns = [
     path("", EventListView.as_view(), name="event_list"),
     # Event submission
     path("events/submit/", EventCreateView.as_view(), name="event_create"),
+    # Series CRUD (must precede the slug-based event_detail route)
+    path("series/new/", EventSeriesCreateView.as_view(), name="series_create"),
+    path("series/<slug:slug>/", EventSeriesDetailView.as_view(), name="series_detail"),
+    path(
+        "series/<slug:slug>/edit/",
+        EventSeriesUpdateView.as_view(),
+        name="series_edit",
+    ),
+    path(
+        "series/<slug:slug>/delete/",
+        EventSeriesDeleteView.as_view(),
+        name="series_delete",
+    ),
     # Event detail
     path("events/<slug:slug>/", EventDetailView.as_view(), name="event_detail"),
     # Event management

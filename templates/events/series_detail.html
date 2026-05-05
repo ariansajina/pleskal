@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load markdown_filters %}
+
+{% block title %}{{ series.title }} – pleskal{% endblock %}
+
+{% block content %}
+<div class="content-wrap" style="padding-top:var(--space-6);">
+    <article>
+        <div class="text-sm text-muted" style="margin-bottom:var(--space-2);">Event series</div>
+        <h1 style="font-family:'Playfair Display',serif;font-weight:900;font-style:italic;font-size:clamp(1.6rem,4vw,2.4rem);color:var(--blue);line-height:1.1;margin-bottom:var(--space-4);">
+            {{ series.title }}
+        </h1>
+
+        {% if series.submitted_by %}
+            <div class="event-meta text-sm text-muted" style="margin-bottom:var(--space-4);">
+                by
+                <a href="{% url 'publisher_profile' series.submitted_by.display_name_slug %}" class="link-accent" style="font-weight:600;">
+                    {{ series.submitted_by.public_name }}
+                </a>
+            </div>
+        {% endif %}
+
+        <div class="btn-row" style="flex-wrap:wrap;margin-bottom:var(--space-6);gap:var(--space-2);">
+            <a href="{% url 'event_ical_feed' %}?series={{ series.slug }}" class="btn btn--ghost btn--sm">Subscribe (iCal)</a>
+            <a href="{% url 'event_rss_feed' %}?series={{ series.slug }}" class="btn btn--ghost btn--sm">RSS</a>
+        </div>
+
+        {% if series.get_display_description %}
+            <hr class="rule">
+            <div class="prose-content" style="margin-bottom:var(--space-6);">
+                {{ series.get_display_description|render_markdown }}
+            </div>
+        {% endif %}
+
+        <hr class="rule">
+        <h2 class="heading-section">Upcoming sessions</h2>
+        {% if upcoming_events %}
+            <div class="event-list">
+                {% for event in upcoming_events %}
+                    {% include "events/partials/event_card.html" with event=event %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted">No upcoming sessions.</p>
+        {% endif %}
+
+        {% if past_events %}
+            <hr class="rule">
+            <h2 class="heading-section">Past sessions</h2>
+            <div class="event-list">
+                {% for event in past_events %}
+                    {% include "events/partials/event_card.html" with event=event %}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if is_owner %}
+            <hr class="rule">
+            <div class="btn-row">
+                <a href="{% url 'series_edit' series.slug %}" class="btn btn--ghost btn--sm">Edit series</a>
+                <a href="{% url 'series_delete' series.slug %}" class="btn btn--danger btn--sm">Delete series</a>
+            </div>
+        {% endif %}
+    </article>
+</div>
+{% endblock %}

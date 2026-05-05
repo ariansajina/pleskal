@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Delete series – pleskal{% endblock %}
+
+{% block content %}
+<div class="content-wrap">
+    <div style="max-width:600px;">
+        <h1 class="heading-page">Delete series</h1>
+
+        <p>Are you sure you want to delete the series <strong>"{{ series.title }}"</strong>?</p>
+        <p class="text-muted">The individual events in this series will <em>not</em> be deleted; they will simply no longer be grouped together.</p>
+
+        <form method="post" class="form-stack">
+            {% csrf_token %}
+            <div class="btn-row">
+                <button type="submit" class="btn btn--danger">Delete series</button>
+                <a href="{% url 'series_detail' series.slug %}" class="btn btn--ghost">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

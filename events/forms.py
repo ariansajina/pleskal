@@ -5,10 +5,40 @@ from django.conf import settings
 from django.utils import timezone
 from markdownx.widgets import MarkdownxWidget
 
-from .models import Event
+from .models import Event, EventSeries
 
 DATE_FORMAT = "%Y-%m-%d"
 TIME_FORMAT = "%H:%M"
+
+
+class EventSeriesForm(forms.ModelForm):
+    """Form for creating and editing an event series."""
+
+    class Meta:
+        model = EventSeries
+        fields = ["title", "description"]
+        widgets = {
+            "description": MarkdownxWidget(attrs={"rows": 6, "maxlength": 2000}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["title"].widget.attrs.setdefault("class", "form-input")
+        self.fields["description"].required = False
+
+    def clean_title(self):
+        title = self.cleaned_data.get("title", "").strip()
+        if title and len(title) < 3:
+            raise forms.ValidationError("Title must be at least 3 characters.")
+        return title
+
+    def clean_description(self):
+        description = self.cleaned_data.get("description", "")
+        if len(description) > 2000:
+            raise forms.ValidationError(
+                f"Description must be 2000 characters or fewer (currently {len(description)})."
+            )
+        return description
 
 
 class EventForm(forms.ModelForm):
@@ -53,14 +83,16 @@ class EventForm(forms.ModelForm):
             "is_wheelchair_accessible",
             "price_note",
             "source_url",
+            "series",
         ]
         widgets = {
             "description": MarkdownxWidget(attrs={"rows": 8, "maxlength": 2000}),
         }
 
-    def __init__(self, *args, creation=True, **kwargs):
+    def __init__(self, *args, creation=True, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._is_creation = creation
+        self._user = user
         # Pre-populate date/time fields from existing instance when editing
         if self.instance and self.instance.pk and self.instance.start_datetime:
             local_start = timezone.localtime(self.instance.start_datetime)
@@ -94,6 +126,22 @@ class EventForm(forms.ModelForm):
         self.fields["venue_address"].required = False
         self.fields["price_note"].required = False
         self.fields["source_url"].required = False
+        if "series" in self.fields:
+            self.fields["series"].required = False
+            # Limit series options: only series owned by this user, plus the
+            # current value if it's already attached to a series owned by
+            # someone else (e.g. system account scraper imports).
+            owner = self._user
+            if owner is None and self.instance is not None:
+                owner = getattr(self.instance, "submitted_by", None)
+            qs = EventSeries.objects.none()
+            if owner is not None:
+                qs = EventSeries.objects.filter(submitted_by=owner)
+            current = getattr(self.instance, "series", None) if self.instance else None
+            if current is not None:
+                qs = (qs | EventSeries.objects.filter(pk=current.pk)).distinct()
+            self.fields["series"].queryset = qs
+            self.fields["series"].widget.attrs.setdefault("class", "form-select")
 
     def clean_description(self):
         description = self.cleaned_data.get("description", "")
@@ -126,6 +174,15 @@ class EventForm(forms.ModelForm):
                 "date",
                 "Start date must not be more than 1 year in the future.",
             )
+
+    def clean_series(self):
+        series = self.cleaned_data.get("series")
+        if series is None:
+            return None
+        owner = self._user or getattr(self.instance, "submitted_by", None)
+        if owner is not None and series.submitted_by_id != owner.id:
+            raise forms.ValidationError("You can only attach events to series you own.")
+        return series
 
     def clean(self):
         cleaned = super().clean()

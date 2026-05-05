@@ -155,6 +155,22 @@
                 {% endif %}
             </div>
 
+            {# Series #}
+            {% if form.series %}
+                <div>
+                    <label for="{{ form.series.id_for_label }}" class="form-label">
+                        Part of series
+                    </label>
+                    {{ form.series }}
+                    <p class="form-help" style="margin-top:var(--space-1);">
+                        Optional. <a href="{% url 'series_create' %}">Create a series</a> to group this with other related events.
+                    </p>
+                    {% if form.series.errors %}
+                        <p class="form-field-error">{{ form.series.errors|join:", " }}</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+
             <div style="border-top:1.5px solid var(--border-light);padding-top:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3);">
                 <div class="text-base text-muted" style="background:var(--surface-alt,#f7f7f5);border:1.5px solid var(--border-light);padding:var(--space-3);line-height:1.5;">
                     <strong style="color:var(--ink);">Published</strong> events are visible to everyone on the calendar.

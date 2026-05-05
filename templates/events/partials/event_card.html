@@ -27,6 +27,9 @@
                 <div class="event-tags">
                     <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
                     {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
+                    {% if event.series_event_count and event.series_event_count > 1 %}
+                        <span class="badge">Series · {{ event.series_event_count }} sessions</span>
+                    {% endif %}
                 </div>
             </div>
         </div>

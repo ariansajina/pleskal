@@ -29,6 +29,7 @@ from events.models import (
     MAX_VENUE_LENGTH,
     Event,
     EventCategory,
+    EventSeries,
 )
 
 
@@ -232,6 +233,42 @@ class BaseEventImportCommand(BaseCommand):
                     rec.get("category", ""), EventCategory.OTHER
                 )
 
+                # Resolve optional series grouping. When a record carries a
+                # `series_key`, get-or-create an EventSeries scoped by the
+                # importer's external_source so re-imports don't duplicate.
+                series_key = rec.get("series_key", "") or ""
+                series_obj: EventSeries | None = None
+                if series_key:
+                    series_title = rec.get("series_title") or rec["title"]
+                    series_description = rec.get("series_description", "")
+                    series_obj, created_series = EventSeries.objects.get_or_create(
+                        external_source=self.external_source,
+                        external_key=series_key,
+                        defaults={
+                            "title": series_title[:MAX_TITLE_LENGTH],
+                            "description": series_description,
+                            "submitted_by": system_user,
+                        },
+                    )
+                    if not created_series:
+                        # Keep the title fresh if the upstream renamed the
+                        # course but keep description if upstream omits it.
+                        changed = False
+                        new_title = series_title[:MAX_TITLE_LENGTH]
+                        if series_obj.title != new_title:
+                            series_obj.title = new_title
+                            changed = True
+                        if (
+                            series_description
+                            and series_obj.description != series_description
+                        ):
+                            series_obj.description = series_description
+                            changed = True
+                        if changed and not dry_run:
+                            series_obj.save(
+                                update_fields=["title", "description", "updated_at"]
+                            )
+
                 fields = {
                     "title": rec["title"],
                     "description": rec.get("description", ""),
@@ -248,6 +285,7 @@ class BaseEventImportCommand(BaseCommand):
                     "source_url": source_url,
                     "external_source": self.external_source,
                     "submitted_by": system_user,
+                    "series": series_obj,
                 }
 
                 if key in existing:
