@@ -12,23 +12,28 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Railway CLI
         run: bash <(curl -fsSL https://railway.com/install.sh)
 
+      - name: Set APP_VERSION on web service
+        run: railway variables --set "APP_VERSION=${{ github.ref_name }}" --service ${{ secrets.RAILWAY_PROD_SERVICE_ID }} --skip-deploys
+
       - name: Deploy web service
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service ${{ secrets.RAILWAY_PROD_SERVICE_ID }} --detach
 
+      - name: Set APP_VERSION on scrape-cron service
+        run: railway variables --set "APP_VERSION=${{ github.ref_name }}" --service ${{ secrets.RAILWAY_PROD_SCRAPE_CRON_SERVICE_ID }} --skip-deploys
+
       - name: Deploy scrape-cron service
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service ${{ secrets.RAILWAY_PROD_SCRAPE_CRON_SERVICE_ID }} --detach
 
+      - name: Set APP_VERSION on backup-cron service
+        run: railway variables --set "APP_VERSION=${{ github.ref_name }}" --service ${{ secrets.RAILWAY_PROD_BACKUP_CRON_SERVICE_ID }} --skip-deploys
+
       - name: Deploy backup-cron service
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service ${{ secrets.RAILWAY_PROD_BACKUP_CRON_SERVICE_ID }} --detach

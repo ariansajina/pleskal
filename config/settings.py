@@ -274,6 +274,7 @@ AXES_RESET_ON_SUCCESS = True
 
 SENTRY_DSN = env("SENTRY_DSN", default="")
 SENTRY_ENVIRONMENT = env("SENTRY_ENVIRONMENT", default="")
+APP_VERSION = env("APP_VERSION", default="")
 if SENTRY_DSN:
     import sentry_sdk
     from sentry_sdk.integrations.django import DjangoIntegration
@@ -284,6 +285,7 @@ if SENTRY_DSN:
         traces_sample_rate=0.2,
         send_default_pii=False,
         environment=SENTRY_ENVIRONMENT or None,
+        release=APP_VERSION or None,
     )
 
 # Security (production only)

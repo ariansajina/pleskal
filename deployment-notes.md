@@ -32,6 +32,9 @@ must never share `PASSWORD_PEPPER` (different DBs require different peppers) or
 - GitHub auto-deploy is **disabled** on the production service. Deploys only
   happen via the `Deploy to production` GitHub Actions workflow on tag push.
 - `SENTRY_ENVIRONMENT=production`
+- `APP_VERSION` is set automatically by the deploy workflow from the git tag
+  (e.g. `v1.4.0`) and used as the Sentry `release` tag, so errors group by
+  deploy version.
 - Scraper and backup cron services run on schedule (see below).
 
 ## Cutting a release
