@@ -22,7 +22,7 @@ must never share `PASSWORD_PEPPER` (different DBs require different peppers) or
   never sends mail to real users or syncs contacts to the Resend CRM segment
 - Run scrapers manually against staging when testing scraper changes:
   ```bash
-  railway run --environment staging --service web python manage.py run_scrapers --dry-run
+  railway run --environment staging --service web-service python manage.py run_scrapers --dry-run
   ```
 - `SITE_DOMAIN` / `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` point at the staging
   Railway subdomain
@@ -117,9 +117,9 @@ The staging environment has no scraper cron service. Test scraper changes
 manually against staging via the web service:
 
 ```bash
-railway run --environment staging --service web python manage.py run_scrapers --dry-run
-railway run --environment staging --service web python manage.py run_scrapers --only hautscene
-railway run --environment staging --service web python manage.py run_scrapers --skip-images
+railway run --environment staging --service web-service python manage.py run_scrapers --dry-run
+railway run --environment staging --service web-service python manage.py run_scrapers --only hautscene
+railway run --environment staging --service web-service python manage.py run_scrapers --skip-images
 ```
 
 If `railway run` fails to resolve `postgres.railway.internal`, use
