@@ -91,14 +91,20 @@ details[open] summary::after { content: ''; }
             <div style="margin-bottom:var(--space-4);"></div>
         {% endif %}
 
-        {# Action buttons #}
+        {# Add to calendar / share cluster #}
         <div class="btn-row" style="flex-wrap:wrap;margin-bottom:var(--space-6);gap:var(--space-2);">
-            <button id="copy-link-btn" class="btn btn--ghost btn--sm" type="button">Copy link</button>
+            <button id="share-btn"
+                    class="btn btn--ghost btn--sm"
+                    type="button"
+                    data-share-title="{{ event.title }}"
+                    data-share-text="{{ event.title }} – pleskal">Copy link</button>
             <details style="position:relative;">
                 <summary class="btn btn--ghost btn--sm" style="list-style:none;cursor:pointer;">Add to calendar</summary>
-                <div style="position:absolute;top:calc(100% + 4px);left:0;z-index:20;background:var(--surface);border:1.5px solid var(--border);padding:var(--space-1);min-width:170px;display:flex;flex-direction:column;gap:var(--space-1);box-shadow:3px 3px 0 var(--border-light);">
-                    <a href="{% url 'event_ical_single' event.slug %}" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Download .ics</a>
+                <div style="position:absolute;top:calc(100% + 4px);left:0;z-index:20;background:var(--surface);border:1.5px solid var(--border);padding:var(--space-1);min-width:190px;display:flex;flex-direction:column;gap:var(--space-1);box-shadow:3px 3px 0 var(--border-light);">
                     <a href="{{ google_calendar_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Google Calendar &nearr;</a>
+                    <a href="{{ outlook_calendar_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Outlook &nearr;</a>
+                    <a href="{{ apple_calendar_url }}" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Apple Calendar</a>
+                    <a href="{% url 'event_ical_single' event.slug %}" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Download .ics</a>
                 </div>
             </details>
             {% if event.has_map_location %}
@@ -183,7 +189,7 @@ details[open] summary::after { content: ''; }
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/copy-link.js' %}"></script>
+<script src="{% static 'js/share.js' %}"></script>
 {% if event.has_map_location %}
     <script src="{% static 'js/show-map.js' %}"></script>
 {% endif %}

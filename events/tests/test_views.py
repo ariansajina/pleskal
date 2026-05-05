@@ -660,10 +660,24 @@ class TestEventDetailView:
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         assert b"Add to calendar" in resp.content
 
-    def test_page_renders_copy_link_button(self, client):
+    def test_page_renders_share_button(self, client):
         event = EventFactory.create()
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
-        assert b"copy-link-btn" in resp.content
+        assert b'id="share-btn"' in resp.content
+        assert b"share.js" in resp.content
+
+    def test_context_contains_outlook_and_apple_calendar_urls(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert "outlook_calendar_url" in resp.context
+        assert "apple_calendar_url" in resp.context
+        assert resp.context["outlook_calendar_url"].startswith(
+            "https://outlook.live.com/"
+        )
+        assert resp.context["apple_calendar_url"].startswith("webcal://")
+        assert resp.context["apple_calendar_url"].endswith(
+            f"/events/{event.slug}/calendar.ics"
+        )
 
     def test_show_map_button_absent_without_coordinates(self, client):
         event = EventFactory.create(latitude=None, longitude=None)

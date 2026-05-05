@@ -1,13 +1,12 @@
 import calendar
 import datetime
-from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.generic import CreateView, DeleteView, TemplateView, UpdateView, View
@@ -18,6 +17,7 @@ from config.ratelimit import RateLimitMixin
 from .forms import EventForm
 from .images import validate_and_process
 from .models import Event, EventCategory
+from .sharing import apple_calendar_url, google_calendar_url, outlook_calendar_url
 
 EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
@@ -345,20 +345,12 @@ class EventDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         event = self.object
-        start = event.start_datetime.strftime("%Y%m%dT%H%M%S")
-        end = (event.end_datetime or event.start_datetime).strftime("%Y%m%dT%H%M%S")
-        location = event.venue_name
-        if event.venue_address:
-            location += f", {event.venue_address}"
-        params: dict[str, str] = {
-            "action": "TEMPLATE",
-            "text": str(event.title),
-            "dates": f"{start}/{end}",
-            "location": location,
-        }
-        context["google_calendar_url"] = (
-            "https://calendar.google.com/calendar/render?" + urlencode(params)
+        ical_absolute = self.request.build_absolute_uri(
+            reverse("event_ical_single", kwargs={"slug": event.slug})
         )
+        context["google_calendar_url"] = google_calendar_url(event)
+        context["outlook_calendar_url"] = outlook_calendar_url(event)
+        context["apple_calendar_url"] = apple_calendar_url(ical_absolute)
         if event.image:
             context["og_image_url"] = self.request.build_absolute_uri(event.image.url)
         return context
