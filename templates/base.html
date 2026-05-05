@@ -17,6 +17,13 @@
   <link rel="icon" type="image/png" href="{% static 'images/favicon-32x32.png' %}">
   <link rel="apple-touch-icon" href="{% static 'images/apple-touch-icon.png' %}">
 
+  {# PWA #}
+  <link rel="manifest" href="{% url 'pwa_manifest' %}">
+  <meta name="theme-color" content="#3333CC">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="pleskal">
+
   {# Compiled Tailwind CSS #}
   <link rel="stylesheet" href="{% static 'css/output.css' %}">
 
@@ -30,6 +37,9 @@
 
   {# Nav toggle #}
   <script src="{% static 'js/nav.js' %}" defer></script>
+
+  {# PWA service worker registration (CSP-safe: same-origin, no inline JS) #}
+  <script src="{% static 'js/pwa.js' %}" defer></script>
 
   <style>
     /* ─── CSS Variables ─────────────────────────────────── */

@@ -4,6 +4,7 @@ from django.http import HttpResponse
 from django.urls import include, path
 
 from accounts.views import ClaimCodeView, ClaimRegisterView
+from config.pwa import manifest_view, offline_view, service_worker_view
 
 
 def health(request):
@@ -12,6 +13,11 @@ def health(request):
 
 urlpatterns = [
     path("health/", health, name="health"),
+    # PWA: manifest + service worker must be served from the origin root so
+    # the SW scope covers the whole site.
+    path("manifest.webmanifest", manifest_view, name="pwa_manifest"),
+    path("service-worker.js", service_worker_view, name="pwa_service_worker"),
+    path("offline/", offline_view, name="pwa_offline"),
     path("admin/", admin.site.urls),
     # Claim flow at top-level /claim/
     path("claim/", ClaimCodeView.as_view(), name="claim"),
