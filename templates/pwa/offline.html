@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Offline — pleskal{% endblock %}
+
+{% block content %}
+<div class="content-wrap" style="text-align:center; padding-top:4rem;">
+  <h1 style="margin-bottom:1rem;">You're offline</h1>
+  <p style="color: var(--ink-muted); margin-bottom:2rem;">
+    pleskal can't reach the network right now. Previously-viewed events should still load from your device.
+  </p>
+  <a href="/" class="nav-btn nav-btn--filled">Back to events</a>
+</div>
+{% endblock %}
