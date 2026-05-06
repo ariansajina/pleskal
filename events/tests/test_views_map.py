@@ -21,7 +21,11 @@ def _without_coords(**kwargs):
 
 
 def _pin_slugs(response):
-    return {pin["slug"] for pin in response.context["pin_data"]}
+    return {
+        event["slug"]
+        for group in response.context["pin_data"]
+        for event in group["events"]
+    }
 
 
 @pytest.mark.django_db
@@ -40,13 +44,43 @@ class TestEventMapView:
         event = _with_coords(title="Map-enabled Show")
         resp = client.get(reverse("event_map"))
         assert resp.status_code == 200
-        pins = resp.context["pin_data"]
-        assert len(pins) == 1
-        assert pins[0]["slug"] == event.slug
-        assert pins[0]["title"] == event.title
-        assert pins[0]["lat"] == pytest.approx(55.6761)
-        assert pins[0]["lng"] == pytest.approx(12.5683)
-        assert pins[0]["url"] == reverse("event_detail", args=[event.slug])
+        groups = resp.context["pin_data"]
+        assert len(groups) == 1
+        assert groups[0]["lat"] == pytest.approx(55.6761)
+        assert groups[0]["lng"] == pytest.approx(12.5683)
+        events = groups[0]["events"]
+        assert len(events) == 1
+        assert events[0]["slug"] == event.slug
+        assert events[0]["title"] == event.title
+        assert events[0]["url"] == reverse("event_detail", args=[event.slug])
+
+    def test_events_at_same_location_share_one_pin(self, client):
+        a = _with_coords(title="Show A", venue_name="Dansehallerne")
+        b = _with_coords(title="Show B", venue_name="Dansehallerne")
+        c = _with_coords(
+            title="Show C",
+            venue_name="Other Venue",
+            latitude=55.7000,
+            longitude=12.6000,
+        )
+        resp = client.get(reverse("event_map"))
+        groups = resp.context["pin_data"]
+        assert len(groups) == 2
+
+        by_venue = {g["venue_name"]: g for g in groups}
+        shared = by_venue["Dansehallerne"]
+        assert {e["slug"] for e in shared["events"]} == {a.slug, b.slug}
+        solo = by_venue["Other Venue"]
+        assert {e["slug"] for e in solo["events"]} == {c.slug}
+
+    def test_events_within_one_metre_collapse_to_one_pin(self, client):
+        # 6th-decimal differences (~10cm) should not split a pin.
+        a = _with_coords(title="A", latitude=55.676100, longitude=12.568300)
+        b = _with_coords(title="B", latitude=55.676101, longitude=12.568301)
+        resp = client.get(reverse("event_map"))
+        groups = resp.context["pin_data"]
+        assert len(groups) == 1
+        assert {e["slug"] for e in groups[0]["events"]} == {a.slug, b.slug}
 
     def test_event_without_coords_goes_to_fallback_section(self, client):
         mapped = _with_coords(title="On The Map")
@@ -181,3 +215,28 @@ class TestEventMapView:
         assert resp.status_code == 200
         content = resp.content.decode("utf-8")
         assert reverse("event_map") in content
+
+
+@pytest.mark.django_db
+class TestMapViewFeatureFlag:
+    def test_view_returns_404_when_disabled(self, client, settings):
+        settings.MAP_VIEW_ENABLED = False
+        resp = client.get(reverse("event_map"))
+        assert resp.status_code == 404
+
+    def test_view_returns_200_when_enabled(self, client, settings):
+        settings.MAP_VIEW_ENABLED = True
+        resp = client.get(reverse("event_map"))
+        assert resp.status_code == 200
+
+    def test_nav_link_hidden_when_disabled(self, client, settings):
+        settings.MAP_VIEW_ENABLED = False
+        resp = client.get(reverse("event_list"))
+        assert resp.status_code == 200
+        # Nav link should not appear; we look for the map URL on the list page.
+        assert reverse("event_map").encode() not in resp.content
+
+    def test_htmx_partial_also_404s_when_disabled(self, client, settings):
+        settings.MAP_VIEW_ENABLED = False
+        resp = client.get(reverse("event_map"), HTTP_HX_REQUEST="true")
+        assert resp.status_code == 404

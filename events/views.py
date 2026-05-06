@@ -336,7 +336,21 @@ class EventMapView(RateLimitMixin, View):
     template_name = "events/event_map.html"
     partial_template_name = "events/partials/event_map_results.html"
 
+    # ~1m precision; events sharing an address geocode to identical floats and
+    # collapse to one marker, but coordinates that differ by more than a metre
+    # stay on separate pins.
+    LOCATION_GROUP_PRECISION = 5
+
+    def dispatch(self, request, *args, **kwargs):
+        if not getattr(settings, "MAP_VIEW_ENABLED", False):
+            from django.http import Http404
+
+            raise Http404("Map view is disabled")
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request):
+        from collections import OrderedDict
+
         from django.contrib.auth import get_user_model
         from django.shortcuts import render
 
@@ -351,19 +365,35 @@ class EventMapView(RateLimitMixin, View):
         with_coords = [e for e in events if e.has_map_location]
         without_coords = [e for e in events if not e.has_map_location]
 
+        groups: OrderedDict[tuple[float, float], list[dict]] = OrderedDict()
+        group_meta: dict[tuple[float, float], dict] = {}
+        for event in with_coords:
+            lat = float(event.latitude)
+            lng = float(event.longitude)
+            key = (
+                round(lat, self.LOCATION_GROUP_PRECISION),
+                round(lng, self.LOCATION_GROUP_PRECISION),
+            )
+            if key not in groups:
+                groups[key] = []
+                group_meta[key] = {
+                    "lat": lat,
+                    "lng": lng,
+                    "venue_name": event.venue_name,
+                }
+            groups[key].append(
+                {
+                    "slug": event.slug,
+                    "title": event.title,
+                    "venue_name": event.venue_name,
+                    "category": event.category,
+                    "category_display": event.get_category_display(),
+                    "start_datetime": event.start_datetime.isoformat(),
+                    "url": reverse("event_detail", args=[event.slug]),
+                }
+            )
         pin_data = [
-            {
-                "slug": event.slug,
-                "title": event.title,
-                "lat": float(event.latitude),
-                "lng": float(event.longitude),
-                "venue_name": event.venue_name,
-                "category": event.category,
-                "category_display": event.get_category_display(),
-                "start_datetime": event.start_datetime.isoformat(),
-                "url": reverse("event_detail", args=[event.slug]),
-            }
-            for event in with_coords
+            {**group_meta[key], "events": events} for key, events in groups.items()
         ]
 
         today = datetime.date.today()

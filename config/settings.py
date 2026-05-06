@@ -98,6 +98,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "events.context_processors.feature_flags",
             ],
         },
     },
@@ -205,6 +206,10 @@ GEOCODING_USER_AGENT = env.str(
     "GEOCODING_USER_AGENT",
     default="pleskal/1.0 (https://pleskal.dk; hello.pleskal@proton.me)",
 )
+
+# Map discovery view (/map/). Off by default; enable via env once the feature
+# is ready to surface.
+MAP_VIEW_ENABLED = env.bool("MAP_VIEW_ENABLED", default=False)
 
 # Cloudflare R2 storage (production)
 if env("R2_BUCKET_NAME", default=None):

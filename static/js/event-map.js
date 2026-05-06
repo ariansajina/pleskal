@@ -53,40 +53,48 @@
     }
   }
 
-  function buildPopup(pin) {
-    var parts = [];
-    parts.push(
-      '<div class="map-popup-title">' + escapeHtml(pin.title) + "</div>",
+  function buildEventEntry(event) {
+    var lines = [];
+    lines.push(
+      '<div class="map-popup-title">' + escapeHtml(event.title) + "</div>",
     );
-    if (pin.venue_name) {
-      parts.push(
-        '<div class="map-popup-meta">' +
-          escapeHtml(pin.venue_name) +
-          "</div>",
-      );
+    var when = formatDate(event.start_datetime);
+    var meta = [];
+    if (when) meta.push(escapeHtml(when));
+    if (event.category_display) meta.push(escapeHtml(event.category_display));
+    if (meta.length) {
+      lines.push('<div class="map-popup-meta">' + meta.join(" · ") + "</div>");
     }
-    var when = formatDate(pin.start_datetime);
-    if (when) {
-      parts.push('<div class="map-popup-meta">' + escapeHtml(when) + "</div>");
-    }
-    if (pin.category_display) {
-      parts.push(
-        '<div class="map-popup-meta">' +
-          escapeHtml(pin.category_display) +
-          "</div>",
-      );
-    }
-    if (pin.url) {
-      parts.push(
+    if (event.url) {
+      lines.push(
         '<a class="map-popup-link" href="' +
-          escapeHtml(pin.url) +
+          escapeHtml(event.url) +
           '">View event →</a>',
       );
     }
+    return '<li class="map-popup-event">' + lines.join("") + "</li>";
+  }
+
+  function buildPopup(group) {
+    var events = Array.isArray(group.events) ? group.events : [];
+    var parts = [];
+    if (group.venue_name) {
+      parts.push(
+        '<div class="map-popup-venue">' +
+          escapeHtml(group.venue_name) +
+          (events.length > 1 ? " (" + events.length + ")" : "") +
+          "</div>",
+      );
+    }
+    parts.push(
+      '<ul class="map-popup-list">' +
+        events.map(buildEventEntry).join("") +
+        "</ul>",
+    );
     return parts.join("");
   }
 
-  function renderMarkers(pins) {
+  function renderMarkers(groups) {
     if (!mapInstance) return;
     if (markerLayer) {
       markerLayer.clearLayers();
@@ -95,14 +103,18 @@
     }
 
     var latLngs = [];
-    pins.forEach(function (pin) {
-      var lat = Number(pin.lat);
-      var lng = Number(pin.lng);
+    groups.forEach(function (group) {
+      var lat = Number(group.lat);
+      var lng = Number(group.lng);
       if (!isFinite(lat) || !isFinite(lng)) return;
-      var marker = window.L.marker([lat, lng], {
-        title: pin.title || "",
-      });
-      marker.bindPopup(buildPopup(pin));
+      var events = Array.isArray(group.events) ? group.events : [];
+      if (!events.length) return;
+      var title =
+        events.length === 1
+          ? events[0].title
+          : (group.venue_name || "") + " (" + events.length + " events)";
+      var marker = window.L.marker([lat, lng], { title: title });
+      marker.bindPopup(buildPopup(group), { maxWidth: 320 });
       marker.addTo(markerLayer);
       latLngs.push([lat, lng]);
     });

@@ -505,10 +505,12 @@
            class="nav-link {% if request.resolver_match.url_name == 'event_list' %}nav-link--active{% endif %}">
           Events
         </a>
+        {% if map_view_enabled %}
         <a href="{% url 'event_map' %}"
            class="nav-link {% if request.resolver_match.url_name == 'event_map' %}nav-link--active{% endif %}">
           Map
         </a>
+        {% endif %}
         <a href="{% url 'subscribe' %}"
            class="nav-link {% if request.resolver_match.url_name == 'subscribe' %}nav-link--active{% endif %}">
           Subscribe
