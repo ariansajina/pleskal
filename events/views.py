@@ -1,6 +1,5 @@
 import calendar
 import datetime
-import json
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -339,7 +338,6 @@ class EventMapView(RateLimitMixin, View):
 
     def get(self, request):
         from django.contrib.auth import get_user_model
-        from django.db.models import Q
         from django.shortcuts import render
 
         User = get_user_model()
@@ -348,12 +346,10 @@ class EventMapView(RateLimitMixin, View):
         # Map view shows upcoming events only — past events are browsed via the
         # list view's "past" toggle.
         now = timezone.now()
-        qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
+        events = list(qs.filter(start_datetime__gte=now).order_by("start_datetime"))
 
-        with_coords = list(qs.filter(latitude__isnull=False, longitude__isnull=False))
-        without_coords = list(
-            qs.filter(Q(latitude__isnull=True) | Q(longitude__isnull=True))
-        )
+        with_coords = [e for e in events if e.has_map_location]
+        without_coords = [e for e in events if not e.has_map_location]
 
         pin_data = [
             {
@@ -381,9 +377,6 @@ class EventMapView(RateLimitMixin, View):
             "events_with_coords": with_coords,
             "events_without_coords": without_coords,
             "pin_data": pin_data,
-            "pin_data_json": json.dumps(pin_data),
-            "with_coords_count": len(with_coords),
-            "without_coords_count": len(without_coords),
             "category_choices": EventCategory.choices,
             "selected_categories": filter_state["categories"],
             "system_publishers": system_publishers,

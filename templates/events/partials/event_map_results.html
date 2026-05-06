@@ -2,15 +2,15 @@
 
 <div class="map-summary text-sm text-muted" style="display:flex;justify-content:space-between;gap:var(--space-3);align-items:baseline;">
     <span>
-        {% if with_coords_count %}
-            {{ with_coords_count }} on map
+        {% if events_with_coords %}
+            {{ events_with_coords|length }} on map
         {% else %}
             No mapped events
         {% endif %}
     </span>
-    {% if without_coords_count %}
+    {% if events_without_coords %}
         <a href="#no-map-location" class="link-accent text-sm">
-            +{{ without_coords_count }} without location
+            +{{ events_without_coords|length }} without location
         </a>
     {% endif %}
 </div>

@@ -1,0 +1,123 @@
+{% comment %}
+Shared filter panel for the event list and map pages.
+
+Required context:
+  - filter_form_id (str): id for the wrapping <form>; also used by the
+    Clear-filters button's reset call and the search input's hx-include.
+  - filter_hx_url (str): URL passed to hx-get on the form, search input, and
+    Clear button.
+  - filter_hx_target (str): CSS selector passed to hx-target on the same.
+  - search_query, selected_categories, category_choices, system_publishers,
+    selected_publishers, date_from, date_to, today, quick_date_ranges,
+    is_free, is_wheelchair_accessible.
+
+Optional:
+  - show_when_filter (bool): renders the upcoming/past toggle (list view only).
+    When omitted/false, the date_from input no longer special-cases show_past.
+  - show_past, upcoming_count, past_count, date_range_active: required when
+    show_when_filter is true.
+{% endcomment %}
+<form id="{{ filter_form_id }}"
+      data-today="{{ today }}"
+      hx-get="{{ filter_hx_url }}"
+      hx-target="{{ filter_hx_target }}"
+      hx-push-url="true"
+      hx-trigger="change, submit">
+    <div class="filter-panel">
+
+        <div class="filter-panel__group" style="flex:1;min-width:160px;">
+            <span class="filter-panel__group-label">Search</span>
+            <input type="search" name="q" value="{{ search_query }}"
+                   placeholder="Title, artist, venue, description…"
+                   hx-get="{{ filter_hx_url }}"
+                   hx-target="{{ filter_hx_target }}"
+                   hx-push-url="true"
+                   hx-trigger="keyup changed delay:400ms"
+                   hx-include="#{{ filter_form_id }}"
+                   class="form-input">
+        </div>
+
+        {% if show_when_filter %}
+            {% include "events/partials/when_filter_group.html" %}
+        {% endif %}
+
+        <div class="filter-panel__group">
+            <span class="filter-panel__group-label">Category</span>
+            <div class="filter-checkboxes">
+                {% for value, label in category_choices %}
+                    <label>
+                        <input type="checkbox" name="category" value="{{ value }}"
+                               {% if value in selected_categories %}checked{% endif %}>
+                        <span class="filter-chip">{{ label }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="filter-panel__group">
+            <span class="filter-panel__group-label">Publisher</span>
+            <div class="filter-checkboxes">
+                {% for publisher in system_publishers %}
+                    <label>
+                        <input type="checkbox" name="publisher" value="{{ publisher.display_name_slug }}"
+                               {% if publisher.display_name_slug in selected_publishers %}checked{% endif %}>
+                        <span class="filter-chip">{{ publisher.public_name }}</span>
+                    </label>
+                {% endfor %}
+                <label>
+                    <input type="checkbox" name="publisher" value="other"
+                           {% if "other" in selected_publishers %}checked{% endif %}>
+                    <span class="filter-chip">Other</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="filter-panel__group">
+            <span class="filter-panel__group-label">Date range</span>
+            <div style="display:flex;gap:var(--space-2);align-items:center;">
+                <input type="date" name="date_from" value="{% if show_past %}{{ date_from }}{% else %}{{ date_from|default:today }}{% endif %}" class="form-input" style="width:auto;">
+                <span class="text-sm text-muted">–</span>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-input" style="width:auto;">
+            </div>
+            <div class="filter-checkboxes" style="margin-top:var(--space-2);">
+                <button type="button" class="filter-chip"
+                        data-quick-date-filter
+                        data-date-from="{{ quick_date_ranges.this_week.0 }}"
+                        data-date-to="{{ quick_date_ranges.this_week.1 }}">This week</button>
+                <button type="button" class="filter-chip"
+                        data-quick-date-filter
+                        data-date-from="{{ quick_date_ranges.next_week.0 }}"
+                        data-date-to="{{ quick_date_ranges.next_week.1 }}">Next week</button>
+                <button type="button" class="filter-chip"
+                        data-quick-date-filter
+                        data-date-from="{{ quick_date_ranges.this_month.0 }}"
+                        data-date-to="{{ quick_date_ranges.this_month.1 }}">This month</button>
+                <button type="button" class="filter-chip"
+                        data-quick-date-filter
+                        data-date-from="{{ quick_date_ranges.next_month.0 }}"
+                        data-date-to="{{ quick_date_ranges.next_month.1 }}">Next month</button>
+            </div>
+        </div>
+
+        <div class="filter-panel__group" style="justify-content:flex-end;">
+            <label class="form-check">
+                <input type="checkbox" name="is_free" value="1" {% if is_free %}checked{% endif %}>
+                <span class="text-sm">Free only</span>
+            </label>
+            <label class="form-check" style="margin-top:var(--space-2);">
+                <input type="checkbox" name="is_wheelchair_accessible" value="1" {% if is_wheelchair_accessible %}checked{% endif %}>
+                <span class="text-sm">Wheelchair accessible</span>
+            </label>
+        </div>
+
+        <div class="filter-panel__group" style="justify-content:flex-end;align-self:flex-end;">
+            <button type="button"
+                    onclick="document.getElementById('{{ filter_form_id }}').reset()"
+                    hx-get="{{ filter_hx_url }}"
+                    hx-target="{{ filter_hx_target }}"
+                    hx-push-url="true"
+                    class="filter-chip">Clear filters</button>
+        </div>
+
+    </div>
+</form>

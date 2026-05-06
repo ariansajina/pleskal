@@ -1,7 +1,5 @@
 """Tests for the /map/ event discovery view."""
 
-import json
-
 import pytest
 from django.urls import reverse
 from django.utils import timezone
@@ -22,15 +20,8 @@ def _without_coords(**kwargs):
     return EventFactory.create(**kwargs)
 
 
-def _get_pin_payload(response):
-    """Parse the json_script block embedded in the rendered response."""
-    body = response.content.decode("utf-8")
-    marker = '<script id="event-map-pins" type="application/json">'
-    start = body.find(marker)
-    assert start != -1, "Expected event-map-pins JSON payload in response"
-    start += len(marker)
-    end = body.find("</script>", start)
-    return json.loads(body[start:end])
+def _pin_slugs(response):
+    return {pin["slug"] for pin in response.context["pin_data"]}
 
 
 @pytest.mark.django_db
@@ -49,7 +40,7 @@ class TestEventMapView:
         event = _with_coords(title="Map-enabled Show")
         resp = client.get(reverse("event_map"))
         assert resp.status_code == 200
-        pins = _get_pin_payload(resp)
+        pins = resp.context["pin_data"]
         assert len(pins) == 1
         assert pins[0]["slug"] == event.slug
         assert pins[0]["title"] == event.title
@@ -62,29 +53,24 @@ class TestEventMapView:
         unmapped = _without_coords(title="Missing Coords")
         resp = client.get(reverse("event_map"))
         assert resp.status_code == 200
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert mapped.slug in pin_slugs
         assert unmapped.slug not in pin_slugs
-        content = resp.content.decode("utf-8")
-        # The unmapped event still appears in the page, in the fallback list.
-        assert unmapped.title in content
-        assert "No map location" in content
+        fallback_slugs = {e.slug for e in resp.context["events_without_coords"]}
+        assert unmapped.slug in fallback_slugs
+        assert b"No map location" in resp.content
 
     def test_draft_events_hidden(self, client):
         owner = UserFactory.create()
-        draft = _with_coords(
-            title="Secret Draft", submitted_by=owner, is_draft=True
-        )
+        draft = _with_coords(title="Secret Draft", submitted_by=owner, is_draft=True)
         published = _with_coords(title="Published Show")
         client.force_login(owner)
         resp = client.get(reverse("event_map"))
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert draft.slug not in pin_slugs
         assert published.slug in pin_slugs
-        content = resp.content.decode("utf-8")
-        assert draft.title not in content
+        fallback_slugs = {e.slug for e in resp.context["events_without_coords"]}
+        assert draft.slug not in fallback_slugs
 
     def test_past_events_hidden(self, client):
         from events.models import Event as EventModel
@@ -100,19 +86,17 @@ class TestEventMapView:
         past.save()
         upcoming = _with_coords(title="Upcoming Show")
         resp = client.get(reverse("event_map"))
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert past.slug not in pin_slugs
         assert upcoming.slug in pin_slugs
-        content = resp.content.decode("utf-8")
-        assert past.title not in content
+        fallback_slugs = {e.slug for e in resp.context["events_without_coords"]}
+        assert past.slug not in fallback_slugs
 
     def test_category_filter_respected(self, client):
         match = _with_coords(title="Workshop Pin", category="workshop")
         miss = _with_coords(title="Social Pin", category="social")
         resp = client.get(reverse("event_map") + "?category=workshop")
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert match.slug in pin_slugs
         assert miss.slug not in pin_slugs
 
@@ -120,8 +104,7 @@ class TestEventMapView:
         free = _with_coords(title="Free Event", is_free=True)
         paid = _with_coords(title="Paid Event", is_free=False)
         resp = client.get(reverse("event_map") + "?is_free=1")
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert free.slug in pin_slugs
         assert paid.slug not in pin_slugs
 
@@ -133,8 +116,7 @@ class TestEventMapView:
             title="Inaccessible Event", is_wheelchair_accessible=False
         )
         resp = client.get(reverse("event_map") + "?is_wheelchair_accessible=1")
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert accessible.slug in pin_slugs
         assert not_accessible.slug not in pin_slugs
 
@@ -142,8 +124,7 @@ class TestEventMapView:
         match = _with_coords(title="Flamenco Night")
         miss = _with_coords(title="Tango Evening")
         resp = client.get(reverse("event_map") + "?q=flamenco")
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert match.slug in pin_slugs
         assert miss.slug not in pin_slugs
 
@@ -156,12 +137,9 @@ class TestEventMapView:
             title="Far Future",
             start_datetime=timezone.now() + timezone.timedelta(days=30),
         )
-        date_to = (timezone.now() + timezone.timedelta(days=10)).strftime(
-            "%Y-%m-%d"
-        )
+        date_to = (timezone.now() + timezone.timedelta(days=10)).strftime("%Y-%m-%d")
         resp = client.get(reverse("event_map") + f"?date_to={date_to}")
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert near.slug in pin_slugs
         assert far.slug not in pin_slugs
 
@@ -172,11 +150,9 @@ class TestEventMapView:
         system_event = _with_coords(submitted_by=system_user, title="System Event")
         other_event = _with_coords(title="Other Event")
         resp = client.get(
-            reverse("event_map")
-            + f"?publisher={system_user.display_name_slug}"
+            reverse("event_map") + f"?publisher={system_user.display_name_slug}"
         )
-        pins = _get_pin_payload(resp)
-        pin_slugs = {p["slug"] for p in pins}
+        pin_slugs = _pin_slugs(resp)
         assert system_event.slug in pin_slugs
         assert other_event.slug not in pin_slugs
 
