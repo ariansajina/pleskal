@@ -1,10 +1,10 @@
-# CLAUDE.md — pleskal (Copenhagen Dance Calendar)
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-pleskal is a Django web application for a Copenhagen dance and performance art calendar.
-
-Inspired by [dukop.dk](https://dukop.dk). Designed for low operational cost and complexity.
+pleskal is a Django web application for a Copenhagen dance and performance art calendar. Inspired by [dukop.dk](https://dukop.dk); designed for low operational cost and complexity.
 
 ## Tech Stack
 
@@ -27,14 +27,14 @@ Inspired by [dukop.dk](https://dukop.dk). Designed for low operational cost and 
 ## Project Structure
 
 ```
-config/          # Django project settings, URLs, CSP middleware, rate limiting
+config/          # Django project settings, URLs, CSP middleware, rate limiting, PWA endpoints
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
-events/          # Dance events app (CRUD, feeds, image processing)
-scrapers/        # Data import scripts (dansehallerne, hautscene, sydhavnteater, kbhdanser, toastercph)
+events/          # Dance events app (CRUD, feeds, image processing, geocoding, map view, sharing)
+scrapers/        # Per-source HTML scrapers (dansehallerne, dansehallerne_workshops, hautscene, kbhdanser, sort_hvid, sydhavnteater, toastercph)
 templates/       # Global Django templates (base, accounts, events, partials)
-static/          # Static assets (Tailwind input CSS, vendored HTMX, logo)
-conftest.py      # pytest-django autouse fixtures (disables SSL, uses simple storage)
-spec.md          # Full system specification (authoritative reference)
+static/          # Static assets (Tailwind input CSS, vendored HTMX + Leaflet, PWA icons, JS shims)
+scripts/         # Standalone runtime scripts (e.g. backup_db.py for the backup cron)
+conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, MAP_VIEW_ENABLED on)
 deployment-notes.md  # Production deployment guidance
 docker-compose.yml   # Local PostgreSQL for development
 ```
@@ -43,13 +43,17 @@ docker-compose.yml   # Local PostgreSQL for development
 
 ```
 events/
-  models.py          # Event, EventCategory, FeedHit models
-  views.py           # CRUD + list + subscribe views
-  forms.py           # EventForm (markdownx)
-  feeds.py           # iCal feed, RSS feed, single-event iCal download
-  images.py          # WebP conversion, EXIF stripping, resize
-  validators.py      # Image format/size and URL validators
-  urls.py            # Event URL patterns
+  models.py            # Event, EventCategory, FeedHit models
+  views.py             # CRUD + list + map + subscribe views
+  forms.py             # EventForm (markdownx)
+  feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)
+  images.py            # WebP conversion, EXIF stripping, resize
+  geocoding.py         # Nominatim/OSM geocoder with rate limiting
+  sharing.py           # Apple/Google calendar URL builders used by detail page
+  signals.py           # Event-related signal handlers
+  context_processors.py  # Template context (e.g. MAP_VIEW_ENABLED for nav)
+  validators.py        # Image format/size and URL validators
+  urls.py              # Event URL patterns
   templatetags/
     markdown_filters.py   # render_markdown filter (nh3 sanitized)
   management/commands/
@@ -58,9 +62,11 @@ events/
     import_dansehallerne_workshops.py  # Dansehallerne workshops importer
     import_hautscene.py         # HAUT Scene importer
     import_kbhdanser.py         # KBH Danser importer
+    import_sort_hvid.py         # Sort/Hvid importer
     import_sydhavnteater.py     # Sydhavn Teater importer
     import_toastercph.py        # Toaster CPH importer
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
+    backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
     weekly_digest.py            # Weekly digest email (feed analytics)
 
 accounts/
@@ -78,9 +84,10 @@ accounts/
 
 config/
   settings.py        # Django settings
-  urls.py            # Root URL conf
+  urls.py            # Root URL conf (includes /health/, /manifest.webmanifest, /service-worker.js, /offline/)
   ratelimit.py       # Cache-based RateLimitMixin
   middleware.py      # ContentSecurityPolicyMiddleware
+  pwa.py             # PWA endpoints: manifest, service worker, offline fallback page
 
 scrapers/
   base.py                      # Shared utilities (get_soup, scrape_url_list, etc.)
@@ -88,9 +95,10 @@ scrapers/
   dansehallerne_workshops.py   # Dansehallerne workshops scraper
   hautscene.py                 # HAUT Scene scraper
   kbhdanser.py                 # KBH Danser scraper
+  sort_hvid.py                 # Sort/Hvid scraper
   sydhavnteater.py             # Sydhavn Teater scraper
   toastercph.py                # Toaster CPH scraper
-  sources.json                 # Source account config for 5 scrapers (external_source, display_name, email)
+  sources.json                 # Source account config (external_source, display_name, email, website) for all scrapers
 ```
 
 ## Commands
@@ -109,15 +117,15 @@ uv run python manage.py createsuperuser    # Create admin user
 ### Testing
 
 ```bash
-uv run pytest -n auto                      # Run all tests (parallel, auto workers)
-uv run pytest -n auto --cov               # Tests with coverage report
-uv run pytest -n auto --cov --cov-fail-under=90  # Enforce 90% coverage (local)
+uv run pytest                              # Run all tests (parallel, defaults from pyproject)
+uv run pytest --cov                        # Tests with coverage report
+uv run pytest --cov --cov-fail-under=90    # Enforce 90% coverage (local)
 uv run pytest path/to/test_file.py         # Run specific test file
-uv run pytest -k "test_name"              # Run tests matching name
+uv run pytest -k "test_name"               # Run tests matching name
 uv run pytest --create-db                  # Force fresh DB (default: --reuse-db)
 ```
 
-- Tests run in parallel via pytest-xdist (`-n auto`)
+- Default pytest addopts: `--reuse-db -n 8` (see `pyproject.toml`); pass `-n auto` to override worker count
 - `--reuse-db` is on by default; use `--create-db` to force fresh DB
 - Coverage minimum: 90% for `events/` and `accounts/` (local), 80% in CI
 - Test factories: `accounts/tests/factories.py` (UserFactory), `events/tests/factories.py` (EventFactory)
@@ -154,11 +162,12 @@ uv run python manage.py import_dansehallerne
 uv run python manage.py import_dansehallerne_workshops
 uv run python manage.py import_hautscene
 uv run python manage.py import_kbhdanser
+uv run python manage.py import_sort_hvid
 uv run python manage.py import_sydhavnteater
 uv run python manage.py import_toastercph
 
-# Unified scraper (runs all sources; used by Railway cron)
-uv run python manage.py run_scrapers              # run all (6 sources)
+# Unified scraper (runs all sources; used by Railway scrape-cron service)
+uv run python manage.py run_scrapers              # run all 7 importers
 uv run python manage.py run_scrapers --dry-run    # preview only (no DB writes)
 uv run python manage.py run_scrapers --skip-images  # skip image downloads
 uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # subset
@@ -324,6 +333,7 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 | View | URL | Auth |
 |---|---|---|
 | `EventListView` | `/` | Public |
+| `EventMapView` | `/map/` | Public (gated by `MAP_VIEW_ENABLED`) |
 | `EventDetailView` | `/events/<slug>/` | Public |
 | `EventCreateView` | `/events/submit/` | Login required |
 | `EventUpdateView` | `/events/<slug>/edit/` | Owner only |
@@ -337,10 +347,20 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 | `EventICalSingleView` | `/events/<slug>/calendar.ics` | Public |
 
 - Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity
-- Event list supports: category (multi-value), date range, is_free, is_wheelchair_accessible, search (title/venue/description/submitter)
+- Event list and map share `_filtered_event_queryset` and the same filter partial; both support: category (multi-value), date range, is_free, is_wheelchair_accessible, search (title/venue/description/submitter)
 - Quick date filters: this_week, next_week, this_month, next_month
+- Map view (Leaflet, vendored under `static/vendor/leaflet/`) clusters co-located events; only renders events with `has_map_location` truthy
 - Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting)
-- Draft events are hidden from public list/detail; only visible to the owner
+- Draft events are hidden from public list/detail/map; only visible to the owner
+
+### Project-level (config/urls.py)
+
+| URL | Purpose |
+|---|---|
+| `/health/` | Plain `200 OK` health check (Railway `healthcheckPath`) |
+| `/manifest.webmanifest` | PWA manifest (`config.pwa.manifest_view`) |
+| `/service-worker.js` | PWA service worker (`config.pwa.service_worker_view`); served at root so SW scope covers the whole site |
+| `/offline/` | Offline fallback rendered when SW intercepts a navigation with no network |
 
 ### accounts/
 
@@ -374,9 +394,9 @@ When running as a Claude Code remote agent (e.g. via the web or API), **before c
 
 Do not open a PR until both commands pass cleanly.
 
-## CI Pipeline
+## CI / CD
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on push/PR to `main`:
+`.github/workflows/ci.yml` runs on push/PR to `main`:
 
 1. Checkout (full history)
 2. Install uv + Python 3.13
@@ -388,6 +408,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on push/PR to `main`:
 8. `ty check .` (type checking)
 9. `pytest --cov --cov-report=term-missing --cov-report=xml --cov-branch --cov-fail-under=80 --create-db` (PostgreSQL 16)
 10. SonarQube scan
+
+`.github/workflows/deploy-production.yml` runs on git tag `v*`. It sets `APP_VERSION=<tag>` and runs `railway up` against three Railway services in turn (web, scrape-cron, backup-cron). `APP_VERSION` is forwarded to Sentry as the release tag.
 
 ## Environment Variables
 
@@ -408,21 +430,32 @@ See `.env.example` for the full list. Key variables:
 | `RESEND_API_KEY` | Enables Resend email sending (production) |
 | `RESEND_SEGMENT_ID` | Optional; for contact list syncing |
 | `SENTRY_DSN` | Enables Sentry error tracking |
+| `SENTRY_ENVIRONMENT` | Environment tag attached to Sentry events (e.g. `staging`, `production`) |
+| `APP_VERSION` | Application version, used as the Sentry release tag (set automatically by deploy workflow from the git tag) |
 | `ADMINS` | Comma-separated admin emails (notified on new signups) |
 | `CSRF_TRUSTED_ORIGINS` | Required in production |
 | `SITE_DOMAIN` | Site domain for allauth |
 | `SITE_NAME` | Site name for allauth |
 | `RAILWAY_PUBLIC_DOMAIN` | Auto-set by Railway |
+| `MAP_VIEW_ENABLED` | Toggle the `/map/` route and nav entry (default: `false`; `conftest.py` enables it for tests) |
 | `GEOCODING_ENABLED` | Toggle Nominatim calls in `Event.save()` (default: `false` in DEBUG, `true` otherwise) |
 | `GEOCODING_USER_AGENT` | User-Agent string sent to Nominatim (required by their policy) |
+| `MAX_UPCOMING_EVENTS_PER_USER` | Cap on upcoming events per user (default: 100) |
+| `CLAIM_CODES_PER_BATCH` | Max codes a user can mint per month from `MyInvitesView` (default: 3) |
+| `CLAIM_CODE_EXPIRY_DAYS` | Expiry for user-minted claim codes (default: 30) |
+| `DB_BACKUP_RETENTION_DAYS` | Retention for `scripts/backup_db.py` uploads to R2 (default: 30) |
+| `SCRAPER_<NAME>_ENABLED` | Per-scraper kill switch consulted by `run_scrapers` |
 
 ## Deployment
 
-- **Platform:** Railway (single web process, gunicorn)
+- **Platform:** Railway, three services per environment:
+  - **web** (`railway.toml`): gunicorn, `migrate --noinput` as preDeploy, `/health/` healthcheck
+  - **scrape-cron** (`railway.scrape-cron.toml`): runs `python manage.py run_scrapers`, `restartPolicyType = NEVER`
+  - **backup-cron** (`railway.backup-cron.toml`): runs `python scripts/backup_db.py`, `restartPolicyType = NEVER`
 - **Database:** Railway managed PostgreSQL 16
-- **Images:** Cloudflare R2 (free tier: 10 GB / 10M reads)
+- **Images / DB backups:** Cloudflare R2 (free tier: 10 GB / 10M reads)
 - **Static files:** WhiteNoise
 - **Email:** Resend via django-anymail
-- **Monitoring:** Sentry (errors), UptimeRobot (uptime)
+- **Monitoring:** Sentry (errors, release-tagged via `APP_VERSION`), UptimeRobot (uptime)
+- **Environments:** staging is web-only (no cron services); production is deployed by tagging `v*` (see `deploy-production.yml`)
 - **Estimated cost:** $5-10/month
-- **Cron job:** `railway.cron.toml` runs `python manage.py run_scrapers` on a schedule (restartPolicyType: NEVER)
