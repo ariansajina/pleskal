@@ -37,6 +37,7 @@ class Event(models.Model):
     slug = models.SlugField(max_length=250, unique=True, editable=False)
     title = models.CharField(max_length=MAX_TITLE_LENGTH)
     description = models.TextField(blank=True, max_length=4000)
+    members_only_info = models.TextField(blank=True, max_length=4000)
     image = models.ImageField(
         upload_to="events/",
         blank=True,

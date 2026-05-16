@@ -134,6 +134,19 @@ details[open] summary::after { content: ''; }
             </div>
         {% endif %}
 
+        {# Members-only info — visible only to logged-in members #}
+        {% if user.is_authenticated and event.members_only_info %}
+            <hr class="rule">
+            <div class="alert alert--info" style="margin-bottom:var(--space-6);">
+                <p class="text-sm" style="text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:var(--space-2);">
+                    For members
+                </p>
+                <div class="prose-content">
+                    {{ event.members_only_info|render_markdown }}
+                </div>
+            </div>
+        {% endif %}
+
         {# Source link #}
         {% if event.source_url %}
             <hr class="rule">

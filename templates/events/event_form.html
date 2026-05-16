@@ -102,6 +102,17 @@
                 {% endif %}
             </div>
 
+            {# Members-only info #}
+            <div>
+                <label for="{{ form.members_only_info.id_for_label }}" class="form-label">
+                    For members <span class="form-help" style="text-transform:none;letter-spacing:0;">(only visible to logged-in users · Markdown supported)</span>
+                </label>
+                {{ form.members_only_info }}
+                {% if form.members_only_info.errors %}
+                    <p class="form-field-error">{{ form.members_only_info.errors|join:", " }}</p>
+                {% endif %}
+            </div>
+
             {# Image #}
             <div>
                 <label for="{{ form.image.id_for_label }}" class="form-label">

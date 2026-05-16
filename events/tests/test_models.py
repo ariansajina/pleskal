@@ -104,6 +104,29 @@ class TestEventValidation:
 
 
 @pytest.mark.django_db
+class TestMembersOnlyInfo:
+    def test_defaults_to_empty_string(self):
+        event = EventFactory.create()
+        assert event.members_only_info == ""
+
+    def test_accepts_long_markdown_content(self):
+        content = "Need accommodation? **DM me** at [link](https://example.com)."
+        event = EventFactory.create(members_only_info=content)
+        event.refresh_from_db()
+        assert event.members_only_info == content
+
+    def test_stored_separately_from_description(self):
+        event = EventFactory.create(
+            description="Public description",
+            members_only_info="Members only note",
+        )
+        event.refresh_from_db()
+        assert event.description == "Public description"
+        assert event.members_only_info == "Members only note"
+        assert "Members only note" not in event.get_display_description()
+
+
+@pytest.mark.django_db
 class TestGeocodingOnSave:
     """Event.save() geocodes the venue when the address changes (or on insert)."""
 

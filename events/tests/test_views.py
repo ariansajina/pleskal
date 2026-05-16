@@ -756,6 +756,33 @@ class TestEventDetailView:
         assert b"og:url" in resp.content
         assert f"/events/{event.slug}/".encode() in resp.content
 
+    def test_members_only_info_hidden_from_anonymous(self, client):
+        event = EventFactory.create(
+            members_only_info="Couch available for traveling dancers"
+        )
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert resp.status_code == 200
+        assert b"Couch available" not in resp.content
+        assert b"For members" not in resp.content
+
+    def test_members_only_info_visible_to_authenticated(self, client):
+        user = UserFactory.create()
+        event = EventFactory.create(
+            members_only_info="Couch available for traveling dancers"
+        )
+        client.force_login(user)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert resp.status_code == 200
+        assert b"Couch available for traveling dancers" in resp.content
+        assert b"For members" in resp.content
+
+    def test_members_only_section_absent_when_field_blank(self, client):
+        user = UserFactory.create()
+        event = EventFactory.create(members_only_info="")
+        client.force_login(user)
+        resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        assert b"For members" not in resp.content
+
 
 @pytest.mark.django_db
 class TestMyEventsView:

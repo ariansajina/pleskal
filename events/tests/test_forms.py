@@ -75,3 +75,49 @@ class TestEventFormUniqueness:
             creation=False,
         )
         assert form.is_valid(), form.errors
+
+
+@pytest.mark.django_db
+class TestEventFormMembersOnlyInfo:
+    def _future_date_and_time(self):
+        future = timezone.localtime(timezone.now() + timezone.timedelta(days=7))
+        return future.date(), future.replace(minute=0, second=0, microsecond=0).time()
+
+    def test_blank_is_valid(self):
+        date, start_time = self._future_date_and_time()
+        form = EventForm(
+            data=make_form_data(
+                "Open Practice", date, start_time, members_only_info=""
+            ),
+            creation=True,
+        )
+        assert form.is_valid(), form.errors
+
+    def test_short_content_is_valid_and_saved(self):
+        date, start_time = self._future_date_and_time()
+        form = EventForm(
+            data=make_form_data(
+                "Open Practice",
+                date,
+                start_time,
+                members_only_info="Couch available, DM me!",
+            ),
+            creation=True,
+        )
+        assert form.is_valid(), form.errors
+        event = form.save()
+        assert event.members_only_info == "Couch available, DM me!"
+
+    def test_over_2000_chars_rejected(self):
+        date, start_time = self._future_date_and_time()
+        form = EventForm(
+            data=make_form_data(
+                "Open Practice",
+                date,
+                start_time,
+                members_only_info="x" * 2001,
+            ),
+            creation=True,
+        )
+        assert not form.is_valid()
+        assert "members_only_info" in form.errors

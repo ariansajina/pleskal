@@ -45,6 +45,7 @@ class EventForm(forms.ModelForm):
         fields = [
             "title",
             "description",
+            "members_only_info",
             "image",
             "venue_name",
             "venue_address",
@@ -56,6 +57,7 @@ class EventForm(forms.ModelForm):
         ]
         widgets = {
             "description": MarkdownxWidget(attrs={"rows": 8, "maxlength": 2000}),
+            "members_only_info": MarkdownxWidget(attrs={"rows": 5, "maxlength": 2000}),
         }
 
     def __init__(self, *args, creation=True, **kwargs):
@@ -91,6 +93,7 @@ class EventForm(forms.ModelForm):
             self.fields["category"].widget.attrs.setdefault("class", "form-select")
         self.fields["image"].required = False
         self.fields["description"].required = False
+        self.fields["members_only_info"].required = False
         self.fields["venue_address"].required = False
         self.fields["price_note"].required = False
         self.fields["source_url"].required = False
@@ -102,6 +105,14 @@ class EventForm(forms.ModelForm):
                 f"Description must be 2000 characters or fewer (currently {len(description)})."
             )
         return description
+
+    def clean_members_only_info(self):
+        members_only_info = self.cleaned_data.get("members_only_info", "")
+        if len(members_only_info) > 2000:
+            raise forms.ValidationError(
+                f"For members info must be 2000 characters or fewer (currently {len(members_only_info)})."
+            )
+        return members_only_info
 
     def clean_image(self):
         image = self.cleaned_data.get("image")
