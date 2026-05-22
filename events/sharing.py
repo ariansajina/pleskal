@@ -9,7 +9,7 @@ across DST boundaries.
 
 from datetime import UTC, datetime
 from typing import cast
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import urlencode
 
 from .feeds import _plain_text
 from .models import Event
@@ -71,13 +71,11 @@ def outlook_calendar_url(event: Event) -> str:
 
 
 def apple_calendar_url(absolute_ical_url: str) -> str:
-    """Convert an absolute http(s) ``.ics`` URL to a ``webcal://`` URL.
+    """Return the absolute ``.ics`` URL unchanged.
 
-    Apple Calendar (and most desktop calendar clients) treat ``webcal://``
-    as the "subscribe / add to calendar" handoff. On non-Apple desktops the
-    browser typically shows an OS handler dialog instead of a silent failure.
+    Linking directly to an ``https://`` ``.ics`` file causes iOS/macOS to
+    download it and prompt the user to import the event into their default
+    calendar — adding a single event rather than creating a subscription.
+    Using ``webcal://`` would create a read-only calendar subscription instead.
     """
-    parsed = urlparse(absolute_ical_url)
-    if parsed.scheme in {"http", "https"}:
-        return urlunparse(parsed._replace(scheme="webcal"))
     return absolute_ical_url

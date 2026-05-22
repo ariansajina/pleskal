@@ -154,14 +154,10 @@ class TestOutlookCalendarURL:
 
 
 class TestAppleCalendarURL:
-    @pytest.mark.parametrize("scheme", ["http", "https"])
-    def test_rewrites_web_scheme_to_webcal(self, scheme):
-        source = f"{scheme}://pleskal.dk/events/abc/calendar.ics"
-        assert (
-            apple_calendar_url(source) == "webcal://pleskal.dk/events/abc/calendar.ics"
-        )
+    def test_returns_https_url_unchanged(self):
+        url = "https://pleskal.dk/events/abc/calendar.ics"
+        assert apple_calendar_url(url) == url
 
-    def test_passes_through_other_schemes(self):
-        assert apple_calendar_url("webcal://example.com/x.ics") == (
-            "webcal://example.com/x.ics"
-        )
+    def test_returns_http_url_unchanged(self):
+        url = "http://pleskal.dk/events/abc/calendar.ics"
+        assert apple_calendar_url(url) == url

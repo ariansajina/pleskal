@@ -674,7 +674,7 @@ class TestEventDetailView:
         assert resp.context["outlook_calendar_url"].startswith(
             "https://outlook.live.com/"
         )
-        assert resp.context["apple_calendar_url"].startswith("webcal://")
+        assert resp.context["apple_calendar_url"].startswith("http")
         assert resp.context["apple_calendar_url"].endswith(
             f"/events/{event.slug}/calendar.ics"
         )
