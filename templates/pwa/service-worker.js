@@ -4,9 +4,11 @@ const PRECACHE = `pleskal-precache-${CACHE_VERSION}`;
 const RUNTIME = `pleskal-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline/";
 
-/* Site shell precached on install. Keep this list small and stable. */
+/* Site shell precached on install. Keep this list small and stable.
+ * HTML pages are intentionally excluded — they carry auth state and must
+ * always be fetched from the network to avoid serving a stale logged-in/out
+ * view after the user signs in or out. */
 const PRECACHE_URLS = [
-  "/",
   OFFLINE_URL,
   "{% static 'css/output.css' %}",
   "{% static 'js/htmx.min.js' %}",
@@ -58,7 +60,9 @@ function isNetworkOnly(url) {
 
 function staleWhileRevalidate(request) {
   return caches.open(RUNTIME).then((cache) =>
-    cache.match(request).then((cached) => {
+    /* Search all caches (including PRECACHE) so precached assets are served
+     * immediately offline, before they've been fetched into RUNTIME. */
+    caches.match(request).then((cached) => {
       const network = fetch(request)
         .then((response) => {
           if (response && response.ok && response.type === "basic") {
@@ -79,16 +83,29 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (isNetworkOnly(url)) return;
 
-  /* Navigation requests: stale-while-revalidate, with offline fallback. */
+  /* Navigation requests: network-first so auth state is always current.
+   * Cache the response for offline fallback; serve stale only when offline. */
   if (request.mode === "navigate") {
     event.respondWith(
-      staleWhileRevalidate(request).catch(() => caches.match(OFFLINE_URL)),
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok && response.type === "basic") {
+            caches.open(RUNTIME).then((cache) => cache.put(request, response.clone()));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match(OFFLINE_URL)),
+        ),
     );
     return;
   }
 
-  /* Same-origin static assets and images: stale-while-revalidate. */
+  /* Same-origin static assets and images: stale-while-revalidate.
+   * Skip HTMX requests — the server returns partials for those, and caching
+   * them at the same URL as full-page navigations would corrupt both. */
   if (url.origin === self.location.origin) {
+    if (request.headers.get("HX-Request")) return;
     event.respondWith(staleWhileRevalidate(request));
   }
 });
