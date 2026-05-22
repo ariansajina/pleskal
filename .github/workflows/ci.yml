@@ -72,6 +72,7 @@ jobs:
         run: uv run pytest --cov --cov-report=term-missing --cov-report=xml --cov-branch --cov-fail-under=80 --create-db
 
       - name: SonarQube Scan
+        if: github.actor != 'dependabot[bot]'
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
