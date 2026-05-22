@@ -36,9 +36,9 @@ class PublisherSitemap(Sitemap):
     priority = 0.4
 
     def items(self):
-        User = get_user_model()
+        user_model = get_user_model()
         return (
-            User.objects.filter(display_name_slug__gt="", events__is_draft=False)
+            user_model.objects.filter(display_name_slug__gt="", events__is_draft=False)
             .distinct()
             .order_by("display_name_slug")
         )

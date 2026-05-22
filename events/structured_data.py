@@ -14,26 +14,27 @@ from .feeds import _plain_text
 from .models import Event
 
 _ESCAPES = {"<": "\\u003c", ">": "\\u003e", "&": "\\u0026"}
+_TYPE = "@type"
 
 
 def event_jsonld(event: Event, request) -> str:
     """Return a CSP-safe JSON-LD string describing the event."""
     location: dict = {
-        "@type": "Place",
+        _TYPE: "Place",
         "name": event.venue_name,
     }
     if event.venue_address:
         location["address"] = event.venue_address
     if event.has_map_location:
         location["geo"] = {
-            "@type": "GeoCoordinates",
+            _TYPE: "GeoCoordinates",
             "latitude": event.latitude,
             "longitude": event.longitude,
         }
 
     data: dict = {
         "@context": "https://schema.org",
-        "@type": "Event",
+        _TYPE: "Event",
         "name": event.title,
         "startDate": event.start_datetime.isoformat(),  # ty: ignore[unresolved-attribute]
         "eventStatus": "https://schema.org/EventScheduled",
@@ -56,7 +57,7 @@ def event_jsonld(event: Event, request) -> str:
 
     if event.is_free or event.price_note or event.source_url:
         offer: dict = {
-            "@type": "Offer",
+            _TYPE: "Offer",
             "availability": "https://schema.org/InStock",
         }
         if event.is_free:
@@ -68,7 +69,7 @@ def event_jsonld(event: Event, request) -> str:
     publisher = event.submitted_by
     if publisher:
         data["organizer"] = {
-            "@type": "Organization",
+            _TYPE: "Organization",
             "name": publisher.public_name,  # ty: ignore[unresolved-attribute]
             "url": request.build_absolute_uri(
                 reverse(
