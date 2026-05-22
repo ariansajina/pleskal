@@ -18,7 +18,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install Railway CLI
-        run: bash <(curl -fsSL https://railway.com/install.sh)
+        run: |
+          bash <(curl -fsSL https://railway.com/install.sh)
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
 
       - name: Set APP_VERSION on web service
         run: railway variables --set "APP_VERSION=${{ github.ref_name }}" --service ${{ secrets.RAILWAY_PROD_SERVICE_ID }} --skip-deploys
