@@ -2,6 +2,7 @@
 
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ariansajina_pleskal&metric=coverage)](https://sonarcloud.io/summary/new_code?id=ariansajina_pleskal)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ariansajina_pleskal&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ariansajina_pleskal)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/C0C01WCJDK)
 
 A hyperlocal community-driven calendar for dance and performance art events in Copenhagen.
 
