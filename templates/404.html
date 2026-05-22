@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Page not found — pleskal{% endblock %}
+
+{% block content %}
+<div class="content-wrap" style="text-align:center;">
+    <div class="page-hero">
+        <div class="page-hero__ornrow">✦ · ✦</div>
+        <h1 class="page-hero__title">Lost the beat</h1>
+        <p class="page-hero__sub">We couldn't find that page. It may have moved, or the event has passed.</p>
+    </div>
+    <a href="{% url 'event_list' %}" class="btn btn--primary">Back to events</a>
+</div>
+{% endblock %}

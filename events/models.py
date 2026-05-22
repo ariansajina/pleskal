@@ -85,6 +85,11 @@ class Event(models.Model):
     def __str__(self):
         return self.title
 
+    def get_absolute_url(self):
+        from django.urls import reverse
+
+        return reverse("event_detail", kwargs={"slug": self.slug})
+
     def _generate_unique_slug(self):
         """Generate a unique slug from the title, appending a suffix on collision."""
         base_slug = slugify(self.title)[:MAX_TITLE_LENGTH]
