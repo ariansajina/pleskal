@@ -105,9 +105,10 @@
             {# Members-only info #}
             <div>
                 <label for="{{ form.members_only_info.id_for_label }}" class="form-label">
-                    For members <span class="form-help" style="text-transform:none;letter-spacing:0;">(only visible to logged-in users · Markdown supported)</span>
+                    For members <span class="form-help" style="text-transform:none;letter-spacing:0;">(only visible to logged-in users)</span>
                 </label>
                 {{ form.members_only_info }}
+                <p class="form-help" style="margin-top:var(--space-1);">For example, to ask for help with accommodation.</p>
                 {% if form.members_only_info.errors %}
                     <p class="form-field-error">{{ form.members_only_info.errors|join:", " }}</p>
                 {% endif %}
