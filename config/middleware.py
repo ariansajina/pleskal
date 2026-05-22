@@ -8,7 +8,7 @@ class ContentSecurityPolicyMiddleware:
     Policy:
       - default-src 'self'
       - script-src 'self' (HTMX is vendored, no inline scripts needed)
-      - style-src 'self' 'unsafe-inline' (Tailwind generates inline styles)
+      - style-src 'self' 'unsafe-inline' https://storage.ko-fi.com (Tailwind inline styles + Ko-fi widget CSS loaded inside srcdoc iframes)
       - img-src 'self' data: https://tile.openstreetmap.org (OSM raster tiles
         for the /map/ page are loaded directly from the tile server)
       - font-src 'self'
@@ -44,12 +44,12 @@ class ContentSecurityPolicyMiddleware:
             [
                 "default-src 'self'",
                 f"script-src 'self' {self.KOFI_HOST}",
-                "style-src 'self' 'unsafe-inline'",
+                f"style-src 'self' 'unsafe-inline' {self.KOFI_HOST}",
                 f"img-src {img_src}",
                 "font-src 'self'",
-                f"connect-src 'self' {self.TILE_HOST}",
+                f"connect-src 'self' {self.TILE_HOST} {self.KOFI_HOST} https://ko-fi.com",
                 "frame-ancestors 'none'",
-                "frame-src https://www.openstreetmap.org",
+                "frame-src https://www.openstreetmap.org https://ko-fi.com",
                 "base-uri 'self'",
                 "form-action 'self'",
             ]
