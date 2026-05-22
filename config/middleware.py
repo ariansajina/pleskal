@@ -24,6 +24,7 @@ class ContentSecurityPolicyMiddleware:
     """
 
     TILE_HOST = "https://tile.openstreetmap.org"
+    KOFI_HOST = "https://storage.ko-fi.com"
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -34,7 +35,7 @@ class ContentSecurityPolicyMiddleware:
         from django.conf import settings
 
         r2_domain = getattr(settings, "AWS_S3_CUSTOM_DOMAIN", None)
-        img_src_parts = ["'self'", "data:", self.TILE_HOST]
+        img_src_parts = ["'self'", "data:", self.TILE_HOST, self.KOFI_HOST]
         if r2_domain:
             img_src_parts.append(f"https://{r2_domain}")
         img_src = " ".join(img_src_parts)
@@ -42,7 +43,7 @@ class ContentSecurityPolicyMiddleware:
         csp = "; ".join(
             [
                 "default-src 'self'",
-                "script-src 'self'",
+                f"script-src 'self' {self.KOFI_HOST}",
                 "style-src 'self' 'unsafe-inline'",
                 f"img-src {img_src}",
                 "font-src 'self'",
