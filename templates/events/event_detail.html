@@ -17,7 +17,10 @@
 {% endif %}
 {% endblock og_tags %}
 
+{% block canonical %}<link rel="canonical" href="{{ request.build_absolute_uri }}">{% endblock %}
+
 {% block extra_head %}
+{% if event_jsonld %}<script type="application/ld+json">{{ event_jsonld }}</script>{% endif %}
 <style>
 details summary::-webkit-details-marker { display: none; }
 details[open] summary::after { content: ''; }

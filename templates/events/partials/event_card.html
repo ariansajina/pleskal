@@ -33,7 +33,7 @@
         {% if event.image %}
             <div class="event-row__thumb">
                 <div class="event-row__thumb-inner">
-                    <img src="{{ event.image.url }}" alt="{{ event.title }}">
+                    <img src="{{ event.image.url }}" alt="{{ event.title }}" loading="lazy" decoding="async">
                 </div>
             </div>
         {% endif %}

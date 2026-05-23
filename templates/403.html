@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Access denied — pleskal{% endblock %}
+
+{% block content %}
+<div class="content-wrap" style="text-align:center;">
+    <div class="page-hero">
+        <div class="page-hero__ornrow">✦ · ✦</div>
+        <h1 class="page-hero__title">Not your stage</h1>
+        <p class="page-hero__sub">You don't have permission to view this page.</p>
+    </div>
+    <a href="{% url 'event_list' %}" class="btn btn--primary">Back to events</a>
+</div>
+{% endblock %}

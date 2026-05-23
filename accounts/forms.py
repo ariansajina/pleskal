@@ -14,6 +14,7 @@ class CustomAuthenticationForm(AuthenticationForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-input")
+        self.fields["username"].widget.attrs.setdefault("autocomplete", "username")
 
 
 class ProfileForm(forms.ModelForm):
@@ -89,22 +90,28 @@ class ClaimCodeForm(forms.Form):
 
 class ClaimRegisterForm(forms.Form):
     email = forms.EmailField(
-        widget=forms.EmailInput(attrs={"class": "form-input"}),
+        widget=forms.EmailInput(attrs={"class": "form-input", "autocomplete": "email"}),
     )
     display_name = forms.CharField(
         max_length=100,
-        widget=forms.TextInput(attrs={"class": "form-input"}),
+        widget=forms.TextInput(
+            attrs={"class": "form-input", "autocomplete": "nickname"}
+        ),
         help_text="This is what other users see. Can include spaces and special characters.",
     )
     password1 = forms.CharField(
         label="Password",
         strip=False,
-        widget=forms.PasswordInput(attrs={"class": "form-input"}),
+        widget=forms.PasswordInput(
+            attrs={"class": "form-input", "autocomplete": "new-password"}
+        ),
     )
     password2 = forms.CharField(
         label="Confirm password",
         strip=False,
-        widget=forms.PasswordInput(attrs={"class": "form-input"}),
+        widget=forms.PasswordInput(
+            attrs={"class": "form-input", "autocomplete": "new-password"}
+        ),
     )
 
     def clean_email(self):
