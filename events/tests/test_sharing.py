@@ -154,10 +154,14 @@ class TestOutlookCalendarURL:
 
 
 class TestAppleCalendarURL:
-    def test_returns_https_url_unchanged(self):
+    def test_appends_inline_hint(self):
         url = "https://pleskal.dk/events/abc/calendar.ics"
-        assert apple_calendar_url(url) == url
+        assert apple_calendar_url(url) == url + "?inline=1"
 
-    def test_returns_http_url_unchanged(self):
+    def test_preserves_scheme(self):
         url = "http://pleskal.dk/events/abc/calendar.ics"
-        assert apple_calendar_url(url) == url
+        assert apple_calendar_url(url) == url + "?inline=1"
+
+    def test_uses_ampersand_when_query_present(self):
+        url = "https://pleskal.dk/events/abc/calendar.ics?foo=bar"
+        assert apple_calendar_url(url) == url + "&inline=1"

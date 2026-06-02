@@ -160,8 +160,18 @@ class EventICalSingleView(View):
 
         content = cal.to_ical()
         filename = f"{event.slug}.ics"
+        # ``?inline=1`` serves the file inline rather than as a download. On
+        # iOS/macOS Safari an inline ``text/calendar`` response is handed
+        # straight to Calendar, which opens an interactive "Add" sheet; an
+        # ``attachment`` response instead downloads the file and opens a
+        # read-only Quick Look preview with no one-tap add. The Apple Calendar
+        # button uses the inline variant; the "Download .ics" link does not.
+        if request.GET.get("inline") == "1":
+            disposition = "inline"
+        else:
+            disposition = f'attachment; filename="{filename}"'
         return HttpResponse(
             content,
             content_type="text/calendar; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": disposition},
         )
