@@ -188,6 +188,21 @@ class TestEventICalSingleView:
         resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
         assert event.slug in resp["Content-Disposition"]
 
+    def test_default_disposition_is_attachment(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert resp["Content-Disposition"].startswith("attachment")
+
+    def test_inline_disposition_when_requested(self, client):
+        event = EventFactory.create()
+        resp = client.get(
+            reverse("event_ical_single", kwargs={"slug": event.slug}),
+            {"inline": "1"},
+        )
+        assert resp.status_code == 200
+        assert resp["Content-Disposition"] == "inline"
+        assert resp.content.startswith(b"BEGIN:VCALENDAR")
+
     def test_is_valid_ical(self, client):
         event = EventFactory.create()
         resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))

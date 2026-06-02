@@ -71,11 +71,17 @@ def outlook_calendar_url(event: Event) -> str:
 
 
 def apple_calendar_url(absolute_ical_url: str) -> str:
-    """Return the absolute ``.ics`` URL unchanged.
+    """Return the absolute ``.ics`` URL with an ``inline=1`` hint.
 
-    Linking directly to an ``https://`` ``.ics`` file causes iOS/macOS to
-    download it and prompt the user to import the event into their default
-    calendar — adding a single event rather than creating a subscription.
-    Using ``webcal://`` would create a read-only calendar subscription instead.
+    The ``inline=1`` query param makes the single-event view serve the file
+    inline instead of as a download. On iOS/macOS Safari an inline
+    ``text/calendar`` response is handed straight to Calendar, which presents
+    an interactive "Add" sheet — a one-tap add. An ``attachment`` response
+    (the default, used by the "Download .ics" link) instead downloads the file
+    and opens a read-only Quick Look preview with no add button.
+
+    ``webcal://`` is deliberately avoided: it would create a read-only
+    calendar subscription rather than adding a single event.
     """
-    return absolute_ical_url
+    separator = "&" if "?" in absolute_ical_url else "?"
+    return f"{absolute_ical_url}{separator}inline=1"

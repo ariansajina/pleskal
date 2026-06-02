@@ -676,7 +676,7 @@ class TestEventDetailView:
         )
         assert resp.context["apple_calendar_url"].startswith("http")
         assert resp.context["apple_calendar_url"].endswith(
-            f"/events/{event.slug}/calendar.ics"
+            f"/events/{event.slug}/calendar.ics?inline=1"
         )
 
     def test_show_map_button_absent_without_coordinates(self, client):
