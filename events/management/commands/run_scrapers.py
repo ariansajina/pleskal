@@ -88,12 +88,14 @@ SCRAPERS = [
 ]
 
 # Per-scraper auto-disable dates (inclusive cutoff). Past this date the
-# scraper stops running and any events it previously imported are purged from
-# the database (via the importer's stale-deletion path). Use this to retire
+# scraper stops running, any events it previously imported are purged (via the
+# importer's stale-deletion path), and its system account is deactivated
+# (is_active=False) so it drops off the subscribe page. Use this to retire
 # one-off / festival sources that go stale after their run.
 #
 # Note: this differs from SCRAPER_<NAME>_ENABLED=false, which only pauses
-# scraping and leaves existing events untouched (so it can be re-enabled).
+# scraping and leaves existing events and the account untouched (so it can be
+# re-enabled).
 SCRAPER_DISABLED_AFTER: dict[str, datetime.date] = {
     # Toaster retired 2026-05-03 — scraper off and its events removed.
     "toastercph": datetime.date(2026, 5, 3),
@@ -256,13 +258,15 @@ class Command(BaseCommand):
             )
 
     def _cleanup_source(self, name: str, import_cmd: str, dry_run: bool) -> None:
-        """Purge events left behind by a retired source.
+        """Retire a source: purge its events and deactivate its publisher account.
 
-        Invokes the source's import command with an empty event list, which
-        triggers the importer's stale-deletion path: every event for that
-        ``external_source`` is absent from the (empty) input and therefore
-        deleted. Idempotent — once cleaned up, later runs find nothing to
-        remove. Failures are logged but never abort the overall run.
+        Purging invokes the source's import command with an empty event list,
+        triggering the importer's stale-deletion path (every event for that
+        ``external_source`` is absent from the empty input and thus deleted).
+        Deactivating sets the source's system account ``is_active=False`` so it
+        drops off the subscribe page's publisher list while its past events keep
+        their attribution. Both steps are idempotent, and failures are logged
+        but never abort the overall run.
         """
         self.stdout.write(f"Purging stale events for {name} via {import_cmd} ...")
         fd, tmp_path = tempfile.mkstemp(suffix=".json", prefix=f"{name}_cleanup_")
@@ -282,3 +286,40 @@ class Command(BaseCommand):
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+        self._deactivate_source_account(import_cmd, dry_run)
+
+    def _deactivate_source_account(self, import_cmd: str, dry_run: bool) -> None:
+        """Mark a retired source's system account inactive (hides it on subscribe)."""
+        from django.contrib.auth import get_user_model
+        from django.core.management import load_command_class
+
+        try:
+            external_source = load_command_class("events", import_cmd).external_source
+        except Exception:
+            self.stderr.write(
+                self.style.ERROR(
+                    f"Could not resolve external_source for {import_cmd}; "
+                    "skipping account deactivation"
+                )
+            )
+            return
+
+        user_model = get_user_model()
+        accounts = user_model.objects.filter(
+            is_system_account=True,
+            display_name_slug=external_source,
+            is_active=True,
+        )
+        if dry_run:
+            for acct in accounts:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"  DEACTIVATE  {acct.display_name} ({external_source})"
+                    )
+                )
+            return
+        if accounts.update(is_active=False):
+            self.stdout.write(
+                self.style.WARNING(f"Deactivated source account for {external_source}")
+            )

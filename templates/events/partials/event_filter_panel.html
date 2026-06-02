@@ -8,8 +8,8 @@ Required context:
     Clear button.
   - filter_hx_target (str): CSS selector passed to hx-target on the same.
   - search_query, selected_categories, category_choices, system_publishers,
-    selected_publishers, date_from, date_to, today, quick_date_ranges,
-    is_free, is_wheelchair_accessible.
+    has_community_publishers, selected_publishers, date_from, date_to, today,
+    quick_date_ranges, is_free, is_wheelchair_accessible.
 
 Optional:
   - show_when_filter (bool): renders the upcoming/past toggle (list view only).
@@ -64,11 +64,13 @@ Optional:
                         <span class="filter-chip">{{ publisher.public_name }}</span>
                     </label>
                 {% endfor %}
+                {% if has_community_publishers %}
                 <label>
                     <input type="checkbox" name="publisher" value="other"
                            {% if "other" in selected_publishers %}checked{% endif %}>
                     <span class="filter-chip">Other</span>
                 </label>
+                {% endif %}
             </div>
         </div>
 

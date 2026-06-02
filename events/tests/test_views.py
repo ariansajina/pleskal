@@ -570,8 +570,8 @@ class TestEventListView:
         )
         assert resp.context["selected_publishers"] == [system_user.display_name_slug]
 
-    def test_publisher_filter_context_shows_all_system_publishers(self, client):
-        """Context includes all system publishers for filter badge rendering."""
+    def test_publisher_filter_context_shows_system_publishers_with_events(self, client):
+        """Context lists system publishers that have events for badge rendering."""
         user1 = UserFactory.create(is_system_account=True, display_name="Dansehallerne")
         user2 = UserFactory.create(is_system_account=True, display_name="HAUT")
         regular_user = UserFactory.create()
@@ -584,6 +584,43 @@ class TestEventListView:
         assert user1 in system_publishers
         assert user2 in system_publishers
         assert regular_user not in system_publishers
+        assert resp.context["has_community_publishers"] is True
+
+    def test_publisher_filter_excludes_system_publisher_with_no_events(self, client):
+        """A system publisher with no events (e.g. a retired scraper whose
+        events were purged) gets no filter badge."""
+        with_events = UserFactory.create(is_system_account=True, display_name="HAUT")
+        EventFactory.create(submitted_by=with_events)
+        empty = UserFactory.create(is_system_account=True, display_name="Toaster")
+        resp = client.get(reverse("event_list"))
+        system_publishers = resp.context["system_publishers"]
+        assert with_events in system_publishers
+        assert empty not in system_publishers
+
+    def test_publisher_filter_includes_system_publisher_with_only_past_events(
+        self, client
+    ):
+        """Past events count — a publisher with only past events keeps its badge."""
+        system_user = UserFactory.create(is_system_account=True, display_name="HAUT")
+        past = Event(
+            title="Past Show",
+            start_datetime=timezone.now() - timezone.timedelta(days=10),
+            venue_name="Old Hall",
+            category="performance",
+            submitted_by=system_user,
+        )
+        past.save()
+        resp = client.get(reverse("event_list"))
+        assert system_user in resp.context["system_publishers"]
+
+    def test_other_badge_hidden_when_no_community_publishers(self, client):
+        """The catch-all 'Other' badge is gated on community publishers existing."""
+        system_user = UserFactory.create(is_system_account=True, display_name="HAUT")
+        EventFactory.create(submitted_by=system_user)
+        resp = client.get(reverse("event_list"))
+        assert resp.context["has_community_publishers"] is False
+        # Note: "other" is also a category value, so target the publisher input.
+        assert b'name="publisher" value="other"' not in resp.content
 
     def test_publisher_filter_pagination_preserves_selection(self, client):
         """Pagination links preserve publisher filter params."""
