@@ -350,7 +350,7 @@ class TestSubscribeView:
         assert resp.context["category_choices"] == EventCategory.choices
         assert len(resp.context["category_choices"]) == 7
 
-    def test_provides_publishers_with_upcoming_events(self, client):
+    def test_community_users_not_listed_as_individual_publishers(self, client):
         user_a = UserFactory.create()
         user_b = UserFactory.create()
         EventFactory.create(submitted_by=user_a)
@@ -371,16 +371,25 @@ class TestSubscribeView:
         slugs = [p.display_name_slug for p in resp.context["publishers"]]
         assert system_user.display_name_slug in slugs
 
-    def test_excludes_users_with_no_upcoming_events(self, client):
-        user = UserFactory.create()
-        past = Event(
-            title="Past",
-            start_datetime=timezone.now() - timezone.timedelta(days=1),
-            venue_name="Somewhere",
-            category="social",
-            submitted_by=user,
-        )
-        past.save()
+    def test_includes_active_system_account_with_no_events(self, client):
+        """Forward-looking: an active publisher is listed even when it has no
+        current events, since it may publish future ones."""
+        system_user = UserFactory.create(is_system_account=True)
         resp = client.get(reverse("subscribe"))
         slugs = [p.display_name_slug for p in resp.context["publishers"]]
-        assert user.display_name_slug not in slugs
+        assert system_user.display_name_slug in slugs
+
+    def test_excludes_deactivated_system_account(self, client):
+        """A disabled/retired publisher (is_active=False) is hidden — even if it
+        still has events attributed to it."""
+        system_user = UserFactory.create(is_system_account=True, is_active=False)
+        EventFactory.create(submitted_by=system_user)
+        resp = client.get(reverse("subscribe"))
+        slugs = [p.display_name_slug for p in resp.context["publishers"]]
+        assert system_user.display_name_slug not in slugs
+
+    def test_no_community_badge_without_community_events(self, client):
+        """The community badge depends on community-submitted events existing."""
+        UserFactory.create(is_system_account=True)
+        resp = client.get(reverse("subscribe"))
+        assert resp.context["has_community_publishers"] is False

@@ -52,6 +52,63 @@ def _get_quick_date_ranges():
     }
 
 
+def _publisher_ids_with_events():
+    """User ids with at least one published (non-draft) event — past or present."""
+    return (
+        Event.objects.filter(is_draft=False, submitted_by__isnull=False)
+        .values_list("submitted_by_id", flat=True)
+        .distinct()
+    )
+
+
+def _has_community_publishers():
+    """True if any community (non-system) publisher has a published event.
+
+    Gates the catch-all "Other"/community badge on both pages: it only makes
+    sense to subscribe to or filter by community events when some exist.
+    """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    return User.objects.filter(
+        is_system_account=False, pk__in=_publisher_ids_with_events()
+    ).exists()
+
+
+def _list_filter_publishers():
+    """Publisher badges for the event list / map filters.
+
+    The filter narrows the *visible* event set, so only system publishers that
+    actually have events (past or present) get a badge — a publisher with no
+    events (e.g. a retired scraper whose events were purged) would be a dead
+    filter. Returns ``(system_publishers, has_community_publishers)``.
+    """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    system_publishers = User.objects.filter(
+        is_system_account=True, pk__in=_publisher_ids_with_events()
+    ).order_by("display_name")
+    return system_publishers, _has_community_publishers()
+
+
+def _subscribe_publishers():
+    """Publisher badges for the subscribe page.
+
+    Forward-looking: every active (non-disabled) system publisher is shown even
+    when it has no current events, because it may publish future ones. Retired
+    sources are deactivated (``is_active=False``) and therefore hidden. Returns
+    ``(system_publishers, has_community_publishers)``.
+    """
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    system_publishers = User.objects.filter(
+        is_system_account=True, is_active=True
+    ).order_by("display_name")
+    return system_publishers, _has_community_publishers()
+
+
 class EventOwnerMixin:
     """Restrict access to the event owner. Returns 403 otherwise."""
 
@@ -249,10 +306,8 @@ class EventListView(RateLimitMixin, View):
     partial_template_name = "events/partials/event_list_results.html"
 
     def get(self, request):
-        from django.contrib.auth import get_user_model
         from django.shortcuts import render
 
-        User = get_user_model()
         qs, filter_state = _filtered_event_queryset(request)
         categories = filter_state["categories"]
         publisher_slugs = filter_state["publisher_slugs"]
@@ -293,9 +348,7 @@ class EventListView(RateLimitMixin, View):
         today = datetime.date.today()
         week_start = today - datetime.timedelta(days=today.weekday())
         week_end = week_start + datetime.timedelta(days=6)
-        system_publishers = User.objects.filter(is_system_account=True).order_by(
-            "display_name"
-        )
+        system_publishers, has_community_publishers = _list_filter_publishers()
         ctx = {
             "page_obj": page_obj,
             "base_query_string": base_query_string,
@@ -303,6 +356,7 @@ class EventListView(RateLimitMixin, View):
             "category_choices": EventCategory.choices,
             "selected_categories": categories,
             "system_publishers": system_publishers,
+            "has_community_publishers": has_community_publishers,
             "selected_publishers": publisher_slugs,
             "show_past": show_past,
             "date_from": date_from or "",
@@ -351,10 +405,8 @@ class EventMapView(RateLimitMixin, View):
     def get(self, request):
         from collections import OrderedDict
 
-        from django.contrib.auth import get_user_model
         from django.shortcuts import render
 
-        User = get_user_model()
         qs, filter_state = _filtered_event_queryset(request)
 
         # Map view shows upcoming events only — past events are browsed via the
@@ -399,9 +451,7 @@ class EventMapView(RateLimitMixin, View):
         today = datetime.date.today()
         week_start = today - datetime.timedelta(days=today.weekday())
         week_end = week_start + datetime.timedelta(days=6)
-        system_publishers = User.objects.filter(is_system_account=True).order_by(
-            "display_name"
-        )
+        system_publishers, has_community_publishers = _list_filter_publishers()
 
         ctx = {
             "events_with_coords": with_coords,
@@ -410,6 +460,7 @@ class EventMapView(RateLimitMixin, View):
             "category_choices": EventCategory.choices,
             "selected_categories": filter_state["categories"],
             "system_publishers": system_publishers,
+            "has_community_publishers": has_community_publishers,
             "selected_publishers": filter_state["publisher_slugs"],
             "date_from": filter_state["date_from"] or "",
             "date_to": filter_state["date_to"] or "",
@@ -674,24 +725,9 @@ class SubscribeView(TemplateView):
     template_name = "events/subscribe.html"
 
     def get_context_data(self, **kwargs):
-        from django.contrib.auth import get_user_model
-
         ctx = super().get_context_data(**kwargs)
-        User = get_user_model()
         ctx["category_choices"] = EventCategory.choices
-        upcoming_publisher_ids = (
-            Event.objects.filter(
-                start_datetime__gte=timezone.now(),
-                is_draft=False,
-                submitted_by__isnull=False,
-            )
-            .values_list("submitted_by_id", flat=True)
-            .distinct()
-        )
-        ctx["publishers"] = User.objects.filter(
-            pk__in=upcoming_publisher_ids, is_system_account=True
-        ).order_by("display_name")
-        ctx["has_community_publishers"] = User.objects.filter(
-            pk__in=upcoming_publisher_ids, is_system_account=False
-        ).exists()
+        publishers, has_community_publishers = _subscribe_publishers()
+        ctx["publishers"] = publishers
+        ctx["has_community_publishers"] = has_community_publishers
         return ctx
