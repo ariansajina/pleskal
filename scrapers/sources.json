@@ -34,5 +34,11 @@
     "display_name": "Sort/Hvid",
     "email": "system.sort-hvid@pleskal.internal",
     "website": "https://sort-hvid.dk"
+  },
+  {
+    "external_source": "warehouse9",
+    "display_name": "Warehouse9",
+    "email": "system.warehouse9@pleskal.internal",
+    "website": "https://warehouse9.dk"
   }
 ]

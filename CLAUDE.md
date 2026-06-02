@@ -30,7 +30,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 config/          # Django project settings, URLs, CSP middleware, rate limiting, PWA endpoints
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
 events/          # Dance events app (CRUD, feeds, image processing, geocoding, map view, sharing)
-scrapers/        # Per-source HTML scrapers (dansehallerne, dansehallerne_workshops, hautscene, kbhdanser, sort_hvid, sydhavnteater, toastercph)
+scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, hautscene, kbhdanser, sort_hvid, sydhavnteater, toastercph, warehouse9)
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX + Leaflet, PWA icons, JS shims)
 scripts/         # Standalone runtime scripts (e.g. backup_db.py for the backup cron)
@@ -65,6 +65,7 @@ events/
     import_sort_hvid.py         # Sort/Hvid importer
     import_sydhavnteater.py     # Sydhavn Teater importer
     import_toastercph.py        # Toaster CPH importer
+    import_warehouse9.py        # Warehouse9 importer
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
     weekly_digest.py            # Weekly digest email (feed analytics)
@@ -98,6 +99,7 @@ scrapers/
   sort_hvid.py                 # Sort/Hvid scraper
   sydhavnteater.py             # Sydhavn Teater scraper
   toastercph.py                # Toaster CPH scraper
+  warehouse9.py                # Warehouse9 scraper (Tribe Events iCal feed)
   sources.json                 # Source account config (external_source, display_name, email, website) for all scrapers
 ```
 
@@ -165,9 +167,10 @@ uv run python manage.py import_kbhdanser
 uv run python manage.py import_sort_hvid
 uv run python manage.py import_sydhavnteater
 uv run python manage.py import_toastercph
+uv run python manage.py import_warehouse9
 
 # Unified scraper (runs all sources; used by Railway scrape-cron service)
-uv run python manage.py run_scrapers              # run all 7 importers
+uv run python manage.py run_scrapers              # run all 8 importers
 uv run python manage.py run_scrapers --dry-run    # preview only (no DB writes)
 uv run python manage.py run_scrapers --skip-images  # skip image downloads
 uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # subset

@@ -32,6 +32,7 @@ from scrapers.kbhdanser import scrape as scrape_kbhdanser
 from scrapers.sort_hvid import scrape as scrape_sort_hvid
 from scrapers.sydhavnteater import scrape as scrape_sydhavnteater
 from scrapers.toastercph import scrape as scrape_toastercph
+from scrapers.warehouse9 import scrape as scrape_warehouse9
 
 log = logging.getLogger(__name__)
 
@@ -78,13 +79,23 @@ SCRAPERS = [
         {"delay": 0.5},
         "import_sort_hvid",
     ),
+    (
+        "warehouse9",
+        scrape_warehouse9,
+        {},
+        "import_warehouse9",
+    ),
 ]
 
 # Per-scraper auto-disable dates (inclusive cutoff). Past this date the
-# scraper is skipped, same as setting SCRAPER_<NAME>_ENABLED=false. Use
-# this for one-off / festival sources that go stale after their run.
+# scraper stops running and any events it previously imported are purged from
+# the database (via the importer's stale-deletion path). Use this to retire
+# one-off / festival sources that go stale after their run.
+#
+# Note: this differs from SCRAPER_<NAME>_ENABLED=false, which only pauses
+# scraping and leaves existing events untouched (so it can be re-enabled).
 SCRAPER_DISABLED_AFTER: dict[str, datetime.date] = {
-    # Toaster Festival 2026 ends 2026-05-03.
+    # Toaster retired 2026-05-03 — scraper off and its events removed.
     "toastercph": datetime.date(2026, 5, 3),
 }
 
@@ -111,7 +122,8 @@ class Command(BaseCommand):
             help=(
                 "Run only the named scraper(s). Can be repeated. "
                 "Choices: dansehallerne, dansehallerne_workshops, "
-                "hautscene, kbhdanser, sort_hvid, sydhavnteater, toastercph."
+                "hautscene, kbhdanser, sort_hvid, sydhavnteater, toastercph, "
+                "warehouse9."
             ),
         )
 
@@ -163,6 +175,9 @@ class Command(BaseCommand):
                         f"Skipping {name} (disabled after {disabled_after.isoformat()})"
                     )
                 )
+                # Retired source: purge any events it left behind so they don't
+                # linger in the database.
+                self._cleanup_source(name, import_cmd, dry_run)
                 results.append(
                     (name, True, f"disabled after {disabled_after.isoformat()}")
                 )
@@ -239,3 +254,31 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS("\nAll scrapers completed successfully.")
             )
+
+    def _cleanup_source(self, name: str, import_cmd: str, dry_run: bool) -> None:
+        """Purge events left behind by a retired source.
+
+        Invokes the source's import command with an empty event list, which
+        triggers the importer's stale-deletion path: every event for that
+        ``external_source`` is absent from the (empty) input and therefore
+        deleted. Idempotent — once cleaned up, later runs find nothing to
+        remove. Failures are logged but never abort the overall run.
+        """
+        self.stdout.write(f"Purging stale events for {name} via {import_cmd} ...")
+        fd, tmp_path = tempfile.mkstemp(suffix=".json", prefix=f"{name}_cleanup_")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump([], f)
+            import_kwargs: dict = {"json_file": tmp_path}
+            if dry_run:
+                import_kwargs["dry_run"] = True
+            call_command(import_cmd, **import_kwargs)
+        except Exception:
+            self.stderr.write(
+                self.style.ERROR(
+                    f"Cleanup for {name} failed:\n{traceback.format_exc()}"
+                )
+            )
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)

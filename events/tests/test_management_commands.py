@@ -181,6 +181,54 @@ class TestImportDansehallerneCRUD:
 
 
 # ---------------------------------------------------------------------------
+# Command: import_warehouse9
+# ---------------------------------------------------------------------------
+
+
+WAREHOUSE9_EVENT = {
+    "source_url": "https://warehouse9.dk/event/tender-routes/",
+    "start_datetime": "2030-06-04T17:00:00+02:00",
+    "end_datetime": "2030-06-04T18:00:00+02:00",
+    "title": "Work presentation: Tender Routes",
+    "description": "A work-in-progress showing.",
+    "venue_name": "Warehouse9",
+    "venue_address": "Rosenlunds Allé 5, Copenhagen, 2720, Denmark",
+    "category": "worksharing",
+    "is_free": True,
+    "is_wheelchair_accessible": True,
+    "price_note": "",
+    "image_url": "",
+}
+
+
+@pytest.mark.django_db
+class TestImportWarehouse9:
+    def test_creates_wheelchair_accessible_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([WAREHOUSE9_EVENT], f)
+        call_command("import_warehouse9", str(f))
+        event = Event.objects.get(external_source="warehouse9")
+        assert event.title == "Work presentation: Tender Routes"
+        assert event.venue_name == "Warehouse9"
+        assert event.category == "worksharing"
+        # Every Warehouse9 event must be marked wheelchair accessible.
+        assert event.is_wheelchair_accessible is True
+
+    def test_attaches_system_user_when_present(self, tmp_path):
+        system_user = UserModel.objects.create(
+            email="system.warehouse9@pleskal.internal",
+            display_name="Warehouse9",
+            display_name_slug="warehouse9",
+            is_system_account=True,
+        )
+        f = tmp_path / "events.json"
+        _write_json([WAREHOUSE9_EVENT], f)
+        call_command("import_warehouse9", str(f))
+        event = Event.objects.get(external_source="warehouse9")
+        assert event.submitted_by == system_user
+
+
+# ---------------------------------------------------------------------------
 # Command: dry-run
 # ---------------------------------------------------------------------------
 
