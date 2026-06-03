@@ -443,6 +443,26 @@ class TestEventListView:
         assert b"Past Event In Range" in resp.content
         assert str(future_event.title).encode() in resp.content
 
+    def test_date_from_input_not_prefilled_with_today(self, client):
+        """The date_from filter input must not have today as its default value.
+
+        Regression: the template used `{{ date_from|default:today }}`, so the
+        date_from input always rendered with today's date. Any HTMX form change
+        (e.g. toggling a category) would then submit date_from=today, which caused
+        _filtered_event_queryset to exclude past events before computing past_count —
+        making it 0 after the first filter interaction even though no date filter
+        was explicitly chosen.
+        """
+        import datetime
+
+        EventFactory.create(start_datetime=timezone.now() + timezone.timedelta(days=3))
+        resp = client.get(reverse("event_list"))
+        today = datetime.date.today().isoformat()
+        # The date_from input should render with an empty value, not today's date,
+        # so that HTMX submissions without an explicit date range do not filter out
+        # past events.
+        assert f'name="date_from" value="{today}"'.encode() not in resp.content
+
     def test_toggle_enabled_with_default_date(self, client):
         """When date_from=today (default) and date_to is empty, the upcoming/past
         toggle should be enabled (date_range_active=False) even though a date was
