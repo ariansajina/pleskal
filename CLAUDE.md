@@ -455,11 +455,11 @@ See `.env.example` for the full list. Key variables:
 
 ## Deployment
 
-- **Platform:** Railway, three services per environment:
-  - **web** (`railway.toml`): gunicorn, `migrate --noinput` as preDeploy, `/health/` healthcheck
-  - **scrape-cron** (`railway.scrape-cron.toml`): runs `python manage.py run_scrapers`, `restartPolicyType = NEVER`
-  - **backup-cron** (`railway.backup-cron.toml`): runs `python scripts/backup_db.py`, `restartPolicyType = NEVER`
-- **Database:** Railway managed PostgreSQL 16
+- **Platform:** Railway. The production environment runs four services — three app services (deployed from this repo) plus a managed database:
+  - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
+  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers`, `restartPolicyType = NEVER`
+  - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
+  - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`
 - **Images / DB backups:** Cloudflare R2 (free tier: 10 GB / 10M reads)
 - **Static files:** WhiteNoise
 - **Email:** Resend via django-anymail
