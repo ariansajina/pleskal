@@ -77,7 +77,7 @@ accounts/
   forms.py           # CustomAuthenticationForm, ProfileForm, ClaimCodeForm, ClaimRegisterForm
   hashers.py         # HmacPepperedArgon2PasswordHasher
   validators.py      # ZxcvbnPasswordValidator
-  signals.py         # Admin notification on new signup; Resend CRM contact sync on email verification
+  signals.py         # Admin notification on new signup; Resend CRM sync on email verification; preserve claim-code emails on user delete
   urls.py            # Account URL patterns
   management/commands/
     generate_claim_codes.py     # Generate invite codes (--count, --expires, --created-by)
@@ -281,8 +281,10 @@ Invite-only registration codes.
 | `created_at` | Auto timestamp |
 | `expires_at` | Expiry datetime |
 | `claimed_at` | Nullable; set when used |
-| `claimed_by` | FK -> User, nullable |
-| `created_by` | FK -> User, nullable; the user who generated the code |
+| `claimed_by` | FK -> User, nullable (SET_NULL on delete) |
+| `claimed_by_email` | Email snapshot; populated on user deletion so the record stays informative |
+| `created_by` | FK -> User, nullable (SET_NULL on delete); the user who generated the code |
+| `created_by_email` | Email snapshot; populated on user deletion so the record stays informative |
 
 Properties: `is_expired`, `is_claimed`, `is_valid`.
 
@@ -345,6 +347,7 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 | `EventToggleDraftView` | `/events/<slug>/toggle-draft/` | Owner only |
 | `MyEventsView` | `/my-events/` | Login required (redirects to publisher profile) |
 | `SubscribeView` | `/subscribe/` | Public |
+| `TemplateView` (about) | `/about/` | Public (static `about.html`) |
 | `EventICalFeed` | `/feed/events.ics` | Public |
 | `EventRSSFeed` | `/feed/events.rss` | Public |
 | `EventICalSingleView` | `/events/<slug>/calendar.ics` | Public |
@@ -371,6 +374,7 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 |---|---|---|
 | `RateLimitedLoginView` | `/accounts/login/` | Public |
 | `RateLimitedPasswordResetView` | `/accounts/password-reset/` | Public |
+| `EmailVerifiedView` | `/accounts/email-verified/` | Public (post-verification landing page) |
 | `AccountDeleteView` | `/accounts/delete/` | Login required |
 | `EditProfileView` | `/accounts/profile/edit/` | Login required |
 | `ChangePasswordView` | `/accounts/change-password/` | Login required |
