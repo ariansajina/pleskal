@@ -196,4 +196,15 @@ details[open] summary::after { content: ''; }
 {% if event.has_map_location %}
     <script src="{% static 'js/show-map.js' %}"></script>
 {% endif %}
+<script>
+(function () {
+    var details = document.querySelector('details');
+    if (!details) return;
+    document.addEventListener('click', function (e) {
+        if (details.open && !details.contains(e.target)) {
+            details.open = false;
+        }
+    });
+}());
+</script>
 {% endblock %}
