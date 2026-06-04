@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load markdown_filters %}
+
+{% block title %}Guide — pleskal{% endblock %}
+
+{% block meta_description %}A field guide to Copenhagen's dance and performance art scene: institutions, companies, collectives, festivals, spaces and voices.{% endblock %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="page-hero__ornrow">✦ · · ✦ · · ✦</div>
+  <h1 class="page-hero__title">Guide</h1>
+  <p class="page-hero__sub">A field guide to Copenhagen's dance and performance art scene.</p>
+</div>
+
+<div class="content-wrap">
+  <div class="prose-content">
+    {{ guide_markdown|render_markdown }}
+  </div>
+</div>
+{% endblock %}

@@ -22,7 +22,7 @@ class StaticViewSitemap(Sitemap):
     priority = 0.5
 
     def items(self):
-        names = ["event_list", "subscribe", "about"]
+        names = ["event_list", "subscribe", "about", "guide"]
         if getattr(settings, "MAP_VIEW_ENABLED", False):
             names.append("event_map")
         return names
