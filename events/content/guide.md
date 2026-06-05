@@ -1,4 +1,3 @@
-# Guide to Copenhagen's contemporary dance and performance art scene
 
 A list of institutions, collectives, companies, festivals, and spaces that shape and sustain Copenhagen's contemporary dance and performance art landscape.
 
