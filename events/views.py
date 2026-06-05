@@ -1,5 +1,6 @@
 import calendar
 import datetime
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
@@ -730,4 +731,18 @@ class SubscribeView(TemplateView):
         publishers, has_community_publishers = _subscribe_publishers()
         ctx["publishers"] = publishers
         ctx["has_community_publishers"] = has_community_publishers
+        return ctx
+
+
+GUIDE_MARKDOWN_PATH = Path(__file__).resolve().parent / "content" / "guide.md"
+
+
+class GuideView(TemplateView):
+    """Render the static Guide page from a Markdown source file."""
+
+    template_name = "guide.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["guide_markdown"] = GUIDE_MARKDOWN_PATH.read_text(encoding="utf-8")
         return ctx

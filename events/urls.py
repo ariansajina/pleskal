@@ -11,6 +11,7 @@ from .views import (
     EventMapView,
     EventToggleDraftView,
     EventUpdateView,
+    GuideView,
     MyEventsView,
     SubscribeView,
 )
@@ -50,4 +51,6 @@ urlpatterns = [
     path("subscribe/", SubscribeView.as_view(), name="subscribe"),
     # About page
     path("about/", TemplateView.as_view(template_name="about.html"), name="about"),
+    # Guide page
+    path("guide/", GuideView.as_view(), name="guide"),
 ]
