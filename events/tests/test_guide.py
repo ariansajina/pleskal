@@ -34,9 +34,11 @@ class TestGuideView:
 
     def test_guide_links_out_to_sources(self, client):
         html = client.get(reverse("guide")).content.decode()
-        # Item titles are links to the original sources.
-        assert 'href="https://dansehallerne.dk/en/about/"' in html
-        assert 'href="https://bastard.blog/info/"' in html
+        # Item titles are plain-text names linked to each item's homepage.
+        assert 'href="https://dansehallerne.dk/en/"' in html
+        assert ">Dansehallerne</a>" in html
+        assert 'href="https://bastard.blog/"' in html
+        assert ">bastard</a>" in html
 
     def test_guide_markdown_rendered_as_html(self, client):
         html = client.get(reverse("guide")).content.decode()
@@ -48,8 +50,9 @@ class TestGuideView:
         html = client.get(reverse("guide")).content.decode()
         assert "A Guide to the Performance Art" in html
         assert "Suggested additions" in html
-        # URL-autolink headings render as clickable links to the source.
-        assert 'href="https://www.thoravej29.dk/en/about"' in html
+        # Suggested-addition titles are named links to the item homepage.
+        assert 'href="https://www.thoravej29.dk/en"' in html
+        assert ">Thoravej 29</a>" in html
 
 
 def test_guide_markdown_file_exists_and_is_nonempty():
