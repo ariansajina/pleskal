@@ -44,6 +44,13 @@ class TestGuideView:
         assert "## Institutions" not in html
         assert "<h2>Institutions</h2>" in html
 
+    def test_guide_renders_document_title_and_suggested_additions(self, client):
+        html = client.get(reverse("guide")).content.decode()
+        assert "A Guide to the Performance Art" in html
+        assert "Suggested additions" in html
+        # URL-autolink headings render as clickable links to the source.
+        assert 'href="https://www.thoravej29.dk/en/about"' in html
+
 
 def test_guide_markdown_file_exists_and_is_nonempty():
     text = GUIDE_MARKDOWN_PATH.read_text(encoding="utf-8")

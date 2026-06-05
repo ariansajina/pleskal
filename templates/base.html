@@ -364,6 +364,19 @@
     .prose-content strong  { font-weight: 700; }
     .prose-content em      { font-style: italic; }
 
+    /* ─── GUIDE PAGE (Markdown directory) ───────────────── */
+    .guide-content h1 {
+      font-family: 'Playfair Display', serif; font-style: italic; font-weight: 900;
+      font-size: var(--text-xl); color: var(--blue); line-height: 1.15;
+      margin: 0 0 0.5em; letter-spacing: -0.01em;
+    }
+    /* Item headings are the source URLs — keep them readable, not uppercased,
+       and let long links wrap instead of overflowing on narrow screens. */
+    .guide-content h4 { text-transform: none; letter-spacing: normal; }
+    .guide-content h3, .guide-content h4 { overflow-wrap: anywhere; }
+    .guide-content h3 a, .guide-content h4 a { text-decoration: none; }
+    .guide-content h3 a:hover, .guide-content h4 a:hover { text-decoration: underline; }
+
     /* ─── PAGE TABS ─────────────────────────────────────── */
     .page-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border-light); margin-bottom: var(--space-4); }
     .page-tab {
