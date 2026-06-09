@@ -33,9 +33,11 @@ Sydhavn Teater is a district theatre that grew out of Copenhagen's South Harbour
 
 Udviklingsplatformen for Scenekunst (the Development Platform for Performing Arts, "UP") is a Copenhagen-based resource centre dedicated to developing and qualifying the independent performing arts in Denmark and Danish independent work abroad. Based at Baldersgade in Nørrebro, UP offers mentorship programmes, residencies, seminars, advisory services, digital toolboxes and rehearsal-space rental, and has received operating support from the Danish Arts Foundation and the Bikuben Foundation since 2016.
 
-### [De Frie Koreografer](https://defriekoreografer.dk/)
+### [Uafhængige Scenekunstnere](https://www.scenekunstnere.dk/)
 
-De Frie Koreografer (The Free Choreographers) is a national advocacy organisation representing 59 freelance choreographers across Denmark, with a strong concentration of Copenhagen-based members. It acts as both a political voice for the independent dance and choreography field and a professional forum for networking, knowledge sharing and dialogue with arts-funding bodies; it co-created the Fair Practice Scenekunstprisen in 2024, awarded to performers and producers committed to ethical working conditions. The organisation is currently chaired by choreographer Lara Vejrup Ostan.
+Uafhængige Scenekunstnere (Independent Performing Artists) is a trade and interest organisation, founded in 2005, that works culturally and politically to recognise and improve conditions for professional, independent, self-producing performing artists in Denmark. It advocates for better production conditions, campaigns for open stages and rehearsal facilities, and promotes genre and aesthetic diversity, while representing the Danish independent field in Nordic cooperation with sister theatre centres in Sweden, Norway, Finland and Iceland. Membership is open to professionals with a board-recognised education or at least three years' work in the field.
+
+_The former national choreographers' organisation De Frie Koreografer (The Free Choreographers) has since closed; its members advise people to join Uafhængige Scenekunstnere instead._
 
 ### [Dansekapellet](https://dansekapellet.kk.dk/en)
 
