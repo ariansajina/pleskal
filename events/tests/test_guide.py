@@ -24,8 +24,8 @@ class TestGuideView:
         html = client.get(reverse("guide")).content.decode()
         for category in (
             "Institutions",
+            "Collectives",
             "Companies",
-            "Cooperatives",
             "Festivals",
             "Spaces",
             "Blogs",
@@ -46,13 +46,14 @@ class TestGuideView:
         assert "## Institutions" not in html
         assert "<h2>Institutions</h2>" in html
 
-    def test_guide_renders_document_title_and_suggested_additions(self, client):
+    def test_guide_lists_uafhaengige_scenekunstnere(self, client):
         html = client.get(reverse("guide")).content.decode()
-        assert "A Guide to the Performance Art" in html
-        assert "Suggested additions" in html
-        # Suggested-addition titles are named links to the item homepage.
-        assert 'href="https://www.thoravej29.dk/en"' in html
-        assert ">Thoravej 29</a>" in html
+        # De Frie Koreografer closed; its entry was replaced by this one.
+        assert 'href="https://www.scenekunstnere.dk/"' in html
+        assert ">Uafhængige Scenekunstnere</a>" in html
+        assert "has since closed" in html
+        # De Frie Koreografer no longer has its own linked heading.
+        assert 'href="https://defriekoreografer.dk/"' not in html
 
 
 def test_guide_markdown_file_exists_and_is_nonempty():
