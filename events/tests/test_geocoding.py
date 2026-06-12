@@ -102,7 +102,9 @@ class TestGeocodeFailureModes:
 class TestGeocodeCache:
     def test_repeat_query_hits_cache(self):
         with patch("events.geocoding.requests.get") as m_get:
-            m_get.return_value = _mock_response(json_data=[{"lat": "1.0", "lon": "2.0"}])
+            m_get.return_value = _mock_response(
+                json_data=[{"lat": "1.0", "lon": "2.0"}]
+            )
             first = geocoding.geocode("Dansehallerne")
             second = geocoding.geocode("Dansehallerne")
 
@@ -127,7 +129,9 @@ class TestGeocodeCache:
 
     def test_query_is_normalized_for_caching(self):
         with patch("events.geocoding.requests.get") as m_get:
-            m_get.return_value = _mock_response(json_data=[{"lat": "1.0", "lon": "2.0"}])
+            m_get.return_value = _mock_response(
+                json_data=[{"lat": "1.0", "lon": "2.0"}]
+            )
             geocoding.geocode("  Dansehallerne  ")
             geocoding.geocode("dansehallerne")
 

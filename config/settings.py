@@ -285,9 +285,7 @@ AXES_RESET_ON_SUCCESS = True
 # default per-process in-memory cache (no table needed).
 
 if DEBUG or "pytest" in _sys.modules:
-    CACHES = {
-        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
-    }
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 else:
     CACHES = {
         "default": {
