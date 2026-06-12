@@ -1,6 +1,8 @@
 """Backfill latitude/longitude for existing events that predate geocoding.
 
 One-shot command. Respects Nominatim's rate limit via events.geocoding.
+Results are cached (see events.geocoding), so re-running within a week
+will not retry venues that previously resolved to no result.
 """
 
 from django.core.management.base import BaseCommand

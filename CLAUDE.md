@@ -315,7 +315,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 
 Method: `get_display_description()` prepends scraped event disclaimer if `external_source` is set.
 
-Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`.
+Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`. Results (including definitive "no result" answers) are cached in the shared Django cache, so repeat venues skip the network call.
 
 ### FeedHit (`events/models.py`)
 
