@@ -231,7 +231,7 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
 - Image uploads: Pillow-validated (not Content-Type), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min IP lockout)
-- Rate limiting: custom cache-based (`config/ratelimit.py`); limits per endpoint listed below
+- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); limits per endpoint listed below
 - CSP: `ContentSecurityPolicyMiddleware` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; auto-migrates legacy PBKDF2 hashes on login
 - Password strength: zxcvbn minimum score 2
@@ -456,7 +456,7 @@ See `.env.example` for the full list. Key variables:
 ## Deployment
 
 - **Platform:** Railway. The production environment runs four services — three app services (deployed from this repo) plus a managed database:
-  - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
+  - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
   - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers`, `restartPolicyType = NEVER`
   - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
   - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`
