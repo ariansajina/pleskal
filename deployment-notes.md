@@ -114,7 +114,11 @@ scheduled Cron Job service in the **production** environment only.
 
 4. Under **Variables**, reference the same environment variables as the web
    service. Required: `DATABASE_URL`, `SECRET_KEY`, `PASSWORD_PEPPER`.
-   Optional: `R2_*` vars (if scraper images should upload to R2), `SENTRY_DSN`.
+   Optional: `R2_*` vars (if scraper images should upload to R2).
+   Strongly recommended: `SENTRY_DSN` and `SENTRY_ENVIRONMENT` — Railway env
+   vars are per-service, and Railway does not alert on a cron exiting non-zero,
+   so Sentry is the only channel that surfaces a scraper failure (`run_scrapers`
+   captures per-source exceptions tagged with the scraper name).
 
 The staging environment has no scraper cron service. Test scraper changes
 manually against staging via the web service:

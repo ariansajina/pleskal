@@ -99,6 +99,45 @@ class TestGeocodeFailureModes:
             assert geocoding.geocode("Copenhagen") is None
 
 
+class TestGeocodeCache:
+    def test_repeat_query_hits_cache(self):
+        with patch("events.geocoding.requests.get") as m_get:
+            m_get.return_value = _mock_response(
+                json_data=[{"lat": "1.0", "lon": "2.0"}]
+            )
+            first = geocoding.geocode("Dansehallerne")
+            second = geocoding.geocode("Dansehallerne")
+
+        assert first == second == (1.0, 2.0)
+        assert m_get.call_count == 1
+
+    def test_definitive_no_result_is_cached(self):
+        with patch("events.geocoding.requests.get") as m_get:
+            m_get.return_value = _mock_response(json_data=[])
+            assert geocoding.geocode("nowhere") is None
+            assert geocoding.geocode("nowhere") is None
+
+        assert m_get.call_count == 1
+
+    def test_transient_failure_is_not_cached(self):
+        with patch("events.geocoding.requests.get") as m_get:
+            m_get.side_effect = requests.Timeout("slow")
+            assert geocoding.geocode("Copenhagen") is None
+            assert geocoding.geocode("Copenhagen") is None
+
+        assert m_get.call_count == 2
+
+    def test_query_is_normalized_for_caching(self):
+        with patch("events.geocoding.requests.get") as m_get:
+            m_get.return_value = _mock_response(
+                json_data=[{"lat": "1.0", "lon": "2.0"}]
+            )
+            geocoding.geocode("  Dansehallerne  ")
+            geocoding.geocode("dansehallerne")
+
+        assert m_get.call_count == 1
+
+
 class TestRateLimit:
     def test_enforces_minimum_spacing_between_calls(self, monkeypatch):
         sleep_calls: list[float] = []

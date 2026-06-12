@@ -29,10 +29,11 @@ def check_rate_limit(key, limit, window):
     present in a naive get/set pattern: add() is a conditional atomic set (no-op
     if the key already exists), and incr() is an atomic increment.
 
-    Note: Django's default LocMemCache is per-process. On a multi-worker gunicorn
-    deployment, each worker maintains independent counters, so the effective limit
-    is multiplied by the number of workers. For strict enforcement, configure a
-    shared cache backend (e.g. database cache or Redis via django-redis).
+    Note: production uses DatabaseCache (see CACHES in settings), so counters are
+    shared across gunicorn workers and survive deploys. DatabaseCache inherits
+    BaseCache.incr (get-then-set, not atomic), so concurrent requests can
+    occasionally undercount by one — acceptable for abuse throttling. Dev and
+    tests use per-process LocMemCache, where incr() is atomic.
     """
     # cache.add() sets key=0 only if absent (atomic no-op if key exists).
     cache.add(key, 0, window)

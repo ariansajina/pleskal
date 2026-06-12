@@ -2,7 +2,7 @@
 buildCommand = "npm ci && npm run css:build && python manage.py collectstatic --noinput"
 
 [deploy]
-preDeployCommand = "python manage.py migrate --noinput"
+preDeployCommand = "python manage.py migrate --noinput && python manage.py createcachetable"
 healthcheckPath = "/health/"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"

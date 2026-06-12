@@ -85,19 +85,21 @@ def test_download_image_network_error():
 class TestImportDansehallerneErrors:
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(CommandError, match="File not found"):
-            call_command("import_dansehallerne", str(tmp_path / "missing.json"))
+            call_command(
+                "import_events", "dansehallerne", str(tmp_path / "missing.json")
+            )
 
     def test_invalid_json_raises(self, tmp_path):
         f = tmp_path / "bad.json"
         f.write_text("not valid json", encoding="utf-8")
         with pytest.raises(CommandError, match="Invalid JSON"):
-            call_command("import_dansehallerne", str(f))
+            call_command("import_events", "dansehallerne", str(f))
 
     def test_non_list_json_raises(self, tmp_path):
         f = tmp_path / "bad.json"
         f.write_text('{"key": "val"}', encoding="utf-8")
         with pytest.raises(CommandError, match="top-level list"):
-            call_command("import_dansehallerne", str(f))
+            call_command("import_events", "dansehallerne", str(f))
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +112,7 @@ class TestImportDansehallerneCRUD:
     def test_creates_new_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
         event = Event.objects.get(external_source="dansehallerne")
         assert event.title == "Test Dance Event"
@@ -119,11 +121,11 @@ class TestImportDansehallerneCRUD:
     def test_updates_changed_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
 
         updated = {**SAMPLE_EVENT, "title": "Updated Dance Event"}
         _write_json([updated], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
 
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
         assert (
@@ -134,48 +136,48 @@ class TestImportDansehallerneCRUD:
     def test_unchanged_event_is_skipped(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         # Second import with identical data: nothing updated
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
 
     def test_deletes_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
 
         _write_json([], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 0
 
     def test_no_delete_preserves_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
 
         _write_json([], f)
-        call_command("import_dansehallerne", str(f), no_delete=True)
+        call_command("import_events", "dansehallerne", str(f), no_delete=True)
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
 
     def test_skips_record_with_bad_datetime(self, tmp_path):
         f = tmp_path / "events.json"
         bad = {**SAMPLE_EVENT, "start_datetime": "not-a-date"}
         _write_json([bad], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 0
 
     def test_category_mapping(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([{**SAMPLE_EVENT, "category": "performance"}], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         event = Event.objects.get(external_source="dansehallerne")
         assert event.category == "performance"
 
     def test_unknown_category_defaults_to_other(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([{**SAMPLE_EVENT, "category": "unknown_type"}], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         event = Event.objects.get(external_source="dansehallerne")
         assert event.category == "other"
 
@@ -206,7 +208,7 @@ class TestImportWarehouse9:
     def test_creates_wheelchair_accessible_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([WAREHOUSE9_EVENT], f)
-        call_command("import_warehouse9", str(f))
+        call_command("import_events", "warehouse9", str(f))
         event = Event.objects.get(external_source="warehouse9")
         assert event.title == "Work presentation: Tender Routes"
         assert event.venue_name == "Warehouse9"
@@ -223,7 +225,7 @@ class TestImportWarehouse9:
         )
         f = tmp_path / "events.json"
         _write_json([WAREHOUSE9_EVENT], f)
-        call_command("import_warehouse9", str(f))
+        call_command("import_events", "warehouse9", str(f))
         event = Event.objects.get(external_source="warehouse9")
         assert event.submitted_by == system_user
 
@@ -238,17 +240,17 @@ class TestImportDansehallernesDryRun:
     def test_dry_run_does_not_create(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f), dry_run=True)
+        call_command("import_events", "dansehallerne", str(f), dry_run=True)
         assert Event.objects.filter(external_source="dansehallerne").count() == 0
 
     def test_dry_run_does_not_update(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
 
         updated = {**SAMPLE_EVENT, "title": "Dry Run Title"}
         _write_json([updated], f)
-        call_command("import_dansehallerne", str(f), dry_run=True)
+        call_command("import_events", "dansehallerne", str(f), dry_run=True)
         assert (
             Event.objects.get(external_source="dansehallerne").title
             == "Test Dance Event"
@@ -257,10 +259,10 @@ class TestImportDansehallernesDryRun:
     def test_dry_run_does_not_delete(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
 
         _write_json([], f)
-        call_command("import_dansehallerne", str(f), dry_run=True)
+        call_command("import_events", "dansehallerne", str(f), dry_run=True)
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
 
 
@@ -275,7 +277,7 @@ class TestImportDansehallerneImages:
         event_rec = {**SAMPLE_EVENT, "image_url": "https://example.com/img.jpg"}
         f = tmp_path / "events.json"
         _write_json([event_rec], f)
-        call_command("import_dansehallerne", str(f), skip_images=True)
+        call_command("import_events", "dansehallerne", str(f), skip_images=True)
         event = Event.objects.get(external_source="dansehallerne")
         assert not event.image.name
 
@@ -287,7 +289,7 @@ class TestImportDansehallerneImages:
             "events.management.commands.base_import._download_image",
             return_value=None,
         ):
-            call_command("import_dansehallerne", str(f))
+            call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
 
 
@@ -320,19 +322,19 @@ HAUTSCENE_SAMPLE_EVENT = {
 class TestImportHautsceneErrors:
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(CommandError, match="File not found"):
-            call_command("import_hautscene", str(tmp_path / "missing.json"))
+            call_command("import_events", "hautscene", str(tmp_path / "missing.json"))
 
     def test_invalid_json_raises(self, tmp_path):
         f = tmp_path / "bad.json"
         f.write_text("not valid json", encoding="utf-8")
         with pytest.raises(CommandError, match="Invalid JSON"):
-            call_command("import_hautscene", str(f))
+            call_command("import_events", "hautscene", str(f))
 
     def test_non_list_json_raises(self, tmp_path):
         f = tmp_path / "bad.json"
         f.write_text('{"key": "val"}', encoding="utf-8")
         with pytest.raises(CommandError, match="top-level list"):
-            call_command("import_hautscene", str(f))
+            call_command("import_events", "hautscene", str(f))
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +347,7 @@ class TestImportHautsceneCRUD:
     def test_creates_new_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([HAUTSCENE_SAMPLE_EVENT], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
         assert Event.objects.filter(external_source="hautscene").count() == 1
         event = Event.objects.get(external_source="hautscene")
         assert event.title == "Test Haut Scene Event"
@@ -354,11 +356,11 @@ class TestImportHautsceneCRUD:
     def test_updates_changed_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([HAUTSCENE_SAMPLE_EVENT], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
 
         updated = {**HAUTSCENE_SAMPLE_EVENT, "title": "Updated Haut Scene Event"}
         _write_json([updated], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
 
         assert Event.objects.filter(external_source="hautscene").count() == 1
         assert (
@@ -369,47 +371,47 @@ class TestImportHautsceneCRUD:
     def test_unchanged_event_is_skipped(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([HAUTSCENE_SAMPLE_EVENT], f)
-        call_command("import_hautscene", str(f))
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
         assert Event.objects.filter(external_source="hautscene").count() == 1
 
     def test_deletes_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([HAUTSCENE_SAMPLE_EVENT], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
         assert Event.objects.filter(external_source="hautscene").count() == 1
 
         _write_json([], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
         assert Event.objects.filter(external_source="hautscene").count() == 0
 
     def test_no_delete_preserves_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([HAUTSCENE_SAMPLE_EVENT], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
 
         _write_json([], f)
-        call_command("import_hautscene", str(f), no_delete=True)
+        call_command("import_events", "hautscene", str(f), no_delete=True)
         assert Event.objects.filter(external_source="hautscene").count() == 1
 
     def test_skips_record_with_bad_datetime(self, tmp_path):
         f = tmp_path / "events.json"
         bad = {**HAUTSCENE_SAMPLE_EVENT, "start_datetime": "not-a-date"}
         _write_json([bad], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
         assert Event.objects.filter(external_source="hautscene").count() == 0
 
     def test_category_mapping(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([{**HAUTSCENE_SAMPLE_EVENT, "category": "talk"}], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
         event = Event.objects.get(external_source="hautscene")
         assert event.category == "talk"
 
     def test_unknown_category_defaults_to_other(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([{**HAUTSCENE_SAMPLE_EVENT, "category": "unknown_type"}], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
         event = Event.objects.get(external_source="hautscene")
         assert event.category == "other"
 
@@ -424,17 +426,17 @@ class TestImportHautsceneDryRun:
     def test_dry_run_does_not_create(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([HAUTSCENE_SAMPLE_EVENT], f)
-        call_command("import_hautscene", str(f), dry_run=True)
+        call_command("import_events", "hautscene", str(f), dry_run=True)
         assert Event.objects.filter(external_source="hautscene").count() == 0
 
     def test_dry_run_does_not_update(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([HAUTSCENE_SAMPLE_EVENT], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
 
         updated = {**HAUTSCENE_SAMPLE_EVENT, "title": "Dry Run Title"}
         _write_json([updated], f)
-        call_command("import_hautscene", str(f), dry_run=True)
+        call_command("import_events", "hautscene", str(f), dry_run=True)
         assert (
             Event.objects.get(external_source="hautscene").title
             == "Test Haut Scene Event"
@@ -443,10 +445,10 @@ class TestImportHautsceneDryRun:
     def test_dry_run_does_not_delete(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([HAUTSCENE_SAMPLE_EVENT], f)
-        call_command("import_hautscene", str(f))
+        call_command("import_events", "hautscene", str(f))
 
         _write_json([], f)
-        call_command("import_hautscene", str(f), dry_run=True)
+        call_command("import_events", "hautscene", str(f), dry_run=True)
         assert Event.objects.filter(external_source="hautscene").count() == 1
 
 
@@ -464,7 +466,7 @@ class TestImportHautsceneImages:
         }
         f = tmp_path / "events.json"
         _write_json([event_rec], f)
-        call_command("import_hautscene", str(f), skip_images=True)
+        call_command("import_events", "hautscene", str(f), skip_images=True)
         event = Event.objects.get(external_source="hautscene")
         assert not event.image.name
 
@@ -479,7 +481,7 @@ class TestImportHautsceneImages:
             "events.management.commands.base_import._download_image",
             return_value=None,
         ):
-            call_command("import_hautscene", str(f))
+            call_command("import_events", "hautscene", str(f))
         assert Event.objects.filter(external_source="hautscene").count() == 1
 
 
@@ -512,19 +514,21 @@ SYDHAVN_SAMPLE_EVENT = {
 class TestImportSydhavnteaterErrors:
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(CommandError, match="File not found"):
-            call_command("import_sydhavnteater", str(tmp_path / "missing.json"))
+            call_command(
+                "import_events", "sydhavnteater", str(tmp_path / "missing.json")
+            )
 
     def test_invalid_json_raises(self, tmp_path):
         f = tmp_path / "bad.json"
         f.write_text("not valid json", encoding="utf-8")
         with pytest.raises(CommandError, match="Invalid JSON"):
-            call_command("import_sydhavnteater", str(f))
+            call_command("import_events", "sydhavnteater", str(f))
 
     def test_non_list_json_raises(self, tmp_path):
         f = tmp_path / "bad.json"
         f.write_text('{"key": "val"}', encoding="utf-8")
         with pytest.raises(CommandError, match="top-level list"):
-            call_command("import_sydhavnteater", str(f))
+            call_command("import_events", "sydhavnteater", str(f))
 
 
 # ---------------------------------------------------------------------------
@@ -537,7 +541,7 @@ class TestImportSydhavnteaterCRUD:
     def test_creates_new_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SYDHAVN_SAMPLE_EVENT], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
         assert Event.objects.filter(external_source="sydhavnteater").count() == 1
         event = Event.objects.get(external_source="sydhavnteater")
         assert event.title == "Test Sydhavn Event"
@@ -546,11 +550,11 @@ class TestImportSydhavnteaterCRUD:
     def test_updates_changed_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SYDHAVN_SAMPLE_EVENT], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
 
         updated = {**SYDHAVN_SAMPLE_EVENT, "title": "Updated Sydhavn Event"}
         _write_json([updated], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
 
         assert Event.objects.filter(external_source="sydhavnteater").count() == 1
         assert (
@@ -561,47 +565,47 @@ class TestImportSydhavnteaterCRUD:
     def test_unchanged_event_is_skipped(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SYDHAVN_SAMPLE_EVENT], f)
-        call_command("import_sydhavnteater", str(f))
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
         assert Event.objects.filter(external_source="sydhavnteater").count() == 1
 
     def test_deletes_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SYDHAVN_SAMPLE_EVENT], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
         assert Event.objects.filter(external_source="sydhavnteater").count() == 1
 
         _write_json([], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
         assert Event.objects.filter(external_source="sydhavnteater").count() == 0
 
     def test_no_delete_preserves_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SYDHAVN_SAMPLE_EVENT], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
 
         _write_json([], f)
-        call_command("import_sydhavnteater", str(f), no_delete=True)
+        call_command("import_events", "sydhavnteater", str(f), no_delete=True)
         assert Event.objects.filter(external_source="sydhavnteater").count() == 1
 
     def test_skips_record_with_bad_datetime(self, tmp_path):
         f = tmp_path / "events.json"
         bad = {**SYDHAVN_SAMPLE_EVENT, "start_datetime": "not-a-date"}
         _write_json([bad], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
         assert Event.objects.filter(external_source="sydhavnteater").count() == 0
 
     def test_category_mapping(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([{**SYDHAVN_SAMPLE_EVENT, "category": "workshop"}], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
         event = Event.objects.get(external_source="sydhavnteater")
         assert event.category == "workshop"
 
     def test_unknown_category_defaults_to_other(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([{**SYDHAVN_SAMPLE_EVENT, "category": "unknown_type"}], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
         event = Event.objects.get(external_source="sydhavnteater")
         assert event.category == "other"
 
@@ -616,17 +620,17 @@ class TestImportSydhavnteaterDryRun:
     def test_dry_run_does_not_create(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SYDHAVN_SAMPLE_EVENT], f)
-        call_command("import_sydhavnteater", str(f), dry_run=True)
+        call_command("import_events", "sydhavnteater", str(f), dry_run=True)
         assert Event.objects.filter(external_source="sydhavnteater").count() == 0
 
     def test_dry_run_does_not_update(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SYDHAVN_SAMPLE_EVENT], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
 
         updated = {**SYDHAVN_SAMPLE_EVENT, "title": "Dry Run Title"}
         _write_json([updated], f)
-        call_command("import_sydhavnteater", str(f), dry_run=True)
+        call_command("import_events", "sydhavnteater", str(f), dry_run=True)
         assert (
             Event.objects.get(external_source="sydhavnteater").title
             == "Test Sydhavn Event"
@@ -635,10 +639,10 @@ class TestImportSydhavnteaterDryRun:
     def test_dry_run_does_not_delete(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SYDHAVN_SAMPLE_EVENT], f)
-        call_command("import_sydhavnteater", str(f))
+        call_command("import_events", "sydhavnteater", str(f))
 
         _write_json([], f)
-        call_command("import_sydhavnteater", str(f), dry_run=True)
+        call_command("import_events", "sydhavnteater", str(f), dry_run=True)
         assert Event.objects.filter(external_source="sydhavnteater").count() == 1
 
 
@@ -653,7 +657,7 @@ class TestImportSydhavnteaterImages:
         event_rec = {**SYDHAVN_SAMPLE_EVENT, "image_url": "https://example.com/img.jpg"}
         f = tmp_path / "events.json"
         _write_json([event_rec], f)
-        call_command("import_sydhavnteater", str(f), skip_images=True)
+        call_command("import_events", "sydhavnteater", str(f), skip_images=True)
         event = Event.objects.get(external_source="sydhavnteater")
         assert not event.image.name
 
@@ -665,7 +669,7 @@ class TestImportSydhavnteaterImages:
             "events.management.commands.base_import._download_image",
             return_value=None,
         ):
-            call_command("import_sydhavnteater", str(f))
+            call_command("import_events", "sydhavnteater", str(f))
         assert Event.objects.filter(external_source="sydhavnteater").count() == 1
 
 
@@ -693,7 +697,7 @@ class TestSystemUserAttribution:
         system_user = self._make_system_user("dansehallerne")
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         event = Event.objects.get(external_source="dansehallerne")
         assert event.submitted_by == system_user
 
@@ -701,7 +705,7 @@ class TestSystemUserAttribution:
         # No system user created — should fall back to None gracefully.
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         event = Event.objects.get(external_source="dansehallerne")
         assert event.submitted_by is None
 
@@ -710,7 +714,7 @@ class TestSystemUserAttribution:
         self._make_system_user("hautscene")
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         event = Event.objects.get(external_source="dansehallerne")
         assert event.submitted_by is None
 
@@ -718,12 +722,12 @@ class TestSystemUserAttribution:
         # First import without system user → submitted_by=None.
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.get(external_source="dansehallerne").submitted_by is None
 
         # Create system user, re-import — existing event is updated.
         system_user = self._make_system_user("dansehallerne")
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         assert (
             Event.objects.get(external_source="dansehallerne").submitted_by
             == system_user
@@ -737,7 +741,7 @@ class TestSystemUserAttribution:
 
 @pytest.mark.django_db
 class TestCategoryScope:
-    """import_dansehallerne_workshops must not delete non-workshop dansehallerne events."""
+    """The dansehallerne_workshops import must not delete non-workshop dansehallerne events."""
 
     FUTURE_PERFORMANCE = {
         **SAMPLE_EVENT,
@@ -756,13 +760,13 @@ class TestCategoryScope:
         # Import a performance and a workshop via the regular importer.
         f = tmp_path / "events.json"
         _write_json([self.FUTURE_PERFORMANCE, self.FUTURE_WORKSHOP], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 2
 
         # Run workshops importer with an empty file — only the workshop should be deleted.
         wf = tmp_path / "workshops.json"
         _write_json([], wf)
-        call_command("import_dansehallerne_workshops", str(wf))
+        call_command("import_events", "dansehallerne_workshops", str(wf))
 
         assert Event.objects.filter(
             source_url=self.FUTURE_PERFORMANCE["source_url"]
@@ -775,7 +779,7 @@ class TestCategoryScope:
         # Import both via the workshops importer first.
         wf = tmp_path / "workshops.json"
         _write_json([self.FUTURE_WORKSHOP], wf)
-        call_command("import_dansehallerne_workshops", str(wf))
+        call_command("import_events", "dansehallerne_workshops", str(wf))
         assert Event.objects.filter(
             source_url=self.FUTURE_WORKSHOP["source_url"]
         ).exists()
@@ -783,7 +787,7 @@ class TestCategoryScope:
         # Run the regular importer with only the performance — workshop must survive.
         f = tmp_path / "events.json"
         _write_json([self.FUTURE_PERFORMANCE], f)
-        call_command("import_dansehallerne", str(f))
+        call_command("import_events", "dansehallerne", str(f))
 
         assert Event.objects.filter(
             source_url=self.FUTURE_WORKSHOP["source_url"]
@@ -814,19 +818,19 @@ KBHDANSER_SAMPLE_EVENT = {
 class TestImportKbhdanserErrors:
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(CommandError, match="File not found"):
-            call_command("import_kbhdanser", str(tmp_path / "missing.json"))
+            call_command("import_events", "kbhdanser", str(tmp_path / "missing.json"))
 
     def test_invalid_json_raises(self, tmp_path):
         f = tmp_path / "bad.json"
         f.write_text("not valid json", encoding="utf-8")
         with pytest.raises(CommandError, match="Invalid JSON"):
-            call_command("import_kbhdanser", str(f))
+            call_command("import_events", "kbhdanser", str(f))
 
     def test_non_list_json_raises(self, tmp_path):
         f = tmp_path / "bad.json"
         f.write_text('{"key": "val"}', encoding="utf-8")
         with pytest.raises(CommandError, match="top-level list"):
-            call_command("import_kbhdanser", str(f))
+            call_command("import_events", "kbhdanser", str(f))
 
 
 @pytest.mark.django_db
@@ -834,7 +838,7 @@ class TestImportKbhdanserCRUD:
     def test_creates_new_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([KBHDANSER_SAMPLE_EVENT], f)
-        call_command("import_kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
         assert Event.objects.filter(external_source="kbhdanser").count() == 1
         event = Event.objects.get(external_source="kbhdanser")
         assert event.title == "Chroniques"
@@ -843,11 +847,11 @@ class TestImportKbhdanserCRUD:
     def test_updates_changed_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([KBHDANSER_SAMPLE_EVENT], f)
-        call_command("import_kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
 
         updated = {**KBHDANSER_SAMPLE_EVENT, "title": "Chroniques Updated"}
         _write_json([updated], f)
-        call_command("import_kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
 
         assert Event.objects.filter(external_source="kbhdanser").count() == 1
         assert (
@@ -857,33 +861,33 @@ class TestImportKbhdanserCRUD:
     def test_unchanged_event_is_skipped(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([KBHDANSER_SAMPLE_EVENT], f)
-        call_command("import_kbhdanser", str(f))
-        call_command("import_kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
         assert Event.objects.filter(external_source="kbhdanser").count() == 1
 
     def test_deletes_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([KBHDANSER_SAMPLE_EVENT], f)
-        call_command("import_kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
         assert Event.objects.filter(external_source="kbhdanser").count() == 1
 
         _write_json([], f)
-        call_command("import_kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
         assert Event.objects.filter(external_source="kbhdanser").count() == 0
 
     def test_no_delete_preserves_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([KBHDANSER_SAMPLE_EVENT], f)
-        call_command("import_kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
 
         _write_json([], f)
-        call_command("import_kbhdanser", str(f), no_delete=True)
+        call_command("import_events", "kbhdanser", str(f), no_delete=True)
         assert Event.objects.filter(external_source="kbhdanser").count() == 1
 
     def test_dry_run_does_not_create(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([KBHDANSER_SAMPLE_EVENT], f)
-        call_command("import_kbhdanser", str(f), dry_run=True)
+        call_command("import_events", "kbhdanser", str(f), dry_run=True)
         assert Event.objects.filter(external_source="kbhdanser").count() == 0
 
     def test_multiple_performances_same_event_url(self, tmp_path):
@@ -894,7 +898,7 @@ class TestImportKbhdanserCRUD:
         }
         f = tmp_path / "events.json"
         _write_json([KBHDANSER_SAMPLE_EVENT, perf2], f)
-        call_command("import_kbhdanser", str(f))
+        call_command("import_events", "kbhdanser", str(f))
         assert Event.objects.filter(external_source="kbhdanser").count() == 2
 
 
@@ -923,19 +927,19 @@ class TestImportToastercphCRUD:
     def test_creates_new_event(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([TOASTERCPH_SAMPLE_EVENT], f)
-        call_command("import_toastercph", str(f))
+        call_command("import_events", "toastercph", str(f))
         assert Event.objects.filter(external_source="toastercph").count() == 1
         event = Event.objects.get(external_source="toastercph")
         assert event.title == "Test Toaster Event"
 
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(CommandError, match="File not found"):
-            call_command("import_toastercph", str(tmp_path / "missing.json"))
+            call_command("import_events", "toastercph", str(tmp_path / "missing.json"))
 
     def test_dry_run_does_not_create(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([TOASTERCPH_SAMPLE_EVENT], f)
-        call_command("import_toastercph", str(f), dry_run=True)
+        call_command("import_events", "toastercph", str(f), dry_run=True)
         assert Event.objects.filter(external_source="toastercph").count() == 0
 
 
@@ -977,7 +981,7 @@ class TestImportImageDeduplication:
             "events.management.commands.base_import._download_image",
             return_value=("shared.jpg", image_bytes),
         ):
-            call_command("import_dansehallerne", str(f))
+            call_command("import_events", "dansehallerne", str(f))
 
         events = list(
             Event.objects.filter(external_source="dansehallerne").order_by(
@@ -1014,7 +1018,7 @@ class TestImportImageDeduplication:
             "events.management.commands.base_import._download_image",
             return_value=("shared.jpg", image_bytes),
         ):
-            call_command("import_dansehallerne", str(f))
+            call_command("import_events", "dansehallerne", str(f))
 
         stored_files = list((tmp_path / "events").iterdir())
         assert len(stored_files) == 1, (
@@ -1049,7 +1053,7 @@ class TestImportImageDeduplication:
             "events.management.commands.base_import._download_image",
             side_effect=side_effects,
         ):
-            call_command("import_dansehallerne", str(f))
+            call_command("import_events", "dansehallerne", str(f))
 
         events = list(
             Event.objects.filter(external_source="dansehallerne").order_by(

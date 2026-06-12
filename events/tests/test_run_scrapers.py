@@ -8,6 +8,7 @@ scrape function).
 """
 
 import datetime
+from dataclasses import replace
 
 import pytest
 from django.core.management import call_command
@@ -16,8 +17,15 @@ from accounts.tests.factories import UserFactory
 from events.management.commands import run_scrapers
 from events.models import Event
 from events.tests.factories import EventFactory
+from scrapers.registry import SOURCES
 
 PAST = datetime.date(2020, 1, 1)
+
+
+def _patched_sources(monkeypatch, scrape_fn, name="hautscene"):
+    """Replace the registry seen by run_scrapers with one stubbed source."""
+    fake = replace(SOURCES[name], scrape=scrape_fn, scrape_kwargs={})
+    monkeypatch.setattr(run_scrapers, "SOURCES", {name: fake})
 
 
 @pytest.fixture
@@ -28,7 +36,7 @@ def retired_toaster(monkeypatch):
 
 @pytest.fixture
 def toaster_account():
-    """A system account whose slug matches import_toastercph.external_source."""
+    """A system account whose slug matches the toastercph external_source."""
     return UserFactory.create(
         is_system_account=True,
         display_name="Toaster",
@@ -68,3 +76,45 @@ class TestRunScrapersCleanup:
         call_command("run_scrapers", only=["toastercph"])
 
         assert Event.objects.filter(external_source="toastercph").count() == 0
+
+
+@pytest.mark.django_db
+class TestRunScrapersSentryReporting:
+    def test_scraper_failure_is_captured_with_tag(self, monkeypatch):
+        boom = RuntimeError("site layout changed")
+
+        def failing_scrape(**kwargs):
+            raise boom
+
+        _patched_sources(monkeypatch, failing_scrape)
+        captured = []
+        monkeypatch.setattr(
+            run_scrapers.sentry_sdk, "capture_exception", captured.append
+        )
+
+        with pytest.raises(SystemExit):
+            call_command("run_scrapers", only=["hautscene"])
+
+        assert captured == [boom]
+
+    def test_successful_run_captures_nothing(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = []
+        monkeypatch.setattr(
+            run_scrapers.sentry_sdk, "capture_exception", captured.append
+        )
+
+        call_command("run_scrapers", only=["hautscene"])
+
+        assert captured == []
+
+
+@pytest.mark.django_db
+class TestImportEventsSourceArg:
+    def test_unknown_source_raises(self, tmp_path):
+        from django.core.management.base import CommandError
+
+        f = tmp_path / "events.json"
+        f.write_text("[]", encoding="utf-8")
+        with pytest.raises(CommandError):
+            call_command("import_events", "not_a_source", str(f))

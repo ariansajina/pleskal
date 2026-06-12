@@ -57,15 +57,8 @@ events/
   templatetags/
     markdown_filters.py   # render_markdown filter (nh3 sanitized)
   management/commands/
-    base_import.py              # Base class for scraper import commands
-    import_dansehallerne.py     # Dansehallerne events importer
-    import_dansehallerne_workshops.py  # Dansehallerne workshops importer
-    import_hautscene.py         # HAUT Scene importer
-    import_kbhdanser.py         # KBH Danser importer
-    import_sort_hvid.py         # Sort/Hvid importer
-    import_sydhavnteater.py     # Sydhavn Teater importer
-    import_toastercph.py        # Toaster CPH importer
-    import_warehouse9.py        # Warehouse9 importer
+    base_import.py              # Base class for event import logic (upsert, stale deletion, images)
+    import_events.py            # Generic importer: import_events <source> (config from scrapers/registry.py)
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
     weekly_digest.py            # Weekly digest email (feed analytics)
@@ -100,6 +93,7 @@ scrapers/
   sydhavnteater.py             # Sydhavn Teater scraper
   toastercph.py                # Toaster CPH scraper
   warehouse9.py                # Warehouse9 scraper (Tribe Events iCal feed)
+  registry.py                  # Scraper source registry (scrape fn, external_source, image-domain allowlist, etc.) consumed by run_scrapers + import_events
   sources.json                 # Source account config (external_source, display_name, email, website) for all scrapers
 ```
 
@@ -159,15 +153,9 @@ uv run python manage.py generate_claim_codes --count 5 --expires 2026-12-31
 # Source accounts (create system users for scrapers)
 uv run python manage.py create_source_accounts
 
-# Event importers (individual)
-uv run python manage.py import_dansehallerne
-uv run python manage.py import_dansehallerne_workshops
-uv run python manage.py import_hautscene
-uv run python manage.py import_kbhdanser
-uv run python manage.py import_sort_hvid
-uv run python manage.py import_sydhavnteater
-uv run python manage.py import_toastercph
-uv run python manage.py import_warehouse9
+# Event importer (generic; per-source config lives in scrapers/registry.py)
+uv run python manage.py import_events hautscene                 # default JSON: hautscene_events.json
+uv run python manage.py import_events hautscene events.json --dry-run
 
 # Unified scraper (runs all sources; used by Railway scrape-cron service)
 uv run python manage.py run_scrapers              # run all 8 importers
@@ -231,7 +219,7 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
 - Image uploads: Pillow-validated (not Content-Type), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min IP lockout)
-- Rate limiting: custom cache-based (`config/ratelimit.py`); limits per endpoint listed below
+- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); limits per endpoint listed below
 - CSP: `ContentSecurityPolicyMiddleware` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; auto-migrates legacy PBKDF2 hashes on login
 - Password strength: zxcvbn minimum score 2
@@ -315,7 +303,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 
 Method: `get_display_description()` prepends scraped event disclaimer if `external_source` is set.
 
-Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`.
+Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`. Results (including definitive "no result" answers) are cached in the shared Django cache, so repeat venues skip the network call.
 
 ### FeedHit (`events/models.py`)
 
@@ -456,7 +444,7 @@ See `.env.example` for the full list. Key variables:
 ## Deployment
 
 - **Platform:** Railway. The production environment runs four services — three app services (deployed from this repo) plus a managed database:
-  - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
+  - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
   - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers`, `restartPolicyType = NEVER`
   - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
   - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`

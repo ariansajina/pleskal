@@ -276,6 +276,26 @@ AXES_COOLOFF_TIME = 0.5  # 30 minutes in hours
 AXES_LOCK_OUT_BY = ["ip_address"]
 AXES_RESET_ON_SUCCESS = True
 
+# Cache
+#
+# Production uses the database cache so rate-limit counters (config/ratelimit.py)
+# and geocoding results (events/geocoding.py) are shared across gunicorn workers
+# and the cron services, and survive deploys. The table is created by
+# `createcachetable` in railway.toml's preDeployCommand. Dev and tests keep the
+# default per-process in-memory cache (no table needed).
+
+if DEBUG or "pytest" in _sys.modules:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "django_cache",
+            # Default MAX_ENTRIES (300) is too tight for rl:* + geocode:* keys.
+            "OPTIONS": {"MAX_ENTRIES": 5000},
+        }
+    }
+
 # Sentry
 
 SENTRY_DSN = env("SENTRY_DSN", default="")

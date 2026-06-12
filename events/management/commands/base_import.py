@@ -2,13 +2,10 @@
 
 All scrapers produce a JSON file with the same schema.  This base class
 handles loading that file, upserting events into the database, and stale
-deletion.  Subclasses only need to declare three class attributes:
-
-    class Command(BaseEventImportCommand):
-        help = "Ingest example.dk events ..."
-        external_source = "example"
-        default_json_file = "example_events.json"
-        default_venue_name = "Example Venue"
+deletion.  The generic ``import_events`` command resolves the per-source
+attributes (external_source, default_json_file, default_venue_name,
+category_scope, allowed_image_domains) from ``scrapers.registry`` before
+delegating to ``handle()``.
 """
 
 import datetime
@@ -96,14 +93,13 @@ def _download_image(url: str) -> tuple[str, bytes] | None:
 
 class BaseEventImportCommand(BaseCommand):
     """
-    Base class for import_<source> management commands.
+    Base class for event import management commands.
 
-    Subclasses must define:
+    The following attributes must be set (by a subclass, or per-instance as
+    ``import_events`` does from the scraper registry) before handle() runs:
         external_source   – the value stored in Event.external_source
-        default_json_file – default argument for the positional json_file arg
+        default_json_file – fallback for the positional json_file arg
         default_venue_name – fallback venue name when the record omits it
-
-    Subclasses should also define:
         allowed_image_domains – frozenset of hostnames (e.g. "example.dk") from
             which this importer is permitted to download images. Subdomains are
             accepted automatically (e.g. "example.dk" also allows
@@ -125,10 +121,10 @@ class BaseEventImportCommand(BaseCommand):
         parser.add_argument(
             "json_file",
             nargs="?",
-            default=self.default_json_file,
+            default=None,
             help=(
-                f"Path to the JSON file produced by the scraper "
-                f"(default: {self.default_json_file})"
+                "Path to the JSON file produced by the scraper "
+                "(default: the source's <name>_events.json)"
             ),
         )
         parser.add_argument(
@@ -155,7 +151,7 @@ class BaseEventImportCommand(BaseCommand):
             is_system_account=True, display_name_slug=self.external_source
         ).first()
 
-        json_path = Path(options["json_file"])
+        json_path = Path(options["json_file"] or self.default_json_file)
         if not json_path.exists():
             raise CommandError(f"File not found: {json_path}")
 
