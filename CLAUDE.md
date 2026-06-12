@@ -57,15 +57,8 @@ events/
   templatetags/
     markdown_filters.py   # render_markdown filter (nh3 sanitized)
   management/commands/
-    base_import.py              # Base class for scraper import commands
-    import_dansehallerne.py     # Dansehallerne events importer
-    import_dansehallerne_workshops.py  # Dansehallerne workshops importer
-    import_hautscene.py         # HAUT Scene importer
-    import_kbhdanser.py         # KBH Danser importer
-    import_sort_hvid.py         # Sort/Hvid importer
-    import_sydhavnteater.py     # Sydhavn Teater importer
-    import_toastercph.py        # Toaster CPH importer
-    import_warehouse9.py        # Warehouse9 importer
+    base_import.py              # Base class for event import logic (upsert, stale deletion, images)
+    import_events.py            # Generic importer: import_events <source> (config from scrapers/registry.py)
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
     weekly_digest.py            # Weekly digest email (feed analytics)
@@ -100,6 +93,7 @@ scrapers/
   sydhavnteater.py             # Sydhavn Teater scraper
   toastercph.py                # Toaster CPH scraper
   warehouse9.py                # Warehouse9 scraper (Tribe Events iCal feed)
+  registry.py                  # Scraper source registry (scrape fn, external_source, image-domain allowlist, etc.) consumed by run_scrapers + import_events
   sources.json                 # Source account config (external_source, display_name, email, website) for all scrapers
 ```
 
@@ -159,15 +153,9 @@ uv run python manage.py generate_claim_codes --count 5 --expires 2026-12-31
 # Source accounts (create system users for scrapers)
 uv run python manage.py create_source_accounts
 
-# Event importers (individual)
-uv run python manage.py import_dansehallerne
-uv run python manage.py import_dansehallerne_workshops
-uv run python manage.py import_hautscene
-uv run python manage.py import_kbhdanser
-uv run python manage.py import_sort_hvid
-uv run python manage.py import_sydhavnteater
-uv run python manage.py import_toastercph
-uv run python manage.py import_warehouse9
+# Event importer (generic; per-source config lives in scrapers/registry.py)
+uv run python manage.py import_events hautscene                 # default JSON: hautscene_events.json
+uv run python manage.py import_events hautscene events.json --dry-run
 
 # Unified scraper (runs all sources; used by Railway scrape-cron service)
 uv run python manage.py run_scrapers              # run all 8 importers

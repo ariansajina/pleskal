@@ -1,7 +1,8 @@
 """Unified management command to scrape all sources and import events.
 
-Runs each scraper's ``scrape()`` function, writes the results to a temporary
-JSON file, then invokes the corresponding ``import_*`` management command.
+Runs each registered scraper's ``scrape()`` function (see
+``scrapers/registry.py``), writes the results to a temporary JSON file, then
+invokes the generic ``import_events`` management command for that source.
 Each source is processed independently so a single failure does not block
 the others.
 
@@ -24,69 +25,9 @@ import sentry_sdk
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
-from scrapers.dansehallerne import scrape as scrape_dansehallerne
-from scrapers.dansehallerne_workshops import (
-    scrape as scrape_dansehallerne_workshops,
-)
-from scrapers.hautscene import scrape as scrape_hautscene
-from scrapers.kbhdanser import scrape as scrape_kbhdanser
-from scrapers.sort_hvid import scrape as scrape_sort_hvid
-from scrapers.sydhavnteater import scrape as scrape_sydhavnteater
-from scrapers.toastercph import scrape as scrape_toastercph
-from scrapers.warehouse9 import scrape as scrape_warehouse9
+from scrapers.registry import SOURCES
 
 log = logging.getLogger(__name__)
-
-SCRAPERS = [
-    (
-        "dansehallerne",
-        scrape_dansehallerne,
-        {"delay": 0.5},
-        "import_dansehallerne",
-    ),
-    (
-        "dansehallerne_workshops",
-        scrape_dansehallerne_workshops,
-        {"delay": 0.5},
-        "import_dansehallerne_workshops",
-    ),
-    (
-        "hautscene",
-        scrape_hautscene,
-        {"delay": 0.5},
-        "import_hautscene",
-    ),
-    (
-        "sydhavnteater",
-        scrape_sydhavnteater,
-        {},
-        "import_sydhavnteater",
-    ),
-    (
-        "toastercph",
-        scrape_toastercph,
-        {"delay": 0.5},
-        "import_toastercph",
-    ),
-    (
-        "kbhdanser",
-        scrape_kbhdanser,
-        {"delay": 1.5},
-        "import_kbhdanser",
-    ),
-    (
-        "sort_hvid",
-        scrape_sort_hvid,
-        {"delay": 0.5},
-        "import_sort_hvid",
-    ),
-    (
-        "warehouse9",
-        scrape_warehouse9,
-        {},
-        "import_warehouse9",
-    ),
-]
 
 # Per-scraper auto-disable dates (inclusive cutoff). Past this date the
 # scraper stops running, any events it previously imported are purged (via the
@@ -124,9 +65,7 @@ class Command(BaseCommand):
             metavar="SOURCE",
             help=(
                 "Run only the named scraper(s). Can be repeated. "
-                "Choices: dansehallerne, dansehallerne_workshops, "
-                "hautscene, kbhdanser, sort_hvid, sydhavnteater, toastercph, "
-                "warehouse9."
+                f"Choices: {', '.join(sorted(SOURCES))}."
             ),
         )
 
@@ -141,20 +80,19 @@ class Command(BaseCommand):
         only = set(options["only"]) if options["only"] else None
 
         if only:
-            valid = {name for name, *_ in SCRAPERS}
-            unknown = only - valid
+            unknown = only - set(SOURCES)
             if unknown:
                 self.stderr.write(
                     self.style.ERROR(
                         f"Unknown source(s): {', '.join(sorted(unknown))}. "
-                        f"Valid: {', '.join(sorted(valid))}"
+                        f"Valid: {', '.join(sorted(SOURCES))}"
                     )
                 )
                 sys.exit(1)
 
         results: list[tuple[str, bool, str]] = []
 
-        for name, scrape_fn, scrape_kwargs, import_cmd in SCRAPERS:
+        for name, cfg in SOURCES.items():
             if only and name not in only:
                 continue
 
@@ -180,7 +118,7 @@ class Command(BaseCommand):
                 )
                 # Retired source: purge any events it left behind so they don't
                 # linger in the database.
-                self._cleanup_source(name, import_cmd, dry_run)
+                self._cleanup_source(name, dry_run)
                 results.append(
                     (name, True, f"disabled after {disabled_after.isoformat()}")
                 )
@@ -197,7 +135,7 @@ class Command(BaseCommand):
             try:
                 # ── Scrape ─────────────────────────────────────────────
                 self.stdout.write(f"Scraping {name} ...")
-                events = scrape_fn(**scrape_kwargs)
+                events = cfg.scrape(**cfg.scrape_kwargs)
                 self.stdout.write(f"Scraped {len(events)} events from {name}")
 
                 if not events:
@@ -213,16 +151,14 @@ class Command(BaseCommand):
                     json.dump(events, f, ensure_ascii=False)
 
                 # ── Import ─────────────────────────────────────────────
-                self.stdout.write(
-                    f"Importing {len(events)} events via {import_cmd} ..."
-                )
+                self.stdout.write(f"Importing {len(events)} events from {name} ...")
                 import_kwargs: dict = {"json_file": tmp_path}
                 if dry_run:
                     import_kwargs["dry_run"] = True
                 if skip_images:
                     import_kwargs["skip_images"] = True
 
-                call_command(import_cmd, **import_kwargs)
+                call_command("import_events", name, **import_kwargs)
 
                 elapsed = time.monotonic() - t0
                 msg = f"{len(events)} events, {elapsed:.1f}s"
@@ -269,18 +205,18 @@ class Command(BaseCommand):
             scope.set_tag("scraper", scraper_name)
             sentry_sdk.capture_exception(exc)
 
-    def _cleanup_source(self, name: str, import_cmd: str, dry_run: bool) -> None:
+    def _cleanup_source(self, name: str, dry_run: bool) -> None:
         """Retire a source: purge its events and deactivate its publisher account.
 
-        Purging invokes the source's import command with an empty event list,
-        triggering the importer's stale-deletion path (every event for that
+        Purging invokes ``import_events`` with an empty event list, triggering
+        the importer's stale-deletion path (every event for that
         ``external_source`` is absent from the empty input and thus deleted).
         Deactivating sets the source's system account ``is_active=False`` so it
         drops off the subscribe page's publisher list while its past events keep
         their attribution. Both steps are idempotent, and failures are logged
         but never abort the overall run.
         """
-        self.stdout.write(f"Purging stale events for {name} via {import_cmd} ...")
+        self.stdout.write(f"Purging stale events for {name} ...")
         fd, tmp_path = tempfile.mkstemp(suffix=".json", prefix=f"{name}_cleanup_")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -288,7 +224,7 @@ class Command(BaseCommand):
             import_kwargs: dict = {"json_file": tmp_path}
             if dry_run:
                 import_kwargs["dry_run"] = True
-            call_command(import_cmd, **import_kwargs)
+            call_command("import_events", name, **import_kwargs)
         except Exception as exc:
             self._report_to_sentry(exc, name)
             self.stderr.write(
@@ -300,23 +236,13 @@ class Command(BaseCommand):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-        self._deactivate_source_account(import_cmd, dry_run)
+        self._deactivate_source_account(name, dry_run)
 
-    def _deactivate_source_account(self, import_cmd: str, dry_run: bool) -> None:
+    def _deactivate_source_account(self, name: str, dry_run: bool) -> None:
         """Mark a retired source's system account inactive (hides it on subscribe)."""
         from django.contrib.auth import get_user_model
-        from django.core.management import load_command_class
 
-        try:
-            external_source = load_command_class("events", import_cmd).external_source
-        except Exception:
-            self.stderr.write(
-                self.style.ERROR(
-                    f"Could not resolve external_source for {import_cmd}; "
-                    "skipping account deactivation"
-                )
-            )
-            return
+        external_source = SOURCES[name].external_source
 
         user_model = get_user_model()
         accounts = user_model.objects.filter(
