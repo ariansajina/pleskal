@@ -24,6 +24,13 @@ def _make_image_upload(width=100, height=100, fmt="JPEG", name="test.jpg"):
     return SimpleUploadedFile(name, buf.getvalue(), content_type=content_type)
 
 
+def _make_corrupt_image_upload(name="bad.jpg"):
+    """Return an upload whose content is not a decodable image."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    return SimpleUploadedFile(name, b"not an image", content_type="image/jpeg")
+
+
 def _future_dt(days=7):
     return timezone.now() + timezone.timedelta(days=days)
 
@@ -320,6 +327,52 @@ class TestEventCreateView:
         event = Event.objects.get(title="Event With Image Issue")
         assert event.image  # Image should be present
         assert event.image.storage.exists(event.image.name)
+
+    def test_corrupt_image_rejected_with_form_error(self, client):
+        """A non-image upload must re-render the form, not raise a 500."""
+        user = UserFactory.create()
+        client.force_login(user)
+        resp = client.post(
+            reverse("event_create"),
+            {
+                "title": "Corrupt Image Event",
+                "date": _future_dt(3).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(3).strftime("%H:%M"),
+                "venue_name": "Gallery",
+                "category": "performance",
+                "image": _make_corrupt_image_upload(),
+            },
+        )
+        assert resp.status_code == 200
+        assert "image" in resp.context["form"].errors
+        assert not Event.objects.filter(title="Corrupt Image Event").exists()
+        # A known-bad upload must not be preserved for re-submission
+        assert "pending_image" not in client.session
+
+    def test_corrupt_pending_image_rejected_with_form_error(self, client):
+        """A corrupt image restored from the session must surface a form error."""
+        user = UserFactory.create()
+        client.force_login(user)
+        session = client.session
+        session["pending_image"] = {
+            "name": "bad.jpg",
+            "content": b"not an image".hex(),
+        }
+        session.save()
+        resp = client.post(
+            reverse("event_create"),
+            {
+                "title": "Corrupt Pending Image Event",
+                "date": _future_dt(3).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(3).strftime("%H:%M"),
+                "venue_name": "Gallery",
+                "category": "performance",
+                "submit_action": "publish",
+            },
+        )
+        assert resp.status_code == 200
+        assert "image" in resp.context["form"].errors
+        assert not Event.objects.filter(title="Corrupt Pending Image Event").exists()
 
 
 @pytest.mark.django_db
@@ -926,6 +979,29 @@ class TestEventUpdateView:
         assert event.image  # Image should be present from pending_image
         assert event.image.storage.exists(event.image.name)
 
+    def test_corrupt_image_rejected_with_form_error(self, client):
+        """A non-image upload on edit must re-render the form, not raise a 500."""
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        client.force_login(user)
+        local_start = timezone.localtime(event.start_datetime)
+        resp = client.post(
+            reverse("event_edit", kwargs={"slug": event.slug}),
+            {
+                "title": event.title,
+                "date": local_start.strftime("%Y-%m-%d"),
+                "start_time": local_start.strftime("%H:%M"),
+                "venue_name": event.venue_name,
+                "category": event.category,
+                "image": _make_corrupt_image_upload(),
+            },
+        )
+        assert resp.status_code == 200
+        assert "image" in resp.context["form"].errors
+        event.refresh_from_db()
+        assert not event.image
+        assert "pending_image" not in client.session
+
 
 @pytest.mark.django_db
 class TestEventDeleteView:
@@ -996,6 +1072,27 @@ class TestEventDuplicateView:
         assert resp.status_code == 302
         assert Event.objects.filter(title="Tango Night II").exists()
         assert Event.objects.filter(title="Tango Night").exists()  # original unchanged
+
+    def test_corrupt_image_rejected_with_form_error(self, client):
+        """A non-image upload on duplicate must re-render the form, not raise a 500."""
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user, title="Tango Night")
+        client.force_login(user)
+        new_start = _future_dt(days=14)
+        resp = client.post(
+            reverse("event_duplicate", kwargs={"slug": event.slug}),
+            {
+                "title": "Tango Night III",
+                "date": new_start.strftime("%Y-%m-%d"),
+                "start_time": new_start.strftime("%H:%M"),
+                "venue_name": event.venue_name,
+                "category": event.category,
+                "image": _make_corrupt_image_upload(),
+            },
+        )
+        assert resp.status_code == 200
+        assert "image" in resp.context["form"].errors
+        assert not Event.objects.filter(title="Tango Night III").exists()
 
     def test_duplicate_blocked_when_at_limit(self, client):
         from events.views import MAX_UPCOMING_EVENTS_PER_USER

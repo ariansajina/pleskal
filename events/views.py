@@ -5,6 +5,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -51,6 +52,17 @@ def _get_quick_date_ranges():
         "this_month": (month_start.isoformat(), month_end.isoformat()),
         "next_month": (next_month_start.isoformat(), next_month_end.isoformat()),
     }
+
+
+def _attach_processed_image(form, event, image_file) -> bool:
+    """Process the upload onto event.image; on invalid image, add a form error."""
+    try:
+        processed = validate_and_process(image_file)
+    except ValidationError as exc:
+        form.add_error("image", exc)
+        return False
+    event.image.save(processed.name, processed, save=False)
+    return True
 
 
 def _publisher_ids_with_events():
@@ -160,9 +172,10 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
         return kwargs
 
     def form_invalid(self, form):
-        # Preserve uploaded image in session for re-submission
+        # Preserve uploaded image in session for re-submission, unless the
+        # image itself is what failed validation.
         image = self.request.FILES.get("image")
-        if image:
+        if image and "image" not in form.errors:
             self.request.session["pending_image"] = {
                 "name": image.name,
                 "content": image.read().hex(),
@@ -183,9 +196,8 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
             image_content = bytes.fromhex(pending["content"])
             image_file = ContentFile(image_content, name=pending["name"])
 
-        if image_file:
-            processed = validate_and_process(image_file)
-            event.image.save(processed.name, processed, save=False)
+        if image_file and not _attach_processed_image(form, event, image_file):
+            return self.form_invalid(form)
 
         event.save()
 
@@ -537,9 +549,10 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
         return kwargs
 
     def form_invalid(self, form):
-        # Preserve uploaded image in session for re-submission
+        # Preserve uploaded image in session for re-submission, unless the
+        # image itself is what failed validation.
         image = self.request.FILES.get("image")
-        if image:
+        if image and "image" not in form.errors:
             self.request.session["pending_image"] = {
                 "name": image.name,
                 "content": image.read().hex(),
@@ -565,9 +578,12 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
             image_content = bytes.fromhex(pending["content"])
             image_file = ContentFile(image_content, name=pending["name"])
 
-        if image_file and hasattr(image_file, "read"):
-            processed = validate_and_process(image_file)
-            event.image.save(processed.name, processed, save=False)
+        if (
+            image_file
+            and hasattr(image_file, "read")
+            and not _attach_processed_image(form, event, image_file)
+        ):
+            return self.form_invalid(form)
 
         event.save()
         if event.is_draft:
@@ -674,8 +690,16 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
             event.is_draft = request.POST.get("submit_action") == "draft"
             image_file = form.cleaned_data.get("image")
             if image_file:
-                processed = validate_and_process(image_file)
-                event.image.save(processed.name, processed, save=False)
+                if not _attach_processed_image(form, event, image_file):
+                    return render(
+                        request,
+                        EVENT_FORM_TEMPLATE,
+                        {
+                            "form": form,
+                            "page_title": "Duplicate Event",
+                            "source_image": source.image or None,
+                        },
+                    )
             elif source.image and request.POST.get("copy_source_image"):
                 source.image.open()
                 event.image.save(
