@@ -20,6 +20,7 @@ import tempfile
 import time
 import traceback
 
+import sentry_sdk
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
@@ -228,9 +229,10 @@ class Command(BaseCommand):
                 results.append((name, True, msg))
                 self.stdout.write(self.style.SUCCESS(f"{name} done ({msg})"))
 
-            except Exception:
+            except Exception as exc:
                 elapsed = time.monotonic() - t0
                 tb = traceback.format_exc()
+                self._report_to_sentry(exc, name)
                 self.stderr.write(self.style.ERROR(f"{name} FAILED ({elapsed:.1f}s):"))
                 self.stderr.write(tb)
                 results.append((name, False, f"error after {elapsed:.1f}s"))
@@ -257,6 +259,16 @@ class Command(BaseCommand):
                 self.style.SUCCESS("\nAll scrapers completed successfully.")
             )
 
+    @staticmethod
+    def _report_to_sentry(exc: Exception, scraper_name: str) -> None:
+        """Send a scraper failure to Sentry, tagged with the source name.
+
+        No-op when Sentry is not initialized (SENTRY_DSN unset).
+        """
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("scraper", scraper_name)
+            sentry_sdk.capture_exception(exc)
+
     def _cleanup_source(self, name: str, import_cmd: str, dry_run: bool) -> None:
         """Retire a source: purge its events and deactivate its publisher account.
 
@@ -277,7 +289,8 @@ class Command(BaseCommand):
             if dry_run:
                 import_kwargs["dry_run"] = True
             call_command(import_cmd, **import_kwargs)
-        except Exception:
+        except Exception as exc:
+            self._report_to_sentry(exc, name)
             self.stderr.write(
                 self.style.ERROR(
                     f"Cleanup for {name} failed:\n{traceback.format_exc()}"

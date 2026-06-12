@@ -68,3 +68,42 @@ class TestRunScrapersCleanup:
         call_command("run_scrapers", only=["toastercph"])
 
         assert Event.objects.filter(external_source="toastercph").count() == 0
+
+
+@pytest.mark.django_db
+class TestRunScrapersSentryReporting:
+    def test_scraper_failure_is_captured_with_tag(self, monkeypatch):
+        boom = RuntimeError("site layout changed")
+
+        def failing_scrape(**kwargs):
+            raise boom
+
+        monkeypatch.setattr(
+            run_scrapers,
+            "SCRAPERS",
+            [("hautscene", failing_scrape, {}, "import_hautscene")],
+        )
+        captured = []
+        monkeypatch.setattr(
+            run_scrapers.sentry_sdk, "capture_exception", captured.append
+        )
+
+        with pytest.raises(SystemExit):
+            call_command("run_scrapers", only=["hautscene"])
+
+        assert captured == [boom]
+
+    def test_successful_run_captures_nothing(self, monkeypatch):
+        monkeypatch.setattr(
+            run_scrapers,
+            "SCRAPERS",
+            [("hautscene", lambda **kwargs: [], {}, "import_hautscene")],
+        )
+        captured = []
+        monkeypatch.setattr(
+            run_scrapers.sentry_sdk, "capture_exception", captured.append
+        )
+
+        call_command("run_scrapers", only=["hautscene"])
+
+        assert captured == []
