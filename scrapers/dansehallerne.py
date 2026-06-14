@@ -197,7 +197,16 @@ def parse_image_url(soup: BeautifulSoup) -> str:
 
 
 def map_category(raw_type: str) -> str:
-    return CATEGORY_MAP.get(raw_type.lower().strip(), "other")
+    # Type field may be comma-separated (e.g. "Children & Family, Performance").
+    # Map each token individually; explicit "other" categories (children, family)
+    # take priority over "performance" so e.g. children's shows stay as "other".
+    tokens = [t.lower().strip() for t in raw_type.split(",")]
+    mapped = [CATEGORY_MAP[t] for t in tokens if t in CATEGORY_MAP]
+    if not mapped:
+        return "other"
+    if "other" in mapped:
+        return "other"
+    return mapped[0]
 
 
 def parse_venue_address(venue_raw: str) -> tuple[str, str]:

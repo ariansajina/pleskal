@@ -219,6 +219,19 @@ def test_map_category_unknown_defaults_to_other():
     assert map_category("") == "other"
 
 
+def test_map_category_comma_separated_picks_known_type():
+    # "Graduation Performance, Performance" → "performance"
+    assert map_category("Graduation Performance, Performance") == "performance"
+    # "Openings, Performance" → "performance"
+    assert map_category("Openings, Performance") == "performance"
+
+
+def test_map_category_comma_separated_other_wins_over_performance():
+    # "Children & Family, Performance" → "other" (children's content stays "other")
+    assert map_category("Children & Family, Performance") == "other"
+    assert map_category("Performance, Children & Family") == "other"
+
+
 # ── parse_venue_address ───────────────────────────────────────────────────────
 
 
