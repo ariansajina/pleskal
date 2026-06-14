@@ -1,5 +1,7 @@
 """Cache-based rate limiting utilities for protecting sensitive endpoints."""
 
+import time
+
 from django.core.cache import cache
 from django.http import HttpResponse
 
@@ -20,24 +22,42 @@ def get_client_ip(request):
 
 def check_rate_limit(key, limit, window):
     """
-    Check and increment a rate limit counter.
+    Check and increment a fixed-window rate limit counter.
 
     Returns True if the request exceeds the limit, False if it is allowed.
-    The counter is stored in Django's cache and expires after ``window`` seconds.
 
-    Uses cache.add() + cache.incr() to reduce the check-then-set race window
-    present in a naive get/set pattern: add() is a conditional atomic set (no-op
-    if the key already exists), and incr() is an atomic increment.
+    The counter key is bucketed by the current window index
+    (``int(time.time() // window)``), so each window gets a fresh key that
+    starts at zero. This makes correctness independent of whether the cache
+    backend's ``incr()`` preserves the original TTL.
 
-    Note: production uses DatabaseCache (see CACHES in settings), so counters are
-    shared across gunicorn workers and survive deploys. DatabaseCache inherits
-    BaseCache.incr (get-then-set, not atomic), so concurrent requests can
-    occasionally undercount by one — acceptable for abuse throttling. Dev and
-    tests use per-process LocMemCache, where incr() is atomic.
+    Why bucketing matters: production uses DatabaseCache (see CACHES in
+    settings), which inherits ``BaseCache.incr`` — a get-then-``set`` with no
+    timeout, so each increment re-sets the key with the *default* cache timeout
+    (DEFAULT_TIMEOUT, 300s). Without bucketing that would (a) inflate every
+    window to 300s and (b) — because even rejected (over-limit) requests still
+    increment — keep pushing the expiry forward on every hit, so a counter that
+    crossed the limit would never reset under sustained traffic, permanently
+    locking out the client. Bucketing sidesteps this: a stale bucket's inflated
+    TTL is harmless because the next window uses a new key. (LocMemCache, used in
+    dev/tests, preserves the add() TTL on incr(), so it was never affected.)
+
+    cache.add() seeds the bucket at 0 only if absent (atomic no-op if present),
+    then cache.incr() increments it. DatabaseCache's incr is not atomic
+    (get-then-set), so concurrent requests can occasionally undercount by one —
+    acceptable for abuse throttling.
     """
-    # cache.add() sets key=0 only if absent (atomic no-op if key exists).
-    cache.add(key, 0, window)
-    count = cache.incr(key)  # atomic increment
+    window_index = int(time.time() // window)
+    bucket_key = f"{key}:{window_index}"
+    # cache.add() sets the bucket to 0 only if absent (no-op if it exists).
+    cache.add(bucket_key, 0, window)
+    try:
+        count = cache.incr(bucket_key)
+    except ValueError:
+        # Rare: the bucket expired between add() and incr(). Re-seed and count
+        # this request as the first in a fresh window.
+        cache.add(bucket_key, 0, window)
+        count = cache.incr(bucket_key)
     return count > limit
 
 
