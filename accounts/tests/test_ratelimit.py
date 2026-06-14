@@ -48,6 +48,50 @@ class TestCheckRateLimit:
         # "beta" key is fresh; should not be blocked
         assert check_rate_limit("test:beta", limit=3, window=60) is False
 
+    def test_counter_resets_in_the_next_window(self, monkeypatch):
+        """Once a new time window starts, the counter resets to zero.
+
+        Bucketing the key by window index means the previous window's counter
+        (and any inflated TTL it may have under DatabaseCache) is irrelevant.
+        """
+        import config.ratelimit as rl
+        from config.ratelimit import check_rate_limit
+
+        now = [1_000_000.0]
+        monkeypatch.setattr(rl.time, "time", lambda: now[0])
+
+        for _ in range(3):
+            check_rate_limit("test:reset", limit=3, window=60)
+        # Limit exhausted within the current window.
+        assert check_rate_limit("test:reset", limit=3, window=60) is True
+
+        # Advance into the next window — the counter must start fresh.
+        now[0] += 60
+        assert check_rate_limit("test:reset", limit=3, window=60) is False
+
+    def test_over_limit_flood_does_not_prevent_reset(self, monkeypatch):
+        """A burst of rejected requests must not push the window forward.
+
+        This is the production regression: under DatabaseCache, every incr()
+        (even for over-limit requests) reset the key's TTL, so continuous
+        traffic kept the lockout alive forever. With bucketing, the window is
+        anchored to wall-clock time and resets on schedule regardless.
+        """
+        import config.ratelimit as rl
+        from config.ratelimit import check_rate_limit
+
+        now = [2_000_000.0]
+        monkeypatch.setattr(rl.time, "time", lambda: now[0])
+
+        # Hammer well past the limit, all inside one window.
+        for _ in range(50):
+            check_rate_limit("test:flood", limit=3, window=60)
+        assert check_rate_limit("test:flood", limit=3, window=60) is True
+
+        # The very next window is clean despite the preceding flood.
+        now[0] += 60
+        assert check_rate_limit("test:flood", limit=3, window=60) is False
+
 
 class TestGetClientIp:
     def test_returns_remote_addr_by_default(self, rf):
