@@ -5,6 +5,7 @@ import uuid
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models
+from django.templatetags.static import static
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -17,6 +18,21 @@ MAX_TITLE_LENGTH = 250
 MAX_VENUE_LENGTH = 200
 MAX_PRICE_NOTE_LENGTH = 200
 MAX_SOURCE_URL_LENGTH = 200
+
+# Default images shown when an event has no scraped/uploaded image of its own.
+# Keyed by Event.external_source; static paths under static/images/defaults/.
+# Sources without an entry and user-created events (blank external_source)
+# fall back to DEFAULT_EVENT_IMAGE.
+DEFAULT_PUBLISHER_IMAGES = {
+    "dansehallerne": "images/defaults/dansehallerne.webp",
+    "hautscene": "images/defaults/hautscene.webp",
+    "kbhdanser": "images/defaults/kbhdanser.webp",
+    "sort-hvid": "images/defaults/sort-hvid.webp",
+    "sydhavnteater": "images/defaults/sydhavnteater.webp",
+    "toastercph": "images/defaults/toastercph.webp",
+    "warehouse9": "images/defaults/warehouse9.webp",
+}
+DEFAULT_EVENT_IMAGE = "images/logo.PNG"
 
 
 class EventCategory(models.TextChoices):
@@ -136,6 +152,19 @@ class Event(models.Model):
     def has_map_location(self) -> bool:
         """True when the venue has been successfully geocoded to lat/lon."""
         return self.latitude is not None and self.longitude is not None
+
+    @property
+    def display_image_url(self) -> str:
+        """URL of the event image, with per-publisher / logo fallbacks.
+
+        Returns the event's own image when set, otherwise the publisher
+        default for its external_source, otherwise the pleskal logo.
+        """
+        if self.image:
+            return self.image.url  # ty: ignore[unresolved-attribute]
+        source = str(self.external_source)
+        path = DEFAULT_PUBLISHER_IMAGES.get(source, DEFAULT_EVENT_IMAGE)
+        return static(path)
 
     def _build_geocode_query(self) -> str:
         """Build the Nominatim query string for this event's venue."""
