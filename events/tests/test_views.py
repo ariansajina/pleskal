@@ -853,12 +853,14 @@ class TestEventDetailView:
         assert b"twitter:image" in resp.content
         assert b"summary_large_image" in resp.content
 
-    def test_og_image_absent_when_no_image(self, client):
-        event = EventFactory.create(image=None)
+    def test_og_image_uses_default_when_no_image(self, client):
+        # Events without their own image fall back to a default (publisher
+        # image or pleskal logo), so an absolute og:image is always present.
+        event = EventFactory.create(image=None, external_source="")
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
-        assert b"og:image" not in resp.content
-        assert b"summary_large_image" not in resp.content
-        assert b'twitter:card" content="summary"' in resp.content
+        assert b"og:image" in resp.content
+        assert b"summary_large_image" in resp.content
+        assert b"images/logo" in resp.content
 
     def test_og_url_is_absolute(self, client):
         event = EventFactory.create()

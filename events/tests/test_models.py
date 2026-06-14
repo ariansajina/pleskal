@@ -3,8 +3,10 @@ from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.templatetags.static import static
 from django.utils import timezone
 
+from ..models import DEFAULT_EVENT_IMAGE
 from .factories import EventFactory
 
 
@@ -196,3 +198,27 @@ class TestGeocodingOnSave:
         assert event.has_map_location is False
         event.longitude = 12.0  # ty: ignore[invalid-assignment]
         assert event.has_map_location is True
+
+
+class TestDisplayImageUrl:
+    def test_own_image_takes_precedence(self):
+        event = EventFactory.build(
+            image="events/img_abc.webp", external_source="dansehallerne"
+        )
+        assert event.display_image_url == event.image.url  # ty: ignore[unresolved-attribute]
+
+    def test_publisher_default_for_known_source(self):
+        event = EventFactory.build(image=None, external_source="dansehallerne")
+        assert event.display_image_url == static("images/defaults/dansehallerne.webp")
+
+    def test_hyphenated_source_default(self):
+        event = EventFactory.build(image=None, external_source="sort-hvid")
+        assert event.display_image_url == static("images/defaults/sort-hvid.webp")
+
+    def test_unmapped_source_falls_back_to_logo(self):
+        event = EventFactory.build(image=None, external_source="unknown-source")
+        assert event.display_image_url == static(DEFAULT_EVENT_IMAGE)
+
+    def test_user_event_falls_back_to_logo(self):
+        event = EventFactory.build(image=None, external_source="")
+        assert event.display_image_url == static(DEFAULT_EVENT_IMAGE)

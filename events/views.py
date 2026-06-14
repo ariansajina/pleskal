@@ -518,8 +518,9 @@ class EventDetailView(DetailView):
         context["google_calendar_url"] = google_calendar_url(event)
         context["outlook_calendar_url"] = outlook_calendar_url(event)
         context["apple_calendar_url"] = apple_calendar_url(ical_absolute)
-        if event.image:
-            context["og_image_url"] = self.request.build_absolute_uri(event.image.url)
+        context["og_image_url"] = self.request.build_absolute_uri(
+            event.display_image_url
+        )
         if not event.is_draft:
             from .structured_data import event_jsonld
 
