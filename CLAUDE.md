@@ -219,24 +219,28 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
 - Image uploads: Pillow-validated (not Content-Type), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min IP lockout)
-- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); limits per endpoint listed below
+- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's `incr()` TTL behavior; limits per endpoint listed below
 - CSP: `ContentSecurityPolicyMiddleware` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; auto-migrates legacy PBKDF2 hashes on login
 - Password strength: zxcvbn minimum score 2
 
 ### Rate Limits (current)
 
-| Endpoint | Limit |
-|---|---|
-| Login | 20 req/hr per IP |
-| Password reset | 5 req/hr per IP |
-| Claim code | 5 req/hr per IP |
-| Event list/search | 20 req/min per IP |
-| Event create | 20 req/hr per user |
-| Event update | 20 req/min per user |
-| Event delete | 20 req/min per user |
-| Event duplicate | 20 req/min per user |
-| Event toggle draft | 20 req/min per user |
+| Endpoint | Method(s) | Limit | Key |
+|---|---|---|---|
+| Login | POST | 20 req/hr | per IP |
+| Password reset | POST | 5 req/hr | per IP |
+| Claim code | POST | 5 req/hr | per IP |
+| Event list/search | GET | 20 req/min | per IP |
+| Event map | GET | 20 req/min | per IP |
+| Event create | POST | 20 req/hr | per user |
+| Event update | POST | 20 req/min | per user |
+| Event duplicate | POST | 20 req/min | per user |
+| Event toggle draft | POST | 20 req/min | per user |
+
+- `EventDeleteView` is **not** rate-limited (owner-only + confirmation step).
+- Event toggle draft shares the `event_update` cache key, so it draws from the same per-user counter as Event update.
+- Default `rate_limit_methods` is `["POST"]`; the list/map views override it to `["GET"]`.
 
 ## Models
 
