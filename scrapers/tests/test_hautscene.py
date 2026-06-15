@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from scrapers.hautscene import (
     _get_info_row_value,
     _next_page_url,
+    collect_event_listing_data,
     collect_event_urls,
     combine_dt,
     parse_date,
@@ -73,6 +74,19 @@ def test_parse_date_iso_format():
 
 def test_parse_date_iso_invalid_month_returns_none():
     assert parse_date("2026-13-01") is None
+
+
+def test_parse_date_month_name_format():
+    """'June 18, 2026' — the format used on the HAUT calendar listing page."""
+    assert parse_date("June 18, 2026") == datetime.date(2026, 6, 18)
+
+
+def test_parse_date_month_name_january():
+    assert parse_date("January 1, 2027") == datetime.date(2027, 1, 1)
+
+
+def test_parse_date_month_name_invalid_returns_none():
+    assert parse_date("Octember 5, 2026") is None
 
 
 # ── parse_time ────────────────────────────────────────────────────────────────
@@ -195,7 +209,72 @@ def test_get_info_row_value_not_found_returns_empty():
     assert _get_info_row_value(info_div, "time") == ""
 
 
-# ── collect_event_urls ────────────────────────────────────────────────────────
+# ── collect_event_listing_data / collect_event_urls ───────────────────────────
+
+# Realistic card HTML reflecting the actual HAUT Webflow structure:
+#   div.calendar-event-teaser > div.event-teaser-content > a + div.event-teaser-date
+_LISTING_HTML_WITH_DATES = """
+<html><body>
+  <div class="calendar-container">
+    <div class="calendar-event-teaser">
+      <div class="event-teaser-content">
+        <a href="/en/events/show-one">Show One</a>
+        <div class="event-teaser-date" data-compare-dates="true">
+          <div class="w-embed"><style>.x{}</style></div>
+          <div>June 18, 2026</div>
+          <div class="date-divider w-condition-invisible">-</div>
+          <div class="end-date w-condition-invisible">June 18, 2026</div>
+        </div>
+      </div>
+    </div>
+    <div class="calendar-event-teaser">
+      <div class="event-teaser-content">
+        <a href="/en/events/show-two">Show Two</a>
+        <div class="event-teaser-date" data-compare-dates="true">
+          <div class="w-embed"><style>.x{}</style></div>
+          <div>June 20, 2026</div>
+          <div class="date-divider">-</div>
+          <div class="end-date">June 22, 2026</div>
+        </div>
+      </div>
+    </div>
+    <div class="calendar-event-teaser">
+      <div class="event-teaser-content">
+        <a href="/en/about/">Not an event</a>
+      </div>
+    </div>
+  </div>
+</body></html>
+"""
+
+
+def test_collect_event_listing_data_extracts_dates():
+    session = _mock_session(_LISTING_HTML_WITH_DATES)
+    data = collect_event_listing_data(session)
+    assert len(data) == 2
+    assert data[0]["url"] == "https://www.hautscene.dk/en/events/show-one"
+    assert data[0]["start_date_str"] == "June 18, 2026"
+    assert data[0]["end_date_str"] == ""  # w-condition-invisible → same-day, no end
+    assert data[1]["url"] == "https://www.hautscene.dk/en/events/show-two"
+    assert data[1]["start_date_str"] == "June 20, 2026"
+    assert data[1]["end_date_str"] == "June 22, 2026"  # visible → multi-day
+
+
+def test_collect_event_listing_data_skips_invisible_links():
+    """Links with w-condition-invisible are duplicate hidden elements; skip them."""
+    html = """
+    <html><body>
+      <div class="calendar-container">
+        <div class="calendar-event-teaser">
+          <a href="/en/events/real-show">Visible</a>
+          <a class="w-condition-invisible" href="/en/events/real-show">Hidden</a>
+        </div>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    data = collect_event_listing_data(session)
+    assert len(data) == 1
 
 
 def test_collect_event_urls_single_page():
@@ -218,39 +297,6 @@ def test_collect_event_urls_single_page():
     urls = collect_event_urls(session)
     assert len(urls) == 2
     assert "https://www.hautscene.dk/en/events/my-show" in urls
-
-
-def test_collect_event_urls_link_block_pattern():
-    """Cards rendered as <a class="calendar-event-teaser"> (Webflow link block)."""
-    html = """
-    <html><body>
-      <div class="calendar-container">
-        <a class="calendar-event-teaser" href="/en/events/show-one">Show One</a>
-        <a class="calendar-event-teaser" href="/en/events/show-two">Show Two</a>
-        <a class="calendar-event-teaser" href="/en/about/">Not an event</a>
-      </div>
-    </body></html>
-    """
-    session = _mock_session(html)
-    urls = collect_event_urls(session)
-    assert len(urls) == 2
-    assert "https://www.hautscene.dk/en/events/show-one" in urls
-    assert "https://www.hautscene.dk/en/events/show-two" in urls
-
-
-def test_collect_event_urls_mixed_patterns():
-    """One card as div-wrapped link, others as link blocks — both found."""
-    html = """
-    <html><body>
-      <div class="calendar-container">
-        <div class="calendar-event-teaser"><a href="/en/events/classic-card">Classic</a></div>
-        <a class="calendar-event-teaser" href="/en/events/link-block-card">LinkBlock</a>
-      </div>
-    </body></html>
-    """
-    session = _mock_session(html)
-    urls = collect_event_urls(session)
-    assert len(urls) == 2
 
 
 def test_collect_event_urls_deduplicates():
@@ -297,6 +343,31 @@ def test_scrape_detail_returns_event():
     assert result["title"] == "My Workshop"
     assert result["external_source"] == "hautscene"
     assert result["is_wheelchair_accessible"] is False
+
+
+def test_scrape_detail_listing_date_used_when_detail_has_none():
+    """listing_start_date is the primary source; detail page needs no date element."""
+    html = """
+    <html><body>
+      <div class="section-tag">My Event</div>
+      <div class="event-info">
+        <div class="info-row">
+          <div class="row-title">time</div>
+          <div class="size-medium">17.00-21.00</div>
+        </div>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail(
+        "https://www.hautscene.dk/en/events/x",
+        session,
+        listing_start_date="June 18, 2026",
+    )
+    assert result is not None
+    dt = datetime.datetime.fromisoformat(result["start_datetime"])
+    assert dt.astimezone(CPH_TZ).date() == datetime.date(2026, 6, 18)
+    assert dt.astimezone(CPH_TZ).hour == 17
 
 
 def test_scrape_detail_http_error_returns_none():
