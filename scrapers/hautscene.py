@@ -134,20 +134,39 @@ def collect_event_urls(session: requests.Session, delay: float = 0.5) -> list[st
 
 def parse_date(date_str: str) -> datetime.date | None:
     """
-    Parse a date string in DD.M.YY or DD.MM.YY format into a datetime.date.
+    Parse a date string into a datetime.date. Supported formats:
 
-    The year is always interpreted as 20XX (e.g. "26" → 2026).
+    - DD.M.YY / DD.MM.YY   (e.g. "24.3.26" → 2026-03-24)
+    - DD.M.YYYY / DD.MM.YYYY (e.g. "24.3.2026")
+    - YYYY-MM-DD            (e.g. "2026-03-24")
+
     Returns None on failure.
     """
-    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{2})$", date_str.strip())
-    if not m:
-        return None
-    day, month, year_short = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    year = 2000 + year_short
-    try:
-        return datetime.date(year, month, day)
-    except ValueError:
-        return None
+    s = date_str.strip()
+    # ISO format
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", s)
+    if m:
+        try:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    # DD.MM.YYYY
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$", s)
+    if m:
+        try:
+            return datetime.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        except ValueError:
+            return None
+    # DD.MM.YY (2-digit year → 20XX)
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{2})$", s)
+    if m:
+        try:
+            return datetime.date(
+                2000 + int(m.group(3)), int(m.group(2)), int(m.group(1))
+            )
+        except ValueError:
+            return None
+    return None
 
 
 def parse_time(time_str: str) -> tuple[datetime.time, datetime.time | None]:
@@ -262,9 +281,16 @@ def scrape_detail(url: str, session: requests.Session) -> dict | None:
         log.warning("No event-info block at %s", url)
         return None
 
-    date_elem = info_div.select_one("div[data-compare-dates='true']")
+    # data-compare-dates element may appear anywhere on the page (not just
+    # inside info_div) depending on the Webflow template version.
+    date_elem = soup.select_one("[data-compare-dates='true']")
     start_date_str = str(date_elem.get("data-start", "")) if date_elem else ""
     end_date_str = str(date_elem.get("data-end", "")) if date_elem else ""
+
+    # Fall back to a "Date" info-row if the attribute-based element is absent.
+    if not start_date_str:
+        start_date_str = _get_info_row_value(info_div, "date")
+        end_date_str = ""
 
     start_date = parse_date(start_date_str)
     if not start_date:

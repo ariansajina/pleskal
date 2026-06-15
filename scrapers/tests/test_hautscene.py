@@ -63,6 +63,18 @@ def test_parse_date_invalid_day_returns_none():
     assert parse_date("32.01.26") is None
 
 
+def test_parse_date_four_digit_year():
+    assert parse_date("24.03.2026") == datetime.date(2026, 3, 24)
+
+
+def test_parse_date_iso_format():
+    assert parse_date("2026-03-24") == datetime.date(2026, 3, 24)
+
+
+def test_parse_date_iso_invalid_month_returns_none():
+    assert parse_date("2026-13-01") is None
+
+
 # ── parse_time ────────────────────────────────────────────────────────────────
 
 
@@ -346,6 +358,41 @@ def test_scrape_detail_missing_date_elem_returns_none():
     """
     session = _mock_session(html)
     assert scrape_detail("https://www.hautscene.dk/en/events/x", session) is None
+
+
+def test_scrape_detail_date_elem_outside_info_div():
+    """data-compare-dates may appear outside div.event-info (whole-page search)."""
+    html = """
+    <html><body>
+      <div class="section-tag">My Event</div>
+      <div class="event-info"></div>
+      <div data-compare-dates="true" data-start="24.3.26"></div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail("https://www.hautscene.dk/en/events/x", session)
+    assert result is not None
+    assert result["title"] == "My Event"
+
+
+def test_scrape_detail_date_from_info_row_fallback():
+    """Falls back to a 'Date' info row when data-compare-dates element is absent."""
+    html = """
+    <html><body>
+      <div class="section-tag">My Event</div>
+      <div class="event-info">
+        <div class="info-row">
+          <div class="row-title">Date</div>
+          <div class="size-medium">24.3.26</div>
+        </div>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail("https://www.hautscene.dk/en/events/x", session)
+    assert result is not None
+    dt = datetime.datetime.fromisoformat(result["start_datetime"])
+    assert dt.astimezone(CPH_TZ).date() == datetime.date(2026, 3, 24)
 
 
 def test_scrape_detail_no_time_falls_back_to_midnight():
