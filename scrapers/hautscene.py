@@ -28,7 +28,6 @@ from scrapers.base import (
     get_crawl_delay,
     get_soup,
     make_session,
-    scrape_url_list,
     write_output,
 )
 
@@ -84,10 +83,46 @@ def _next_page_url(soup: BeautifulSoup, current_url: str) -> str | None:
     return best[1] if best else None
 
 
-def collect_event_urls(session: requests.Session, delay: float = 0.5) -> list[str]:
-    """Return all unique event detail URLs from the calendar listing."""
+def _listing_date_strs(card: Tag) -> tuple[str, str]:
+    """
+    Extract (start_date_str, end_date_str) from a calendar-event-teaser card.
+
+    The listing page renders dates inside ``div.event-teaser-date``:
+      - first non-style child div  → start date  (e.g. "June 18, 2026")
+      - ``div.end-date`` (visible) → end date, only present for multi-day events
+    """
+    date_div = card.select_one("div.event-teaser-date")
+    if not date_div:
+        return "", ""
+
+    start_date_str = ""
+    for child in date_div.children:
+        if not isinstance(child, Tag):
+            continue
+        # Skip the w-embed wrapper that contains a <style> block
+        if child.name == "div" and not child.select_one("style"):
+            text = child.get_text(strip=True)
+            if text:
+                start_date_str = text
+                break
+
+    end_el = date_div.select_one(".end-date:not(.w-condition-invisible)")
+    end_date_str = end_el.get_text(strip=True) if end_el else ""
+
+    return start_date_str, end_date_str
+
+
+def collect_event_listing_data(
+    session: requests.Session, delay: float = 0.5
+) -> list[dict]:
+    """
+    Return listing metadata for all upcoming events.
+
+    Each dict contains ``url``, ``start_date_str``, and ``end_date_str``.
+    Dates are the rendered text from the calendar page (e.g. "June 18, 2026").
+    """
     seen: set[str] = set()
-    urls: list[str] = []
+    entries: list[dict] = []
 
     page_url: str | None = CALENDAR_URL
     pages_fetched = 0
@@ -104,29 +139,46 @@ def collect_event_urls(session: requests.Session, delay: float = 0.5) -> list[st
         # Only collect from the upcoming events section, not .calendar-archive
         upcoming = soup.select_one("div.calendar-container") or soup
         found_on_page = 0
-        # Webflow event cards may be link blocks (<a class="calendar-event-teaser">)
-        # or wrapped links (<div class="calendar-event-teaser"><a>). Handle both.
-        candidates = upcoming.select(
-            "a.calendar-event-teaser[href], div.calendar-event-teaser a[href]"
-        )
-        for a in candidates:
-            href = str(a.get("href", ""))
-            if not re.search(r"/en/events/[^/]+$", href):
+
+        for card in upcoming.select("div.calendar-event-teaser"):
+            # Find the visible event link (skip w-condition-invisible duplicates)
+            a = None
+            for link in card.select("a[href]"):
+                if "w-condition-invisible" not in (link.get("class") or []):
+                    href = str(link.get("href", ""))
+                    if re.search(r"/en/events/[^/]+$", href):
+                        a = link
+                        break
+            if not a:
                 continue
-            url = urljoin(BASE_URL, href)
-            if url not in seen:
-                seen.add(url)
-                urls.append(url)
-                found_on_page += 1
+
+            url = urljoin(BASE_URL, str(a["href"]))
+            if url in seen:
+                continue
+            seen.add(url)
+
+            start_date_str, end_date_str = _listing_date_strs(card)
+            entries.append(
+                {
+                    "url": url,
+                    "start_date_str": start_date_str,
+                    "end_date_str": end_date_str,
+                }
+            )
+            found_on_page += 1
 
         log.debug(
             "[%d] %s: found %d new event URLs", pages_fetched, page_url, found_on_page
         )
-
         page_url = _next_page_url(soup, page_url)
 
-    log.info("Found %d event URLs across %d listing pages", len(urls), pages_fetched)
-    return urls
+    log.info("Found %d event URLs across %d listing pages", len(entries), pages_fetched)
+    return entries
+
+
+def collect_event_urls(session: requests.Session, delay: float = 0.5) -> list[str]:
+    """Return all unique event detail URLs from the calendar listing."""
+    return [e["url"] for e in collect_event_listing_data(session, delay)]
 
 
 # ── Date / time helpers ────────────────────────────────────────────────────────
@@ -134,20 +186,47 @@ def collect_event_urls(session: requests.Session, delay: float = 0.5) -> list[st
 
 def parse_date(date_str: str) -> datetime.date | None:
     """
-    Parse a date string in DD.M.YY or DD.MM.YY format into a datetime.date.
+    Parse a date string into a datetime.date. Supported formats:
 
-    The year is always interpreted as 20XX (e.g. "26" → 2026).
+    - "Month D, YYYY"    (e.g. "June 18, 2026")  ← listing page format
+    - DD.M.YY / DD.MM.YY   (e.g. "24.3.26" → 2026-03-24)
+    - DD.M.YYYY / DD.MM.YYYY (e.g. "24.3.2026")
+    - YYYY-MM-DD            (e.g. "2026-03-24")
+
     Returns None on failure.
     """
-    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{2})$", date_str.strip())
-    if not m:
+    s = date_str.strip()
+    if not s:
         return None
-    day, month, year_short = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    year = 2000 + year_short
+    # "Month D, YYYY" — the format rendered on the HAUT calendar listing page
     try:
-        return datetime.date(year, month, day)
+        return datetime.datetime.strptime(s, "%B %d, %Y").date()
     except ValueError:
-        return None
+        pass
+    # ISO format
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", s)
+    if m:
+        try:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    # DD.MM.YYYY
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$", s)
+    if m:
+        try:
+            return datetime.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        except ValueError:
+            return None
+    # DD.MM.YY (2-digit year → 20XX)
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{2})$", s)
+    if m:
+        try:
+            return datetime.date(
+                2000 + int(m.group(3)), int(m.group(2)), int(m.group(1))
+            )
+        except ValueError:
+            return None
+    return None
 
 
 def parse_time(time_str: str) -> tuple[datetime.time, datetime.time | None]:
@@ -234,9 +313,19 @@ def _get_info_row_value(info_div: Tag, label: str) -> str:
     return ""
 
 
-def scrape_detail(url: str, session: requests.Session) -> dict | None:
+def scrape_detail(
+    url: str,
+    session: requests.Session,
+    *,
+    listing_start_date: str = "",
+    listing_end_date: str = "",
+) -> dict | None:
     """
     Scrape a single event detail page.
+
+    ``listing_start_date`` and ``listing_end_date`` are pre-extracted from the
+    calendar listing page and used as the primary date source, since HAUT's
+    Webflow detail pages do not carry structured date metadata.
 
     Returns an event dict, or None on parse errors.
     """
@@ -262,9 +351,18 @@ def scrape_detail(url: str, session: requests.Session) -> dict | None:
         log.warning("No event-info block at %s", url)
         return None
 
-    date_elem = info_div.select_one("div[data-compare-dates='true']")
-    start_date_str = str(date_elem.get("data-start", "")) if date_elem else ""
-    end_date_str = str(date_elem.get("data-end", "")) if date_elem else ""
+    # Prefer the date passed in from the listing page (most reliable source).
+    # Fall back to the legacy data-compare-dates attribute pattern, then a
+    # "Date" info-row, in case the listing date is unavailable.
+    start_date_str = listing_start_date
+    end_date_str = listing_end_date
+    if not start_date_str:
+        date_elem = soup.select_one("[data-compare-dates='true']")
+        start_date_str = str(date_elem.get("data-start", "")) if date_elem else ""
+        end_date_str = str(date_elem.get("data-end", "")) if date_elem else ""
+    if not start_date_str:
+        start_date_str = _get_info_row_value(info_div, "date")
+        end_date_str = ""
 
     start_date = parse_date(start_date_str)
     if not start_date:
@@ -370,8 +468,24 @@ def scrape(delay: float = 0.5) -> list[dict]:
             "robots.txt Crawl-delay %.1fs overrides --delay %.1fs", crawl_delay, delay
         )
         delay = crawl_delay
-    urls = collect_event_urls(session, delay)
-    return scrape_url_list(urls, session, scrape_detail, delay)
+
+    listing = collect_event_listing_data(session, delay)
+    events: list[dict] = []
+    for i, entry in enumerate(listing, 1):
+        url = entry["url"]
+        log.info("[%d/%d] Scraping %s", i, len(listing), url)
+        result = scrape_detail(
+            url,
+            session,
+            listing_start_date=entry["start_date_str"],
+            listing_end_date=entry["end_date_str"],
+        )
+        if result is not None:
+            events.append(result)
+        if i < len(listing):
+            time.sleep(delay)
+    log.info("Scraped %d event records from %d pages", len(events), len(listing))
+    return events
 
 
 def main() -> None:
