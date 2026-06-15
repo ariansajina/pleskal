@@ -208,6 +208,39 @@ def test_collect_event_urls_single_page():
     assert "https://www.hautscene.dk/en/events/my-show" in urls
 
 
+def test_collect_event_urls_link_block_pattern():
+    """Cards rendered as <a class="calendar-event-teaser"> (Webflow link block)."""
+    html = """
+    <html><body>
+      <div class="calendar-container">
+        <a class="calendar-event-teaser" href="/en/events/show-one">Show One</a>
+        <a class="calendar-event-teaser" href="/en/events/show-two">Show Two</a>
+        <a class="calendar-event-teaser" href="/en/about/">Not an event</a>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    urls = collect_event_urls(session)
+    assert len(urls) == 2
+    assert "https://www.hautscene.dk/en/events/show-one" in urls
+    assert "https://www.hautscene.dk/en/events/show-two" in urls
+
+
+def test_collect_event_urls_mixed_patterns():
+    """One card as div-wrapped link, others as link blocks — both found."""
+    html = """
+    <html><body>
+      <div class="calendar-container">
+        <div class="calendar-event-teaser"><a href="/en/events/classic-card">Classic</a></div>
+        <a class="calendar-event-teaser" href="/en/events/link-block-card">LinkBlock</a>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    urls = collect_event_urls(session)
+    assert len(urls) == 2
+
+
 def test_collect_event_urls_deduplicates():
     html = """
     <html><body>
