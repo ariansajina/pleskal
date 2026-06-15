@@ -104,7 +104,12 @@ def collect_event_urls(session: requests.Session, delay: float = 0.5) -> list[st
         # Only collect from the upcoming events section, not .calendar-archive
         upcoming = soup.select_one("div.calendar-container") or soup
         found_on_page = 0
-        for a in upcoming.select("div.calendar-event-teaser a[href]"):
+        # Webflow event cards may be link blocks (<a class="calendar-event-teaser">)
+        # or wrapped links (<div class="calendar-event-teaser"><a>). Handle both.
+        candidates = upcoming.select(
+            "a.calendar-event-teaser[href], div.calendar-event-teaser a[href]"
+        )
+        for a in candidates:
             href = str(a.get("href", ""))
             if not re.search(r"/en/events/[^/]+$", href):
                 continue
