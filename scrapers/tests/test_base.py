@@ -26,9 +26,15 @@ def test_make_session_returns_session():
 
 
 def test_make_session_has_retry_adapter():
+    from typing import cast
+
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+
     session = make_session()
-    adapter = session.get_adapter("https://example.com")
+    adapter = cast(HTTPAdapter, session.get_adapter("https://example.com"))
     assert adapter is not None
+    assert isinstance(adapter.max_retries, Retry)
     assert adapter.max_retries.total == 3
 
 

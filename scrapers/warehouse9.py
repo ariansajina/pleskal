@@ -66,10 +66,12 @@ log = logging.getLogger(__name__)
 
 def fetch_calendar() -> Calendar:
     """Fetch the Tribe Events iCal feed and return a parsed Calendar."""
+    from typing import cast
+
     session = make_session()
     resp = session.get(ICAL_URL, headers=HEADERS, timeout=30)
     resp.raise_for_status()
-    return Calendar.from_ical(resp.content)
+    return cast(Calendar, Calendar.from_ical(resp.content))
 
 
 # ── Field extraction ──────────────────────────────────────────────────────────

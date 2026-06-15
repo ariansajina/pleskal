@@ -979,7 +979,12 @@ class TestEventUpdateView:
         # Verify the event now has an image
         event.refresh_from_db()
         assert event.image  # Image should be present from pending_image
-        assert event.image.storage.exists(event.image.name)
+        from typing import cast
+
+        from django.db.models.fields.files import FieldFile
+
+        image = cast(FieldFile, event.image)
+        assert image.storage.exists(image.name)
 
     def test_corrupt_image_rejected_with_form_error(self, client):
         """A non-image upload on edit must re-render the form, not raise a 500."""
