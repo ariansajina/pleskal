@@ -24,12 +24,22 @@ def validate_and_process(upload) -> ContentFile:
     except Exception as exc:
         raise ValidationError("Upload a valid image file.") from exc
 
+    if img.mode == "P" and "transparency" in img.info:
+        # Palette images can carry transparency via a "transparency" info key
+        # rather than an alpha channel; promote to RGBA first so it's handled
+        # by the compositing branch below instead of falling through to a
+        # flat RGB convert (which renders the transparent regions as whatever
+        # arbitrary palette color sits at the transparency index — often
+        # black — instead of white).
+        img = img.convert("RGBA")
+
     if img.mode in ("RGBA", "LA"):
         background = Image.new("RGB", img.size, (255, 255, 255))
         background.paste(img, mask=img.convert("RGBA").getchannel("A"))
         img = background
     elif img.mode != "RGB":
-        # Covers P, CMYK, I;16, L, 1, etc. — anything WebP can't encode directly.
+        # Covers P (no transparency), CMYK, I;16, L, 1, etc. — anything WebP
+        # can't encode directly.
         img = img.convert("RGB")
 
     img.thumbnail(

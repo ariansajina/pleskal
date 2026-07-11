@@ -122,3 +122,22 @@ class TestValidateAndProcess:
         result = validate_and_process(upload)
         out = Image.open(io.BytesIO(result.read()))
         assert out.format == "WEBP"
+
+    def test_palette_transparency_composited_onto_white(self, settings):
+        """A P-mode image with a transparency index (e.g. GIF) must not
+        render its transparent regions as an arbitrary dark palette color."""
+        settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+        settings.MAX_IMAGE_DIMENSION = 1200
+        settings.IMAGE_WEBP_QUALITY = 70
+        buf = io.BytesIO()
+        rgba = Image.new("RGBA", (10, 10), color=(255, 0, 0, 0))
+        rgba.save(buf, format="GIF")
+        buf.seek(0)
+        src = Image.open(buf)
+        assert src.mode == "P"
+        assert "transparency" in src.info
+
+        upload = SimpleUploadedFile("p.gif", buf.getvalue(), content_type="image/gif")
+        result = validate_and_process(upload)
+        out = Image.open(io.BytesIO(result.read())).convert("RGB")
+        assert out.getpixel((5, 5)) == (255, 255, 255)

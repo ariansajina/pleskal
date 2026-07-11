@@ -6,6 +6,8 @@ from markdownx.widgets import MarkdownxWidget
 
 User = get_user_model()
 
+EMAIL_ALREADY_IN_USE_ERROR = "This email address is already in use."
+
 
 class CustomAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label="Email")
@@ -73,17 +75,33 @@ class ProfileForm(forms.ModelForm):
         email = self.cleaned_data.get("email", "")
         if not email:
             return email
-        qs = User.objects.filter(email=email)
+        if self.instance and email.lower() == self.instance.email.lower():
+            return email
+
+        user_qs = User.objects.filter(email__iexact=email)
         if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise forms.ValidationError("This email address is already in use.")
+            user_qs = user_qs.exclude(pk=self.instance.pk)
+        if user_qs.exists():
+            raise forms.ValidationError(EMAIL_ALREADY_IN_USE_ERROR)
+
+        # Also check pending/verified EmailAddress rows (allauth), not just
+        # User.email — otherwise two users could each start a change to the
+        # same address; whichever confirms second is left with a permanently
+        # unverified, orphaned row.
+        from allauth.account.models import EmailAddress
+
+        address_qs = EmailAddress.objects.filter(email__iexact=email)
+        if self.instance:
+            address_qs = address_qs.exclude(user=self.instance)
+        if address_qs.exists():
+            raise forms.ValidationError(EMAIL_ALREADY_IN_USE_ERROR)
+
         return email
 
     @property
     def email_changed(self) -> bool:
         new_email = self.cleaned_data.get("email", "")
-        return bool(new_email) and new_email != self.instance.email
+        return bool(new_email) and new_email.lower() != self.instance.email.lower()
 
 
 class ClaimCodeForm(forms.Form):
@@ -133,7 +151,7 @@ class ClaimRegisterForm(forms.Form):
     def clean_email(self):
         email = self.cleaned_data["email"]
         if User.objects.filter(email=email).exists():
-            raise forms.ValidationError("This email address is already in use.")
+            raise forms.ValidationError(EMAIL_ALREADY_IN_USE_ERROR)
         return email
 
     def clean_display_name(self):
