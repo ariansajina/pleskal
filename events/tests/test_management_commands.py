@@ -2,6 +2,7 @@
 
 import io
 import json
+import urllib.request
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -63,17 +64,53 @@ def test_download_image_non_https_url():
 
 
 def test_download_image_success():
-    with patch("urllib.request.urlopen") as mock_urlopen:
+    with patch("urllib.request.OpenerDirector.open") as mock_open:
         mock_resp = MagicMock()
         mock_resp.read.return_value = b"imagedata"
-        mock_urlopen.return_value.__enter__.return_value = mock_resp
-        result = _download_image("https://example.com/photo.jpg")
+        mock_open.return_value.__enter__.return_value = mock_resp
+        result = _download_image(
+            "https://example.com/photo.jpg", frozenset({"example.com"})
+        )
     assert result == ("photo.jpg", b"imagedata")
 
 
 def test_download_image_network_error():
-    with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+    with patch("urllib.request.OpenerDirector.open", side_effect=OSError("refused")):
         assert _download_image("https://example.com/img.jpg") is None
+
+
+def test_download_image_oversized_rejected():
+    with patch("urllib.request.OpenerDirector.open") as mock_open:
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"x" * (20 * 1024 * 1024 + 1)
+        mock_open.return_value.__enter__.return_value = mock_resp
+        result = _download_image(
+            "https://example.com/photo.jpg", frozenset({"example.com"})
+        )
+    assert result is None
+
+
+def test_download_image_redirect_to_disallowed_host_blocked():
+    from events.management.commands.base_import import _AllowlistedRedirectHandler
+
+    handler = _AllowlistedRedirectHandler(frozenset({"example.com"}))
+    with pytest.raises(OSError):
+        handler.redirect_request(
+            MagicMock(), None, 302, "Found", {}, "https://evil.example.org/x.jpg"
+        )
+
+
+def test_download_image_redirect_to_allowed_host_ok():
+    from events.management.commands.base_import import _AllowlistedRedirectHandler
+
+    handler = _AllowlistedRedirectHandler(frozenset({"example.com"}))
+    with patch.object(
+        urllib.request.HTTPRedirectHandler, "redirect_request"
+    ) as mock_super:
+        handler.redirect_request(
+            MagicMock(), None, 302, "Found", {}, "https://cdn.example.com/x.jpg"
+        )
+    mock_super.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -1065,3 +1102,64 @@ class TestImportImageDeduplication:
         )
         stored_files = list((tmp_path / "events").iterdir())
         assert len(stored_files) == 2
+
+
+# ---------------------------------------------------------------------------
+# Stale-deletion sanity guard (Q4/2.1)
+# ---------------------------------------------------------------------------
+
+
+def _make_events(n, source_url_prefix="https://dansehallerne.dk/event/"):
+    events = []
+    for i in range(n):
+        events.append(
+            {
+                **SAMPLE_EVENT,
+                "source_url": f"{source_url_prefix}{i}",
+                "start_datetime": f"2030-06-{i + 1:02d}T18:00:00+02:00",
+                "title": f"Event {i}",
+            }
+        )
+    return events
+
+
+@pytest.mark.django_db
+class TestStaleDeletionGuard:
+    def test_partial_scrape_below_threshold_skips_deletion(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json(_make_events(6), f)
+        call_command("import_events", "dansehallerne", str(f))
+        assert Event.objects.filter(external_source="dansehallerne").count() == 6
+
+        # Only 1 of 6 future events scraped this time — looks like breakage.
+        _write_json(_make_events(1), f)
+        call_command("import_events", "dansehallerne", str(f))
+        assert Event.objects.filter(external_source="dansehallerne").count() == 6
+
+    def test_force_delete_bypasses_guard(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json(_make_events(6), f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        _write_json(_make_events(1), f)
+        call_command("import_events", "dansehallerne", str(f), force_delete=True)
+        assert Event.objects.filter(external_source="dansehallerne").count() == 1
+
+    def test_full_scrape_above_threshold_deletes_normally(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json(_make_events(6), f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        # 4 of 6 scraped (>= 50%) — a normal partial drop, deletion proceeds.
+        _write_json(_make_events(4), f)
+        call_command("import_events", "dansehallerne", str(f))
+        assert Event.objects.filter(external_source="dansehallerne").count() == 4
+
+    def test_small_sources_are_not_guarded(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json(_make_events(2), f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        _write_json([], f)
+        call_command("import_events", "dansehallerne", str(f))
+        assert Event.objects.filter(external_source="dansehallerne").count() == 0

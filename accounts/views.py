@@ -62,10 +62,33 @@ class EditProfileView(LoginRequiredMixin, View):
     def post(self, request):
         form = ProfileForm(request.POST, instance=request.user)
         if form.is_valid():
+            email_changed = form.email_changed
+            new_email = form.cleaned_data.get("email", "")
             form.save()
-            messages.success(request, "Profile updated.")
+            if email_changed:
+                self._send_email_change_confirmation(request, new_email)
+                messages.success(
+                    request,
+                    "Profile updated. Check your inbox to confirm your new "
+                    "email address — your login email won't change until "
+                    "you do.",
+                )
+            else:
+                messages.success(request, "Profile updated.")
             return redirect("publisher_profile", slug=request.user.display_name_slug)
         return render(request, "accounts/account_profile.html", {"form": form})
+
+    @staticmethod
+    def _send_email_change_confirmation(request, new_email: str) -> None:
+        """Add *new_email* as an unverified address and email a confirm link.
+
+        User.email is left untouched here; allauth's email_confirmed flow
+        (ACCOUNT_CHANGE_EMAIL=True) promotes the new address to primary and
+        removes the old one only once the user clicks the confirmation link.
+        """
+        from allauth.account.models import EmailAddress
+
+        EmailAddress.objects.add_email(request, request.user, new_email, confirm=True)
 
 
 def _styled_password_change_form(user, data=None):

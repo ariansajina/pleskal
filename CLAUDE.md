@@ -8,7 +8,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 
 ## Tech Stack
 
-- **Framework:** Django 6.0.3+ (Python 3.14+)
+- **Framework:** Django 6.0.3+ (Python 3.13+)
 - **Database:** PostgreSQL (production), SQLite (dev default)
 - **Frontend:** Django templates + HTMX (no JS framework)
 - **Styling:** Tailwind CSS 4.0 (built via CLI)
@@ -178,7 +178,7 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 ### Style & Linting
 
 - **Line length:** 88 (ruff default)
-- **Python target:** 3.13 (ruff target; runtime requires Python 3.14+)
+- **Python target:** 3.13 (ruff target; matches `requires-python`)
 - **Ruff rules:** E, F, I (isort), UP (pyupgrade), B (bugbear), SIM (simplify), S (security); E501 ignored
 - **Per-file ignores:** tests allow S101 (assert), S106 (hardcoded password), S314
 - **Migrations excluded** from linting
@@ -221,7 +221,7 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 - Brute-force: django-axes (5 failures = 30 min IP lockout)
 - Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's `incr()` TTL behavior; limits per endpoint listed below
 - CSP: `ContentSecurityPolicyMiddleware` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
-- Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; auto-migrates legacy PBKDF2 hashes on login
+- Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
 
 ### Rate Limits (current)
@@ -286,7 +286,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 |---|---|
 | `id` | UUID PK |
 | `slug` | Auto-generated, immutable, collision-safe (random 2-byte hex suffix) |
-| `title` | Max 200 chars, min 3 chars |
+| `title` | Max 250 chars, min 3 chars |
 | `description` | Markdown |
 | `image` | Optional; WebP, max 10 MB, 1200px max dimension, EXIF stripped |
 | `start_datetime` | Must be future on creation, max 1 year out |
@@ -441,10 +441,11 @@ See `.env.example` for the full list. Key variables:
 
 ## Deployment
 
-- **Platform:** Railway. The production environment runs four services — three app services (deployed from this repo) plus a managed database:
+- **Platform:** Railway. The production environment runs app services (deployed from this repo) plus a managed database:
   - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
   - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers`, `restartPolicyType = NEVER`
   - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
+  - **digest-cron** (`railway.digest-cron.toml`): scheduled cron running `python manage.py weekly_digest`, `restartPolicyType = NEVER`. Set up manually per `deployment-notes.md` (not wired into `deploy-production.yml`, unlike the other two crons, since that requires a Railway service ID secret to be provisioned first)
   - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`
 - **Images / DB backups:** Cloudflare R2 (free tier: 10 GB / 10M reads)
 - **Static files:** WhiteNoise

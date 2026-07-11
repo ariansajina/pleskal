@@ -159,6 +159,37 @@ class TestEditProfileView:
         )
         assert response.status_code == 200
 
+    def test_email_change_requires_confirmation(self):
+        """Changing email creates an unverified EmailAddress and sends a
+        confirmation link, but doesn't touch User.email until confirmed."""
+        from allauth.account.models import EmailAddress
+
+        user = UserFactory.create(email="old@example.com")
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/profile/edit/",
+            {"display_name": user.display_name, "email": "new@example.com"},
+        )
+        assert response.status_code == 302
+        user.refresh_from_db()
+        assert user.email == "old@example.com"
+        pending = EmailAddress.objects.get(user=user, email="new@example.com")
+        assert not pending.verified
+        assert not pending.primary
+
+    def test_email_unchanged_does_not_create_pending_address(self):
+        from allauth.account.models import EmailAddress
+
+        user = UserFactory.create(email="same@example.com")
+        client = Client()
+        client.force_login(user)
+        client.post(
+            "/accounts/profile/edit/",
+            {"display_name": user.display_name, "email": "same@example.com"},
+        )
+        assert not EmailAddress.objects.filter(user=user).exists()
+
 
 @pytest.mark.django_db
 class TestChangePasswordView:

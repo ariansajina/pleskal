@@ -123,6 +123,39 @@ class TestICalFeed:
         resp = client.get(reverse("event_ical_feed"))
         assert str(event.id).encode() in resp.content
 
+    def test_ical_uid_stable_across_delete_recreate_for_scraped_event(self, client):
+        """A scraped event's iCal UID must survive delete+recreate by the
+        importer (same external_source/source_url/start_datetime), so
+        subscriber calendars don't see a duplicate entry."""
+        from events.feeds import _stable_uid
+
+        original = EventFactory.create(
+            external_source="hautscene",
+            source_url="https://hautscene.dk/event/1",
+        )
+        uid_before = _stable_uid(original)
+        original_id = original.pk
+        original.delete()
+
+        recreated = EventFactory.create(
+            external_source="hautscene",
+            source_url="https://hautscene.dk/event/1",
+            start_datetime=original.start_datetime,
+        )
+        assert recreated.pk != original_id
+        assert _stable_uid(recreated) == uid_before
+
+    def test_ical_uid_differs_for_different_scraped_events(self, client):
+        from events.feeds import _stable_uid
+
+        e1 = EventFactory.create(
+            external_source="hautscene", source_url="https://hautscene.dk/event/1"
+        )
+        e2 = EventFactory.create(
+            external_source="hautscene", source_url="https://hautscene.dk/event/2"
+        )
+        assert _stable_uid(e1) != _stable_uid(e2)
+
     def test_ical_is_valid_ical(self, client):
         EventFactory.create()
         resp = client.get(reverse("event_ical_feed"))

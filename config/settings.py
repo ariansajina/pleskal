@@ -268,6 +268,10 @@ ACCOUNT_ALLOW_REGISTRATION = False
 # Auto-confirm email on GET (no extra button click required).
 ACCOUNT_CONFIRM_EMAIL_ON_GET = True
 ACCOUNT_EMAIL_CONFIRMATION_ANONYMOUS_REDIRECT_URL = "/accounts/email-verified/"
+# When a user confirms a newly-added email address, replace their existing
+# primary email with it (rather than only setting it primary if none exists).
+# Required for EditProfileView's email-change flow to take effect on confirm.
+ACCOUNT_CHANGE_EMAIL = True
 
 # django-axes (brute-force protection)
 
