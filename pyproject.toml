@@ -46,6 +46,10 @@ dev = [
 target-version = "py313"
 line-length = 88
 extend-exclude = ["*/migrations/*"]
+# Honor excludes even for explicitly-passed paths, so pre-commit (which passes
+# filenames) skips migrations the same way CI's directory-based `ruff format
+# --check .` does.
+force-exclude = true
 
 [tool.ruff.lint]
 select = [
