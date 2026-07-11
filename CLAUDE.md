@@ -441,10 +441,11 @@ See `.env.example` for the full list. Key variables:
 
 ## Deployment
 
-- **Platform:** Railway. The production environment runs four services — three app services (deployed from this repo) plus a managed database:
+- **Platform:** Railway. The production environment runs app services (deployed from this repo) plus a managed database:
   - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
   - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers`, `restartPolicyType = NEVER`
   - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
+  - **digest-cron** (`railway.digest-cron.toml`): scheduled cron running `python manage.py weekly_digest`, `restartPolicyType = NEVER`. Set up manually per `deployment-notes.md` (not wired into `deploy-production.yml`, unlike the other two crons, since that requires a Railway service ID secret to be provisioned first)
   - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`
 - **Images / DB backups:** Cloudflare R2 (free tier: 10 GB / 10M reads)
 - **Static files:** WhiteNoise

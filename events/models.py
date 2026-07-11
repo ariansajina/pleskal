@@ -98,6 +98,11 @@ class Event(models.Model):
                 name="unique_event_title_start_datetime",
             )
         ]
+        indexes = [
+            # Every public listing query filters is_draft + start_datetime and
+            # sorts by start_datetime (event list, map, feeds).
+            models.Index(fields=["is_draft", "start_datetime"]),
+        ]
 
     def __str__(self):
         return self.title

@@ -1,5 +1,6 @@
 """iCal and RSS feed views for upcoming events."""
 
+import hashlib
 import re
 
 from django.contrib.syndication.views import Feed
@@ -51,10 +52,30 @@ def _upcoming_qs(
     return qs
 
 
+def _stable_uid(event: Event) -> str:
+    """Return an iCal UID that survives the importer's delete+recreate cycle.
+
+    Scraped events are matched for upsert/deletion on
+    (external_source, source_url, start_datetime) — see base_import.py — but
+    a delete+recreate assigns a fresh DB UUID, which previously became the
+    iCal UID and made subscriber calendars treat the re-imported event as a
+    brand new one (duplicate entries). Deriving the UID from the same match
+    key instead keeps it stable across that cycle. User-submitted events
+    (blank external_source) aren't subject to delete+recreate, so the DB UUID
+    remains a fine, unique UID for them.
+    """
+    if event.external_source and event.source_url:
+        start_iso = event.start_datetime.isoformat()  # ty: ignore[unresolved-attribute]
+        basis = f"{event.external_source}|{event.source_url}|{start_iso}"
+        digest = hashlib.sha1(basis.encode(), usedforsecurity=False).hexdigest()
+        return f"{digest}@pleskal.dk"
+    return f"{event.id}@pleskal.dk"
+
+
 def _build_vevent(event: Event) -> ICalEvent:
     """Build an iCalendar VEVENT component from an Event instance."""
     vevent = ICalEvent()
-    vevent.add("uid", str(event.id))
+    vevent.add("uid", _stable_uid(event))
     vevent.add("summary", event.title)
     vevent.add("dtstart", event.start_datetime)
     if event.end_datetime:

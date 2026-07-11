@@ -256,6 +256,20 @@ class BaseEventImportCommand(BaseCommand):
 
         created = updated = deleted = skipped = 0
 
+        # ── Resolve images up front, outside any DB transaction ─────────────
+        # Downloading + uploading images is network I/O (up to 20s per image);
+        # doing it before the transaction opens (rather than inside the
+        # per-event atomic block) means a slow image never holds a Postgres
+        # transaction open.
+        image_names: dict[tuple[str, datetime.datetime], str | None] = {}
+        if not dry_run:
+            for key, rec in incoming.items():
+                existing_event = existing.get(key)
+                has_existing_image = bool(existing_event and existing_event.image.name)
+                image_names[key] = self._resolve_image_storage_name(
+                    rec, has_existing_image, skip_images
+                )
+
         with transaction.atomic():
             # ── Upsert ────────────────────────────────────────────────────────
             for key, rec in incoming.items():
@@ -317,8 +331,10 @@ class BaseEventImportCommand(BaseCommand):
                                 with transaction.atomic():
                                     for k, v in fields.items():
                                         setattr(event, k, v)
+                                    image_name = image_names.get(key)
+                                    if image_name:
+                                        event.image.name = image_name
                                     event.save()
-                                    self._maybe_update_image(event, rec, skip_images)
                                 self.stdout.write(
                                     self.style.SUCCESS(
                                         f"  UPDATED  {rec['title'][:60]}"
@@ -340,8 +356,10 @@ class BaseEventImportCommand(BaseCommand):
                         try:
                             with transaction.atomic():
                                 event = Event(**fields)
+                                image_name = image_names.get(key)
+                                if image_name:
+                                    event.image.name = image_name
                                 event.save()
-                                self._maybe_update_image(event, rec, skip_images)
                             self.stdout.write(
                                 self.style.SUCCESS(f"  CREATED  {rec['title'][:60]}")
                             )
@@ -426,21 +444,24 @@ class BaseEventImportCommand(BaseCommand):
 
         return True
 
-    def _maybe_update_image(self, event: Event, rec: dict, skip_images: bool) -> None:
-        """Download and attach the event image if it isn't already set.
+    def _resolve_image_storage_name(
+        self, rec: dict, has_existing_image: bool, skip_images: bool
+    ) -> str | None:
+        """Download, validate, and upload the record's image; return its storage name.
 
-        Images are stored with content-addressed filenames (events/img_<sha256>.webp)
-        so that multiple events importing the same source image share one file in
-        storage rather than storing independent copies.
+        Pure I/O — no DB writes here, deliberately: this is called *before* the
+        per-event DB transaction opens so a slow/stalled image download (up to
+        20s) or storage upload doesn't hold a Postgres transaction open. Images
+        are stored with content-addressed filenames (events/img_<sha256>.webp)
+        so that multiple events importing the same source image share one file
+        in storage rather than storing independent copies. Returns None if no
+        new image is available/needed; failures are logged, never raised.
         """
-        if skip_images:
-            return
+        if skip_images or has_existing_image:
+            return None
         image_url = rec.get("image_url", "")
         if not image_url:
-            return
-        # Don't re-download if the event already has an image
-        if event.image.name:
-            return
+            return None
 
         # SSRF mitigation: only download from explicitly allowed domains.
         if self.allowed_image_domains:
@@ -453,17 +474,17 @@ class BaseEventImportCommand(BaseCommand):
                 self.stderr.write(
                     f"    Blocked image from non-allowlisted domain '{host}': {image_url}"
                 )
-                return
+                return None
         else:
             self.stderr.write(
                 f"    No allowed_image_domains set for {self.external_source}; skipping image"
             )
-            return
+            return None
 
         result = _download_image(image_url, self.allowed_image_domains)
         if result is None:
             self.stderr.write(f"    Could not download image: {image_url}")
-            return
+            return None
 
         _filename, data = result
         try:
@@ -478,15 +499,10 @@ class BaseEventImportCommand(BaseCommand):
             storage_name = f"events/img_{hash_hex}.webp"
 
             if default_storage.exists(storage_name):
-                event.image.name = storage_name
-                event.save(update_fields=["image"])
-            else:
-                saved_name = default_storage.save(
-                    storage_name, ContentFile(content_bytes, name=storage_name)
-                )
-                event.image.name = saved_name
-                event.save(update_fields=["image"])
-        except Exception as exc:
-            self.stderr.write(
-                f"    Image save failed for {str(event.title)[:40]}: {exc}"
+                return storage_name
+            return default_storage.save(
+                storage_name, ContentFile(content_bytes, name=storage_name)
             )
+        except Exception as exc:
+            self.stderr.write(f"    Image processing failed for {image_url}: {exc}")
+            return None
