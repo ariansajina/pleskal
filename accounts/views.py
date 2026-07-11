@@ -85,9 +85,17 @@ class EditProfileView(LoginRequiredMixin, View):
         User.email is left untouched here; allauth's email_confirmed flow
         (ACCOUNT_CHANGE_EMAIL=True) promotes the new address to primary and
         removes the old one only once the user clicks the confirmation link.
+
+        Drops any other unverified, non-primary EmailAddress this user
+        already holds first — otherwise repeated "change my email" requests
+        (typo, resend, changed their mind) pile up stale pending rows that
+        never get cleaned up on their own.
         """
         from allauth.account.models import EmailAddress
 
+        EmailAddress.objects.filter(
+            user=request.user, verified=False, primary=False
+        ).delete()
         EmailAddress.objects.add_email(request, request.user, new_email, confirm=True)
 
 
@@ -125,10 +133,17 @@ class RateLimitedLoginView(RateLimitMixin, auth_views.LoginView):
         from allauth.account.models import EmailAddress
 
         user = form.get_user()
-        # Block login if the user has an unverified EmailAddress record.
+        # Block login only if the address the user is logging in with is
+        # itself unverified. Scoping to user.email (rather than "any
+        # unverified row on this user") matters once EditProfileView can
+        # leave a *different*, not-yet-confirmed address on the account
+        # (see _send_email_change_confirmation) — that pending row must
+        # never lock the user out of their still-verified login email.
         # Users without an EmailAddress record (e.g. created via management
         # commands or before allauth was added) are allowed through.
-        if EmailAddress.objects.filter(user=user, verified=False).exists():
+        if EmailAddress.objects.filter(
+            user=user, email__iexact=user.email, verified=False
+        ).exists():
             messages.error(
                 self.request,
                 "Please verify your email address before logging in. "
