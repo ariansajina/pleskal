@@ -3,6 +3,7 @@
 import io
 
 import pytest
+from django.contrib.messages import get_messages
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -279,8 +280,8 @@ class TestEventCreateView:
         resp = client.get(reverse("event_create"))
         assert resp.status_code == 200
 
-    def test_image_preserved_on_validation_failure(self, client):
-        """Image uploaded in a failed form submission should be used on re-submission."""
+    def test_image_not_preserved_on_validation_failure(self, client):
+        """An uploaded image is not stashed anywhere across a failed submission."""
         user = UserFactory.create()
         client.force_login(user)
         img = _make_image_upload()
@@ -300,14 +301,12 @@ class TestEventCreateView:
         )
         assert resp.status_code == 200  # form re-rendered with errors
         assert not Event.objects.filter(title="Event With Image Issue").exists()
+        assert "pending_image" not in client.session
+        messages = [str(m) for m in get_messages(resp.wsgi_request)]
+        assert any("re-select your image" in m for m in messages)
 
-        # Verify the image is in session as pending_image
-        session = client.session
-        assert "pending_image" in session
-        assert session["pending_image"]["name"] == "test.jpg"
-
-        # Second submission: fixed times, no image re-selected
-        # The image should be used from session
+        # Second submission: fixed times, no image re-selected — must fail
+        # since nothing was preserved.
         resp = client.post(
             reverse("event_create"),
             {
@@ -323,10 +322,8 @@ class TestEventCreateView:
         )
         assert resp.status_code == 302  # redirect on success
 
-        # Verify the event was created with the preserved image
         event = Event.objects.get(title="Event With Image Issue")
-        assert event.image  # Image should be present
-        assert event.image.storage.exists(event.image.name)
+        assert not event.image
 
     def test_corrupt_image_rejected_with_form_error(self, client):
         """A non-image upload must re-render the form, not raise a 500."""
@@ -346,33 +343,9 @@ class TestEventCreateView:
         assert resp.status_code == 200
         assert "image" in resp.context["form"].errors
         assert not Event.objects.filter(title="Corrupt Image Event").exists()
-        # A known-bad upload must not be preserved for re-submission
-        assert "pending_image" not in client.session
-
-    def test_corrupt_pending_image_rejected_with_form_error(self, client):
-        """A corrupt image restored from the session must surface a form error."""
-        user = UserFactory.create()
-        client.force_login(user)
-        session = client.session
-        session["pending_image"] = {
-            "name": "bad.jpg",
-            "content": b"not an image".hex(),
-        }
-        session.save()
-        resp = client.post(
-            reverse("event_create"),
-            {
-                "title": "Corrupt Pending Image Event",
-                "date": _future_dt(3).strftime("%Y-%m-%d"),
-                "start_time": _future_dt(3).strftime("%H:%M"),
-                "venue_name": "Gallery",
-                "category": "performance",
-                "submit_action": "publish",
-            },
-        )
-        assert resp.status_code == 200
-        assert "image" in resp.context["form"].errors
-        assert not Event.objects.filter(title="Corrupt Pending Image Event").exists()
+        # No reprompt message when the image itself is what failed.
+        messages = [str(m) for m in get_messages(resp.wsgi_request)]
+        assert not any("re-select your image" in m for m in messages)
 
 
 @pytest.mark.django_db
@@ -930,8 +903,8 @@ class TestEventUpdateView:
         event.refresh_from_db()
         assert event.slug == original_slug
 
-    def test_image_preserved_on_validation_failure(self, client):
-        """When editing, image uploaded in a failed form submission should be used on re-submission."""
+    def test_image_not_preserved_on_validation_failure(self, client):
+        """When editing, an image is not stashed anywhere across a failed submission."""
         user = UserFactory.create()
         event = EventFactory.create(submitted_by=user)
         client.force_login(user)
@@ -953,14 +926,12 @@ class TestEventUpdateView:
             },
         )
         assert resp.status_code == 200  # form re-rendered with errors
+        assert "pending_image" not in client.session
+        messages = [str(m) for m in get_messages(resp.wsgi_request)]
+        assert any("re-select your image" in m for m in messages)
 
-        # Verify the image is in session as pending_image
-        session = client.session
-        assert "pending_image" in session
-        assert session["pending_image"]["name"] == "test.jpg"
-
-        # Second submission: fixed times, no image re-selected
-        # The image should be used from session
+        # Second submission: fixed times, no image re-selected — nothing was
+        # preserved, so the event stays without an image.
         resp = client.post(
             reverse("event_edit", kwargs={"slug": event.slug}),
             {
@@ -976,15 +947,8 @@ class TestEventUpdateView:
         )
         assert resp.status_code == 302  # redirect on success
 
-        # Verify the event now has an image
         event.refresh_from_db()
-        assert event.image  # Image should be present from pending_image
-        from typing import cast
-
-        from django.db.models.fields.files import FieldFile
-
-        image = cast(FieldFile, event.image)
-        assert image.storage.exists(image.name)
+        assert not event.image
 
     def test_corrupt_image_rejected_with_form_error(self, client):
         """A non-image upload on edit must re-render the form, not raise a 500."""
@@ -1007,7 +971,8 @@ class TestEventUpdateView:
         assert "image" in resp.context["form"].errors
         event.refresh_from_db()
         assert not event.image
-        assert "pending_image" not in client.session
+        messages = [str(m) for m in get_messages(resp.wsgi_request)]
+        assert not any("re-select your image" in m for m in messages)
 
 
 @pytest.mark.django_db
