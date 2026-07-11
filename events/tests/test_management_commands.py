@@ -1163,3 +1163,51 @@ class TestStaleDeletionGuard:
         _write_json([], f)
         call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 0
+
+
+# ---------------------------------------------------------------------------
+# Image backfill for unchanged events (nightly re-download waste bug)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestImageBackfillOnUnchangedEvent:
+    def test_unchanged_event_still_gets_image_attached(self, settings, tmp_path):
+        """An event imported once without an image, then re-imported unchanged
+        except for now having an image_url, must have the image attached —
+        not silently downloaded/uploaded and discarded every run."""
+        settings.MEDIA_ROOT = tmp_path
+        event_rec = {**SAMPLE_EVENT, "image_url": ""}
+        f = tmp_path / "events.json"
+        _write_json([event_rec], f)
+        call_command("import_events", "dansehallerne", str(f))
+        event = Event.objects.get(external_source="dansehallerne")
+        assert not event.image.name
+
+        image_bytes = _make_jpeg_bytes()
+        event_rec_with_image = {
+            **event_rec,
+            "image_url": "https://dansehallerne.dk/img.jpg",
+        }
+        _write_json([event_rec_with_image], f)
+        with patch(
+            "events.management.commands.base_import._download_image",
+            return_value=("img.jpg", image_bytes),
+        ):
+            call_command("import_events", "dansehallerne", str(f))
+
+        event.refresh_from_db()
+        assert event.image.name, "Image should be backfilled onto the unchanged event"
+
+    def test_unchanged_event_without_image_url_downloads_nothing(self, tmp_path):
+        """No image_url in the record at all — no download should be attempted
+        regardless of whether other fields changed."""
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        with patch(
+            "events.management.commands.base_import._download_image"
+        ) as mock_download:
+            call_command("import_events", "dansehallerne", str(f))
+        mock_download.assert_not_called()
