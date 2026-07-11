@@ -378,20 +378,14 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 
 - `MyInvitesView`: GET lists user's claim codes (filterable by all/active/claimed); POST generates a new batch (limited to `CLAIM_CODES_PER_BATCH` codes, expires in `CLAIM_CODE_EXPIRY_DAYS` days); supports HTMX partial swap
 
-## Remote Session Requirements
+## Claude Code Hooks
 
-When running as a Claude Code remote agent (e.g. via the web or API), **before creating a pull request** you must:
+This repo ships `.claude/hooks/` + `.claude/settings.json` for remote/web sessions (gated on `CLAUDE_CODE_REMOTE=true`, no-op locally):
 
-1. Run pre-commit hooks across all files and fix any issues:
-   ```bash
-   pre-commit run --all-files
-   ```
-2. Run the full test suite and fix any failures:
-   ```bash
-   uv run pytest -n auto
-   ```
+- **`session-start.sh`** (`SessionStart`): runs `uv sync --dev`, `npm install`, and `pre-commit install --install-hooks` at session start, so dependencies are ready without spending turns on setup.
+- **`pre-pr-check.sh`** (`PreToolUse`, matches `create_pull_request`): runs `pre-commit run --all-files` — ruff format, ruff check, ty check, and the full `pytest -n 8` suite (see `.pre-commit-config.yaml`) — and blocks PR creation with the failure output until it's clean.
 
-Do not open a PR until both commands pass cleanly.
+Because of this hook, **do not manually run `ruff format`, `ruff check`, `ty check`, or `pytest` before opening a PR** — the hook runs them automatically and will block the PR creation tool call if anything fails, feeding the failure output back for you to fix and retry. Manually re-running these first just duplicates the check. Only run them ad hoc if you want a mid-task sanity check on a single file, or if the hook itself surfaces a failure to diagnose.
 
 ## CI / CD
 
