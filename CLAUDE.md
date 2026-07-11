@@ -8,7 +8,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 
 ## Tech Stack
 
-- **Framework:** Django 6.0.3+ (Python 3.14+)
+- **Framework:** Django 6.0.3+ (Python 3.13+)
 - **Database:** PostgreSQL (production), SQLite (dev default)
 - **Frontend:** Django templates + HTMX (no JS framework)
 - **Styling:** Tailwind CSS 4.0 (built via CLI)
@@ -178,7 +178,7 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 ### Style & Linting
 
 - **Line length:** 88 (ruff default)
-- **Python target:** 3.13 (ruff target; runtime requires Python 3.14+)
+- **Python target:** 3.13 (ruff target; matches `requires-python`)
 - **Ruff rules:** E, F, I (isort), UP (pyupgrade), B (bugbear), SIM (simplify), S (security); E501 ignored
 - **Per-file ignores:** tests allow S101 (assert), S106 (hardcoded password), S314
 - **Migrations excluded** from linting

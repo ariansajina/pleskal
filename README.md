@@ -14,7 +14,7 @@ Copenhagen has a vibrant dance scene spread across many venues, studios, and org
 
 ## Tech Stack
 
-- **Backend:** Django 6 · Python 3.14+
+- **Backend:** Django 6 · Python 3.13+
 - **Database:** PostgreSQL (production) · SQLite (dev)
 - **Frontend:** Django templates + HTMX
 - **Styling:** Tailwind CSS 4
