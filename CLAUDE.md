@@ -52,7 +52,7 @@ events/
   sharing.py           # Apple/Google calendar URL builders used by detail page
   signals.py           # Event-related signal handlers
   context_processors.py  # Template context (e.g. MAP_VIEW_ENABLED for nav)
-  validators.py        # Image format/size and URL validators
+  validators.py        # URL scheme validator (image format/size validation lives in images.py)
   urls.py              # Event URL patterns
   templatetags/
     markdown_filters.py   # render_markdown filter (nh3 sanitized)
@@ -78,7 +78,7 @@ accounts/
 
 config/
   settings.py        # Django settings
-  urls.py            # Root URL conf (includes /health/, /manifest.webmanifest, /service-worker.js, /offline/)
+  urls.py            # Root URL conf (includes /health/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's upload/markdownify views with login_required (its default urls.py mounts them unauthenticated)
   ratelimit.py       # Cache-based RateLimitMixin
   middleware.py      # ContentSecurityPolicyMiddleware
   pwa.py             # PWA endpoints: manifest, service worker, offline fallback page
