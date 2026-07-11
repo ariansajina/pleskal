@@ -221,7 +221,9 @@ class Command(BaseCommand):
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump([], f)
-            import_kwargs: dict = {"json_file": tmp_path}
+            # An empty event list always trips the importer's stale-deletion
+            # sanity guard, so retirement must explicitly force it.
+            import_kwargs: dict = {"json_file": tmp_path, "force_delete": True}
             if dry_run:
                 import_kwargs["dry_run"] = True
             call_command("import_events", name, **import_kwargs)

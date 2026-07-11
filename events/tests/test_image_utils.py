@@ -84,3 +84,41 @@ class TestValidateAndProcess:
         result = validate_and_process(upload)
         out = Image.open(io.BytesIO(result.read()))
         assert out.mode == "RGB"
+
+    def test_rgba_transparency_composited_onto_white(self, settings):
+        settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+        settings.MAX_IMAGE_DIMENSION = 1200
+        settings.IMAGE_WEBP_QUALITY = 70
+        buf = io.BytesIO()
+        # Fully transparent red pixel should become white, not black.
+        Image.new("RGBA", (10, 10), color=(255, 0, 0, 0)).save(buf, format="PNG")
+        upload = SimpleUploadedFile(
+            "rgba.png", buf.getvalue(), content_type="image/png"
+        )
+        result = validate_and_process(upload)
+        out = Image.open(io.BytesIO(result.read())).convert("RGB")
+        assert out.getpixel((5, 5)) == (255, 255, 255)
+
+    def test_cmyk_converted_without_crashing(self, settings):
+        settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+        settings.MAX_IMAGE_DIMENSION = 1200
+        settings.IMAGE_WEBP_QUALITY = 70
+        buf = io.BytesIO()
+        Image.new("CMYK", (100, 100)).save(buf, format="TIFF")
+        upload = SimpleUploadedFile(
+            "cmyk.tiff", buf.getvalue(), content_type="image/tiff"
+        )
+        result = validate_and_process(upload)
+        out = Image.open(io.BytesIO(result.read()))
+        assert out.format == "WEBP"
+
+    def test_palette_mode_converted(self, settings):
+        settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+        settings.MAX_IMAGE_DIMENSION = 1200
+        settings.IMAGE_WEBP_QUALITY = 70
+        buf = io.BytesIO()
+        Image.new("RGB", (50, 50)).convert("P").save(buf, format="PNG")
+        upload = SimpleUploadedFile("p.png", buf.getvalue(), content_type="image/png")
+        result = validate_and_process(upload)
+        out = Image.open(io.BytesIO(result.read()))
+        assert out.format == "WEBP"

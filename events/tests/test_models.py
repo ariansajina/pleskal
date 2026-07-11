@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.templatetags.static import static
 from django.utils import timezone
 
-from ..models import DEFAULT_EVENT_IMAGE
+from ..models import DEFAULT_EVENT_IMAGE, MAX_SLUG_LENGTH
 from .factories import EventFactory
 
 
@@ -44,6 +44,14 @@ class TestSlugGeneration:
     def test_empty_title_fallback_slug(self):
         event = EventFactory.create(title="---")  # slugify produces empty string
         assert event.slug == "event"
+
+    def test_slug_never_exceeds_column_max_length_on_collision(self):
+        long_title = "a" * 250
+        e1 = EventFactory.create(title=long_title)
+        e2 = EventFactory.create(title=long_title)
+        assert len(str(e1.slug)) <= MAX_SLUG_LENGTH
+        assert len(str(e2.slug)) <= MAX_SLUG_LENGTH
+        assert e2.slug != e1.slug
 
 
 @pytest.mark.django_db

@@ -18,6 +18,7 @@ MAX_TITLE_LENGTH = 250
 MAX_VENUE_LENGTH = 200
 MAX_PRICE_NOTE_LENGTH = 200
 MAX_SOURCE_URL_LENGTH = 200
+MAX_SLUG_LENGTH = 250
 
 # Default images shown when an event has no scraped/uploaded image of its own.
 # Keyed by Event.external_source; static paths under static/images/defaults/.
@@ -32,7 +33,7 @@ DEFAULT_PUBLISHER_IMAGES = {
     "toastercph": "images/defaults/toastercph.webp",
     "warehouse9": "images/defaults/warehouse9.webp",
 }
-DEFAULT_EVENT_IMAGE = "images/logo.PNG"
+DEFAULT_EVENT_IMAGE = "images/logo.png"
 
 
 class EventCategory(models.TextChoices):
@@ -50,7 +51,7 @@ class Event(models.Model):
     DoesNotExist: type[ObjectDoesNotExist]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    slug = models.SlugField(max_length=250, unique=True, editable=False)
+    slug = models.SlugField(max_length=MAX_SLUG_LENGTH, unique=True, editable=False)
     title = models.CharField(max_length=MAX_TITLE_LENGTH)
     description = models.TextField(blank=True, max_length=4000)
     image = models.ImageField(
@@ -108,7 +109,10 @@ class Event(models.Model):
 
     def _generate_unique_slug(self):
         """Generate a unique slug from the title, appending a suffix on collision."""
-        base_slug = slugify(self.title)[:MAX_TITLE_LENGTH]
+        # Reserve room for "-<4 hex chars>" so a colliding slug never exceeds
+        # the slug column's max_length.
+        suffix_room = 5
+        base_slug = slugify(self.title)[: MAX_SLUG_LENGTH - suffix_room]
         if not base_slug:
             base_slug = "event"
         slug = base_slug

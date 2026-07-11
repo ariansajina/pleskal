@@ -17,7 +17,6 @@ dependencies = [
     "sentry-sdk[django]>=2.0",
     "whitenoise>=6.8",
     "icalendar>=6.0",
-    "pytest-xdist>=3.8.0",
     "zxcvbn>=4.4",
     "requests>=2.32.5",
     "beautifulsoup4>=4.14.3",
@@ -40,6 +39,7 @@ dev = [
     "django-debug-toolbar>=5.0",
     "ty>=0.0.23",
     "pre-commit>=4.0",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.ruff]
@@ -75,5 +75,5 @@ addopts = "--reuse-db -n 8"
 
 [tool.coverage.run]
 source = ["."]
-omit = ["*/migrations/*", "*/tests/*", "manage.py", "config/*"]
+omit = ["*/migrations/*", "*/tests/*", "manage.py"]
 relative_files = true

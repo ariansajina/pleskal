@@ -1,53 +1,7 @@
-import io
-
 import pytest
 from django.core.exceptions import ValidationError
-from django.core.files.uploadedfile import SimpleUploadedFile
-from PIL import Image
 
-from ..validators import validate_image_file, validate_url_scheme
-
-
-class TestValidateImageFile:
-    def _make_image(self, fmt="JPEG", size=(100, 100)):
-        buf = io.BytesIO()
-        img = Image.new("RGB", size)
-        img.save(buf, format=fmt)
-        buf.seek(0)
-        return SimpleUploadedFile(
-            f"test.{fmt.lower()}",
-            buf.read(),
-            content_type=f"image/{fmt.lower()}",
-        )
-
-    def test_valid_jpeg(self):
-        f = self._make_image("JPEG")
-        validate_image_file(f)  # Should not raise
-
-    def test_valid_png(self):
-        f = self._make_image("PNG")
-        validate_image_file(f)
-
-    def test_valid_webp(self):
-        f = self._make_image("WEBP")
-        validate_image_file(f)
-
-    def test_invalid_format_rejected(self):
-        f = self._make_image("BMP")
-        with pytest.raises(ValidationError, match="JPEG, PNG, WebP, or HEIC"):
-            validate_image_file(f)
-
-    def test_oversized_file_rejected(self):
-        # Create a file that reports size > 10MB
-        f = self._make_image("JPEG")
-        f.size = 11 * 1024 * 1024
-        with pytest.raises(ValidationError, match="10 MB"):
-            validate_image_file(f)
-
-    def test_invalid_file_rejected(self):
-        f = SimpleUploadedFile("test.jpg", b"not an image", content_type="image/jpeg")
-        with pytest.raises(ValidationError, match="valid image"):
-            validate_image_file(f)
+from ..validators import validate_url_scheme
 
 
 class TestValidateUrlScheme:

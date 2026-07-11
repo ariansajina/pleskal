@@ -12,12 +12,15 @@ import datetime
 import hashlib
 import io
 import json
+import math
 import os
 import urllib.request
 from pathlib import Path
 
+import sentry_sdk
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 
 from events.models import (
     MAX_PRICE_NOTE_LENGTH,
@@ -27,6 +30,16 @@ from events.models import (
     Event,
     EventCategory,
 )
+
+# If a scraper returns fewer than this fraction of a source's existing future
+# events, stale deletion is skipped — a near-empty result is more likely a
+# broken scraper than a real drop in events. Legitimate source retirement goes
+# through --force-delete instead (see run_scrapers._cleanup_source).
+STALE_DELETION_MIN_RATIO = 0.5
+# Below this many existing future events, the ratio check is too noisy to be
+# useful (a source with 2 events going to 0 is a normal, small event calendar
+# emptying out, not evidence of scraper breakage) — skip the guard entirely.
+STALE_DELETION_GUARD_MIN_EXISTING = 4
 
 
 def _validate_field_lengths(rec: dict, title_for_log: str) -> tuple[bool, str | None]:
@@ -71,10 +84,41 @@ def _parse_dt(iso_str: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(iso_str)
 
 
-def _download_image(url: str) -> tuple[str, bytes] | None:
+MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024  # 20 MB; mirrors the image upload cap
+
+
+def _host_allowed(host: str, allowed_domains: frozenset[str]) -> bool:
+    return any(host == d or host.endswith("." + d) for d in allowed_domains)
+
+
+class _AllowlistedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse to follow a redirect whose target host isn't in the allowlist.
+
+    ``urllib.request.urlopen`` follows redirects transparently, which would
+    otherwise let a compromised/misconfigured venue site redirect the scraper
+    off the allowlisted domain (e.g. to an internal endpoint).
+    """
+
+    def __init__(self, allowed_domains: frozenset[str]):
+        self.allowed_domains = allowed_domains
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        from urllib.parse import urlparse
+
+        host = urlparse(newurl).hostname or ""
+        if not _host_allowed(host, self.allowed_domains):
+            raise OSError(f"Redirect to non-allowlisted host '{host}' blocked")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _download_image(
+    url: str, allowed_domains: frozenset[str] = frozenset()
+) -> tuple[str, bytes] | None:
     """
     Download an image from *url* and return (filename, bytes).
-    Returns None on any error.
+    Returns None on any error. Redirects to hosts outside *allowed_domains*
+    are refused (SSRF mitigation); pass an empty frozenset to skip the check
+    (only used where the caller has no allowlist context).
     """
     if not url or not url.startswith("https://"):
         return None
@@ -83,8 +127,13 @@ def _download_image(url: str) -> tuple[str, bytes] | None:
             url,
             headers={"User-Agent": "Mozilla/5.0 (compatible; pleskalScraper/1.0)"},
         )
-        with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310
-            data = resp.read()
+        opener = urllib.request.build_opener(
+            _AllowlistedRedirectHandler(allowed_domains)
+        )
+        with opener.open(req, timeout=20) as resp:
+            data = resp.read(MAX_DOWNLOAD_BYTES + 1)
+        if len(data) > MAX_DOWNLOAD_BYTES:
+            return None
         filename = os.path.basename(url.split("?")[0]) or "image.jpg"
         return filename, data
     except Exception:
@@ -138,6 +187,15 @@ class BaseEventImportCommand(BaseCommand):
             help="Do not delete stale events that are absent from the JSON.",
         )
         parser.add_argument(
+            "--force-delete",
+            action="store_true",
+            help=(
+                "Bypass the sanity-threshold guard and delete all stale events "
+                "even if the incoming set looks implausibly small (e.g. source "
+                "retirement, which imports an empty event list on purpose)."
+            ),
+        )
+        parser.add_argument(
             "--skip-images",
             action="store_true",
             help="Do not download or update event images.",
@@ -157,6 +215,7 @@ class BaseEventImportCommand(BaseCommand):
 
         dry_run = options["dry_run"]
         no_delete = options["no_delete"]
+        force_delete = options["force_delete"]
         skip_images = options["skip_images"]
 
         try:
@@ -293,7 +352,9 @@ class BaseEventImportCommand(BaseCommand):
                     created += 1
 
             # ── Stale deletion ────────────────────────────────────────────────
-            if not no_delete:
+            if not no_delete and self._stale_deletion_is_safe(
+                existing, incoming, force_delete
+            ):
                 stale_keys = set(existing.keys()) - set(incoming.keys())
                 for key in stale_keys:
                     event = existing[key]
@@ -321,6 +382,49 @@ class BaseEventImportCommand(BaseCommand):
             )
         else:
             self.stdout.write(self.style.SUCCESS(f"Done.  {summary}"))
+
+    def _stale_deletion_is_safe(
+        self,
+        existing: dict[tuple[str, datetime.datetime], Event],
+        incoming: dict[tuple[str, datetime.datetime], dict],
+        force_delete: bool,
+    ) -> bool:
+        """Guard against wiping a source's events on partial scraper failure.
+
+        Compares *future* event counts only — past events naturally age out of
+        the incoming set and shouldn't count against the scraper. Returns
+        False (skip deletion, report to Sentry) when the incoming future
+        count looks implausibly low vs. what's already in the DB.
+        """
+        if force_delete:
+            return True
+
+        now = timezone.now()
+        existing_future_count = sum(
+            1
+            for key in existing
+            if key[1] >= now  # key[1] is start_dt_utc
+        )
+        if existing_future_count < STALE_DELETION_GUARD_MIN_EXISTING:
+            return True
+
+        incoming_future_count = sum(1 for key in incoming if key[1] >= now)
+        min_required = math.ceil(STALE_DELETION_MIN_RATIO * existing_future_count)
+
+        if incoming_future_count < min_required:
+            message = (
+                f"Stale-deletion guard tripped for '{self.external_source}': "
+                f"only {incoming_future_count} future events scraped vs. "
+                f"{existing_future_count} existing in DB (need >= {min_required}). "
+                "Skipping deletion; use --force-delete to override."
+            )
+            self.stderr.write(self.style.ERROR(f"  {message}"))
+            with sentry_sdk.new_scope() as scope:
+                scope.set_tag("scraper", self.external_source)
+                sentry_sdk.capture_message(message, level="warning")
+            return False
+
+        return True
 
     def _maybe_update_image(self, event: Event, rec: dict, skip_images: bool) -> None:
         """Download and attach the event image if it isn't already set.
@@ -356,7 +460,7 @@ class BaseEventImportCommand(BaseCommand):
             )
             return
 
-        result = _download_image(image_url)
+        result = _download_image(image_url, self.allowed_image_domains)
         if result is None:
             self.stderr.write(f"    Could not download image: {image_url}")
             return

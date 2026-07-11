@@ -1,9 +1,11 @@
 from django.conf import settings
 from django.contrib import admin
+from django.contrib.auth.decorators import login_required
 from django.contrib.sitemaps.views import sitemap
 from django.http import HttpResponse
 from django.urls import include, path
 from django.views.decorators.cache import cache_control
+from markdownx.views import ImageUploadView, MarkdownifyView
 
 from accounts.views import ClaimCodeView, ClaimRegisterView
 from config.pwa import manifest_view, offline_view, service_worker_view
@@ -62,7 +64,19 @@ urlpatterns = [
     # allauth provides email confirmation views (/accounts/confirm-email/<key>/).
     # Our custom views above shadow allauth's login/logout/signup routes.
     path("accounts/", include("allauth.urls")),
-    path("markdownx/", include("markdownx.urls")),
+    # markdownx's default urls.py mounts these views with no auth requirement;
+    # wrap them with login_required since only authenticated users can edit
+    # markdown content (event descriptions, bios).
+    path(
+        "markdownx/upload/",
+        login_required(ImageUploadView.as_view()),
+        name="markdownx_upload",
+    ),
+    path(
+        "markdownx/markdownify/",
+        login_required(MarkdownifyView.as_view()),
+        name="markdownx_markdownify",
+    ),
     path("", include("events.urls")),
 ]
 

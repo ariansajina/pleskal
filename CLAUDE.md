@@ -221,7 +221,7 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 - Brute-force: django-axes (5 failures = 30 min IP lockout)
 - Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's `incr()` TTL behavior; limits per endpoint listed below
 - CSP: `ContentSecurityPolicyMiddleware` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
-- Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; auto-migrates legacy PBKDF2 hashes on login
+- Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
 
 ### Rate Limits (current)
@@ -286,7 +286,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 |---|---|
 | `id` | UUID PK |
 | `slug` | Auto-generated, immutable, collision-safe (random 2-byte hex suffix) |
-| `title` | Max 200 chars, min 3 chars |
+| `title` | Max 250 chars, min 3 chars |
 | `description` | Markdown |
 | `image` | Optional; WebP, max 10 MB, 1200px max dimension, EXIF stripped |
 | `start_datetime` | Must be future on creation, max 1 year out |

@@ -10,10 +10,9 @@ Passwords are processed in two stages before storage:
 2. **Hash** — the peppered value is fed into Django's Argon2id hasher,
    providing strong brute-force resistance.
 
-``PASSWORD_HASHERS`` lists this hasher first (new/updated passwords) and plain
-``PBKDF2PasswordHasher`` as a fallback for any legacy hashes.  Django
-automatically re-hashes a legacy password with the primary hasher on the next
-successful login, so the transition is transparent to users.
+``PASSWORD_HASHERS`` lists only this hasher — there is no PBKDF2 (or other)
+fallback configured. Every user's password must have been created or migrated
+to this hasher; a stored hash using any other algorithm cannot be verified.
 """
 
 import base64
