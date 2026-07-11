@@ -6,6 +6,8 @@ from markdownx.widgets import MarkdownxWidget
 
 User = get_user_model()
 
+EMAIL_ALREADY_IN_USE_ERROR = "This email address is already in use."
+
 
 class CustomAuthenticationForm(AuthenticationForm):
     username = forms.CharField(label="Email")
@@ -80,7 +82,7 @@ class ProfileForm(forms.ModelForm):
         if self.instance:
             user_qs = user_qs.exclude(pk=self.instance.pk)
         if user_qs.exists():
-            raise forms.ValidationError("This email address is already in use.")
+            raise forms.ValidationError(EMAIL_ALREADY_IN_USE_ERROR)
 
         # Also check pending/verified EmailAddress rows (allauth), not just
         # User.email — otherwise two users could each start a change to the
@@ -92,7 +94,7 @@ class ProfileForm(forms.ModelForm):
         if self.instance:
             address_qs = address_qs.exclude(user=self.instance)
         if address_qs.exists():
-            raise forms.ValidationError("This email address is already in use.")
+            raise forms.ValidationError(EMAIL_ALREADY_IN_USE_ERROR)
 
         return email
 
@@ -149,7 +151,7 @@ class ClaimRegisterForm(forms.Form):
     def clean_email(self):
         email = self.cleaned_data["email"]
         if User.objects.filter(email=email).exists():
-            raise forms.ValidationError("This email address is already in use.")
+            raise forms.ValidationError(EMAIL_ALREADY_IN_USE_ERROR)
         return email
 
     def clean_display_name(self):
