@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("events", "0002_event_latitude_event_longitude"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

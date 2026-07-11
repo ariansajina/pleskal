@@ -117,8 +117,9 @@ def _download_image(
     """
     Download an image from *url* and return (filename, bytes).
     Returns None on any error. Redirects to hosts outside *allowed_domains*
-    are refused (SSRF mitigation); pass an empty frozenset to skip the check
-    (only used where the caller has no allowlist context).
+    are refused (SSRF mitigation); an empty frozenset (the default) matches no
+    host, so it blocks every redirect rather than skipping the check — pass
+    the caller's real allowlist to permit redirects within it.
     """
     if not url or not url.startswith("https://"):
         return None
@@ -322,8 +323,15 @@ class BaseEventImportCommand(BaseCommand):
                 if key in existing:
                     event = existing[key]
                     changed = any(getattr(event, k) != v for k, v in fields.items())
+                    # An unchanged event that's still missing an image (backfill
+                    # case) needs to attach image_name too — otherwise the image
+                    # resolved in the pre-pass above is downloaded/uploaded to
+                    # storage every single import run and never attached to
+                    # anything, wasting bandwidth and leaving an orphaned R2
+                    # object each time.
+                    image_name = image_names.get(key)
 
-                    if changed:
+                    if changed or image_name:
                         if dry_run:
                             self.stdout.write(f"  UPDATE  {rec['title'][:60]}")
                         else:
@@ -331,7 +339,6 @@ class BaseEventImportCommand(BaseCommand):
                                 with transaction.atomic():
                                     for k, v in fields.items():
                                         setattr(event, k, v)
-                                    image_name = image_names.get(key)
                                     if image_name:
                                         event.image.name = image_name
                                     event.save()

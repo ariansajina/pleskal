@@ -52,6 +52,25 @@ class TestLoginView:
         # Should not redirect to success — stays on login page (200 or re-render)
         assert response.status_code != 302 or "/accounts/login/" in response.url
 
+    def test_login_not_blocked_by_pending_email_change(self):
+        """A pending (unconfirmed) email change must not lock the user out of
+        logging in with their still-verified original address — regression
+        test for the login gate scoping to any unverified row on the user."""
+        from allauth.account.models import EmailAddress
+
+        user = UserFactory.create(email="old@example.com")
+        _make_verified(user)
+        EmailAddress.objects.create(
+            user=user, email="new@example.com", primary=False, verified=False
+        )
+        client = Client()
+        response = client.post(
+            "/accounts/login/",
+            {"username": "old@example.com", "password": "testpass123"},
+        )
+        assert response.status_code == 302
+        assert "/accounts/login/" not in response.url
+
 
 @pytest.mark.django_db
 class TestLogoutView:
@@ -189,6 +208,26 @@ class TestEditProfileView:
             {"display_name": user.display_name, "email": "same@example.com"},
         )
         assert not EmailAddress.objects.filter(user=user).exists()
+
+    def test_repeated_email_change_does_not_accumulate_pending_rows(self):
+        """A second change request (typo fix, resend, changed their mind)
+        replaces the earlier pending address instead of piling up rows."""
+        from allauth.account.models import EmailAddress
+
+        user = UserFactory.create(email="old@example.com")
+        client = Client()
+        client.force_login(user)
+        client.post(
+            "/accounts/profile/edit/",
+            {"display_name": user.display_name, "email": "typo@example.com"},
+        )
+        client.post(
+            "/accounts/profile/edit/",
+            {"display_name": user.display_name, "email": "fixed@example.com"},
+        )
+        pending = EmailAddress.objects.filter(user=user, verified=False, primary=False)
+        assert pending.count() == 1
+        assert pending.get().email == "fixed@example.com"
 
 
 @pytest.mark.django_db
