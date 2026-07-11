@@ -168,28 +168,19 @@ class UpcomingEventLimitMixin:
         return None
 
 
-def _stash_pending_image(request, form) -> None:
-    """Preserve an uploaded image in the session for re-submission on a failed form.
+def _reprompt_image_if_needed(request, form) -> None:
+    """Warn the user to re-attach their image after an unrelated validation error.
 
-    Skipped when the image itself is what failed validation (no point
-    re-offering a rejected file).
+    Uploaded files aren't preserved across a failed submission, so if the
+    image itself was valid but other fields weren't, the browser will have
+    cleared the file input and the user needs to re-select it.
     """
-    image = request.FILES.get("image")
-    if image and "image" not in form.errors:
-        request.session["pending_image"] = {
-            "name": image.name,
-            "content": image.read().hex(),
-        }
-
-
-def _pop_pending_image(request):
-    """Return a ContentFile built from a stashed pending image, or None."""
-    if "pending_image" not in request.session:
-        return None
-    from django.core.files.base import ContentFile
-
-    pending = request.session.pop("pending_image")
-    return ContentFile(bytes.fromhex(pending["content"]), name=pending["name"])
+    if "image" in request.FILES and "image" not in form.errors:
+        messages.warning(
+            request,
+            "Please re-select your image — it wasn't kept after the "
+            "form errors below were fixed.",
+        )
 
 
 class EventCreateView(
@@ -217,7 +208,7 @@ class EventCreateView(
         return kwargs
 
     def form_invalid(self, form):
-        _stash_pending_image(self.request, form)
+        _reprompt_image_if_needed(self.request, form)
         return super().form_invalid(form)
 
     def form_valid(self, form):
@@ -225,8 +216,7 @@ class EventCreateView(
         event.submitted_by = self.request.user
         event.is_draft = self.request.POST.get("submit_action") == "draft"
 
-        # Process newly uploaded image or use pending image from failed submission
-        image_file = form.cleaned_data.get("image") or _pop_pending_image(self.request)
+        image_file = form.cleaned_data.get("image")
 
         if image_file and not _attach_processed_image(form, event, image_file):
             return self.form_invalid(form)
@@ -242,8 +232,6 @@ class EventCreateView(
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["page_title"] = "Submit an Event"
-        if "pending_image" in self.request.session:
-            ctx["pending_image"] = self.request.session["pending_image"]
         return ctx
 
 
@@ -582,7 +570,7 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
         return kwargs
 
     def form_invalid(self, form):
-        _stash_pending_image(self.request, form)
+        _reprompt_image_if_needed(self.request, form)
         return super().form_invalid(form)
 
     def form_valid(self, form):
@@ -595,8 +583,7 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
             event.is_draft = False
         # If neither button was used (fallback), keep existing value.
 
-        # Process newly uploaded image or use pending image from failed submission
-        image_file = form.cleaned_data.get("image") or _pop_pending_image(self.request)
+        image_file = form.cleaned_data.get("image")
 
         if image_file and not _attach_processed_image(form, event, image_file):
             return self.form_invalid(form)
@@ -611,8 +598,6 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["page_title"] = "Edit Event"
-        if "pending_image" in self.request.session:
-            ctx["pending_image"] = self.request.session["pending_image"]
         return ctx
 
 
