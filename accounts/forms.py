@@ -18,9 +18,22 @@ class CustomAuthenticationForm(AuthenticationForm):
 
 
 class ProfileForm(forms.ModelForm):
+    # Not a model field: changing email requires re-verification (see
+    # EditProfileView.post), so it's handled separately from the model save
+    # rather than written straight to User.email like the other fields.
+    email = forms.EmailField(
+        required=False,
+        widget=forms.EmailInput(attrs={"class": "form-input"}),
+        label="Email address",
+        help_text=(
+            "Used for password resets. Changing this sends a confirmation "
+            "link to the new address; it only takes effect once confirmed."
+        ),
+    )
+
     class Meta:
         model = User
-        fields = ("display_name", "email", "bio", "website")
+        fields = ("display_name", "bio", "website")
         widgets = {
             "display_name": forms.TextInput(
                 attrs={"class": "form-input", "maxlength": 100}
@@ -29,32 +42,30 @@ class ProfileForm(forms.ModelForm):
             "website": forms.URLInput(
                 attrs={"placeholder": "https://", "class": "form-input"}
             ),
-            "email": forms.EmailInput(attrs={"class": "form-input"}),
         }
         labels = {
             "display_name": "Display name",
             "bio": "Short bio",
             "website": "Website",
-            "email": "Email address",
         }
         help_texts = {
             "display_name": "Shown next to your submitted events. Can include spaces and special characters.",
             "bio": mark_safe(
-                'Up to 1,500 characters. <a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" rel="noopener noreferrer">Markdown</a> supported. Displayed on your public profile.'
+                'Up to 2,000 characters. <a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" rel="noopener noreferrer">Markdown</a> supported. Displayed on your public profile.'
             ),
             "website": "Optional link displayed on your public profile.",
-            "email": "Used for password resets.",
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["email"].required = False
+        if self.instance and self.instance.pk:
+            self.fields["email"].initial = self.instance.email
 
     def clean_bio(self):
         bio = self.cleaned_data.get("bio", "")
         if len(bio) > 2000:
             raise forms.ValidationError(
-                f"Bio must be 1,500 characters or fewer (currently {len(bio)})."
+                f"Bio must be 2,000 characters or fewer (currently {len(bio)})."
             )
         return bio
 
@@ -68,6 +79,11 @@ class ProfileForm(forms.ModelForm):
         if qs.exists():
             raise forms.ValidationError("This email address is already in use.")
         return email
+
+    @property
+    def email_changed(self) -> bool:
+        new_email = self.cleaned_data.get("email", "")
+        return bool(new_email) and new_email != self.instance.email
 
 
 class ClaimCodeForm(forms.Form):

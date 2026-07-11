@@ -1,0 +1,3 @@
+[deploy]
+startCommand = "python manage.py weekly_digest"
+restartPolicyType = "NEVER"

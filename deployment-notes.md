@@ -146,10 +146,24 @@ If `railway run` fails to resolve `postgres.railway.internal`, use
 
 The `weekly_digest` management command emails growth and activity stats to
 `ADMINS`. Schedule it in Railway as a Cron Job service in the production
-environment (separate from the web process):
+environment (separate from the web process), the same way as the scrape and
+backup crons:
 
-- **Schedule:** `0 8 * * 1` (every Monday at 08:00 UTC)
-- **Command:** `python manage.py weekly_digest`
+1. Add a new service in the production environment.
+2. Connect the same GitHub repo and `main` branch as the web service.
+3. Configure:
+
+| Setting | Value |
+|---|---|
+| **Config file path** | `railway.digest-cron.toml` |
+| **Cron schedule** | `0 8 * * 1` (every Monday at 08:00 UTC) |
+
+   `railway.digest-cron.toml` sets the start command (`python manage.py
+   weekly_digest`) — no separate dashboard overrides needed.
+
+4. Under **Variables**, reference the same environment variables as the web
+   service. Required: `DATABASE_URL`, `SECRET_KEY`, `PASSWORD_PEPPER`,
+   `ADMINS`, `RESEND_API_KEY`.
 
 The command requires `ADMINS` and `RESEND_API_KEY` to be set. Run a one-off
 test before scheduling:

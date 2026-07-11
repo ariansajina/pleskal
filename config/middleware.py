@@ -7,15 +7,18 @@ class ContentSecurityPolicyMiddleware:
 
     Policy:
       - default-src 'self'
-      - script-src 'self' (HTMX is vendored, no inline scripts needed)
+      - script-src 'self' https://storage.ko-fi.com (HTMX is vendored, no inline
+        scripts needed; Ko-fi widget script is loaded from its CDN)
       - style-src 'self' 'unsafe-inline' https://storage.ko-fi.com (Tailwind inline styles + Ko-fi widget CSS loaded inside srcdoc iframes)
       - img-src 'self' data: https://tile.openstreetmap.org (OSM raster tiles
         for the /map/ page are loaded directly from the tile server)
       - font-src 'self'
-      - connect-src 'self' https://tile.openstreetmap.org (Leaflet may prefetch
-        tiles via fetch/XHR depending on the browser)
+      - connect-src 'self' https://tile.openstreetmap.org https://storage.ko-fi.com
+        https://ko-fi.com (Leaflet may prefetch tiles via fetch/XHR depending on
+        the browser; Ko-fi widget polls its API)
       - frame-ancestors 'none' (also covered by X-Frame-Options: DENY)
-      - frame-src https://www.openstreetmap.org (OpenStreetMap embed on event detail)
+      - frame-src https://www.openstreetmap.org https://ko-fi.com (OpenStreetMap
+        embed on event detail; Ko-fi donation widget)
       - base-uri 'self'
       - form-action 'self'
 

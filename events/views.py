@@ -122,20 +122,79 @@ def _subscribe_publishers():
     return system_publishers, _has_community_publishers()
 
 
+def _require_owner(request, obj) -> None:
+    """Raise PermissionDenied unless *request.user* submitted *obj*."""
+    if obj.submitted_by != request.user:
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
+
+
 class EventOwnerMixin:
     """Restrict access to the event owner. Returns 403 otherwise."""
 
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)  # type: ignore
-        user = self.request.user  # type: ignore
-        if obj.submitted_by != user:
-            from django.core.exceptions import PermissionDenied
-
-            raise PermissionDenied
+        _require_owner(self.request, obj)  # type: ignore
         return obj
 
 
-class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
+class UpcomingEventLimitMixin:
+    """Blocks event creation/duplication once a user is at MAX_UPCOMING_EVENTS_PER_USER.
+
+    System accounts (scrapers) are exempt.
+    """
+
+    def _upcoming_events_count(self, user) -> int:
+        return Event.objects.filter(
+            submitted_by=user,
+            start_datetime__gte=timezone.now(),
+        ).count()
+
+    def _reject_if_over_event_limit(self, request):
+        """Return a redirect response if *request.user* is at the limit, else None."""
+        if (
+            not request.user.is_system_account
+            and self._upcoming_events_count(request.user)
+            >= MAX_UPCOMING_EVENTS_PER_USER
+        ):
+            messages.error(
+                request,
+                f"You have reached the limit of {MAX_UPCOMING_EVENTS_PER_USER} "
+                "upcoming events. Please delete or wait for some events to pass "
+                "before submitting new ones.",
+            )
+            return redirect("my_events")
+        return None
+
+
+def _stash_pending_image(request, form) -> None:
+    """Preserve an uploaded image in the session for re-submission on a failed form.
+
+    Skipped when the image itself is what failed validation (no point
+    re-offering a rejected file).
+    """
+    image = request.FILES.get("image")
+    if image and "image" not in form.errors:
+        request.session["pending_image"] = {
+            "name": image.name,
+            "content": image.read().hex(),
+        }
+
+
+def _pop_pending_image(request):
+    """Return a ContentFile built from a stashed pending image, or None."""
+    if "pending_image" not in request.session:
+        return None
+    from django.core.files.base import ContentFile
+
+    pending = request.session.pop("pending_image")
+    return ContentFile(bytes.fromhex(pending["content"]), name=pending["name"])
+
+
+class EventCreateView(
+    RateLimitMixin, LoginRequiredMixin, UpcomingEventLimitMixin, CreateView
+):
     rate_limit_key = "event_create"
     rate_limit_limit = 20
     rate_limit_window = 3600
@@ -145,25 +204,11 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
     form_class = EventForm
     template_name = EVENT_FORM_TEMPLATE
 
-    def _upcoming_events_count(self):
-        return Event.objects.filter(
-            submitted_by=self.request.user,
-            start_datetime__gte=timezone.now(),
-        ).count()
-
     def dispatch(self, request, *args, **kwargs):
-        if (
-            request.user.is_authenticated
-            and not request.user.is_system_account
-            and self._upcoming_events_count() >= MAX_UPCOMING_EVENTS_PER_USER
-        ):
-            messages.error(
-                request,
-                f"You have reached the limit of {MAX_UPCOMING_EVENTS_PER_USER} "
-                "upcoming events. Please delete or wait for some events to pass "
-                "before submitting new ones.",
-            )
-            return redirect("my_events")
+        if request.user.is_authenticated:
+            over_limit_response = self._reject_if_over_event_limit(request)
+            if over_limit_response:
+                return over_limit_response
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -172,14 +217,7 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
         return kwargs
 
     def form_invalid(self, form):
-        # Preserve uploaded image in session for re-submission, unless the
-        # image itself is what failed validation.
-        image = self.request.FILES.get("image")
-        if image and "image" not in form.errors:
-            self.request.session["pending_image"] = {
-                "name": image.name,
-                "content": image.read().hex(),
-            }
+        _stash_pending_image(self.request, form)
         return super().form_invalid(form)
 
     def form_valid(self, form):
@@ -188,13 +226,7 @@ class EventCreateView(RateLimitMixin, LoginRequiredMixin, CreateView):
         event.is_draft = self.request.POST.get("submit_action") == "draft"
 
         # Process newly uploaded image or use pending image from failed submission
-        image_file = form.cleaned_data.get("image")
-        if not image_file and "pending_image" in self.request.session:
-            from django.core.files.base import ContentFile
-
-            pending = self.request.session.pop("pending_image")
-            image_content = bytes.fromhex(pending["content"])
-            image_file = ContentFile(image_content, name=pending["name"])
+        image_file = form.cleaned_data.get("image") or _pop_pending_image(self.request)
 
         if image_file and not _attach_processed_image(form, event, image_file):
             return self.form_invalid(form)
@@ -550,14 +582,7 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
         return kwargs
 
     def form_invalid(self, form):
-        # Preserve uploaded image in session for re-submission, unless the
-        # image itself is what failed validation.
-        image = self.request.FILES.get("image")
-        if image and "image" not in form.errors:
-            self.request.session["pending_image"] = {
-                "name": image.name,
-                "content": image.read().hex(),
-            }
+        _stash_pending_image(self.request, form)
         return super().form_invalid(form)
 
     def form_valid(self, form):
@@ -571,19 +596,9 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
         # If neither button was used (fallback), keep existing value.
 
         # Process newly uploaded image or use pending image from failed submission
-        image_file = form.cleaned_data.get("image")
-        if not image_file and "pending_image" in self.request.session:
-            from django.core.files.base import ContentFile
+        image_file = form.cleaned_data.get("image") or _pop_pending_image(self.request)
 
-            pending = self.request.session.pop("pending_image")
-            image_content = bytes.fromhex(pending["content"])
-            image_file = ContentFile(image_content, name=pending["name"])
-
-        if (
-            image_file
-            and hasattr(image_file, "read")
-            and not _attach_processed_image(form, event, image_file)
-        ):
+        if image_file and not _attach_processed_image(form, event, image_file):
             return self.form_invalid(form)
 
         event.save()
@@ -613,45 +628,33 @@ class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
         return super().form_valid(form)
 
 
-class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
+class EventDuplicateView(
+    RateLimitMixin, LoginRequiredMixin, UpcomingEventLimitMixin, View
+):
     rate_limit_key = "event_duplicate"
     rate_limit_limit = 20
     rate_limit_window = 60  # 20 requests per minute per user
     rate_limit_by_user = True
 
-    def _check_owner(self, request, source):
-        if source.submitted_by != request.user:
-            from django.core.exceptions import PermissionDenied
-
-            raise PermissionDenied
-
-    def _upcoming_events_count(self, request):
-        return Event.objects.filter(
-            submitted_by=request.user,
-            start_datetime__gte=timezone.now(),
-        ).count()
-
-    def _check_event_limit(self, request):
-        if (
-            not request.user.is_system_account
-            and self._upcoming_events_count(request) >= MAX_UPCOMING_EVENTS_PER_USER
-        ):
-            messages.error(
-                request,
-                f"You have reached the limit of {MAX_UPCOMING_EVENTS_PER_USER} "
-                "upcoming events. Please delete or wait for some events to pass "
-                "before submitting new ones.",
-            )
-            return True
-        return False
-
-    def get(self, request, slug):
+    def _render_form(self, request, form, source):
         from django.shortcuts import render
 
+        return render(
+            request,
+            EVENT_FORM_TEMPLATE,
+            {
+                "form": form,
+                "page_title": "Duplicate Event",
+                "source_image": source.image or None,
+            },
+        )
+
+    def get(self, request, slug):
         source = get_object_or_404(Event, slug=slug)
-        self._check_owner(request, source)
-        if self._check_event_limit(request):
-            return redirect("my_events")
+        _require_owner(request, source)
+        over_limit_response = self._reject_if_over_event_limit(request)
+        if over_limit_response:
+            return over_limit_response
         form = EventForm(
             creation=True,
             initial={
@@ -666,64 +669,41 @@ class EventDuplicateView(RateLimitMixin, LoginRequiredMixin, View):
                 "source_url": source.source_url,
             },
         )
-        return render(
-            request,
-            EVENT_FORM_TEMPLATE,
-            {
-                "form": form,
-                "page_title": "Duplicate Event",
-                "source_image": source.image or None,
-            },
-        )
+        return self._render_form(request, form, source)
 
     def post(self, request, slug):
         from django.core.files.base import ContentFile
-        from django.shortcuts import render
 
         source = get_object_or_404(Event, slug=slug)
-        self._check_owner(request, source)
-        if self._check_event_limit(request):
-            return redirect("my_events")
+        _require_owner(request, source)
+        over_limit_response = self._reject_if_over_event_limit(request)
+        if over_limit_response:
+            return over_limit_response
         form = EventForm(request.POST, request.FILES, creation=True)
-        if form.is_valid():
-            event = form.save(commit=False)
-            event.submitted_by = request.user
-            event.is_draft = request.POST.get("submit_action") == "draft"
-            image_file = form.cleaned_data.get("image")
-            if image_file:
-                if not _attach_processed_image(form, event, image_file):
-                    return render(
-                        request,
-                        EVENT_FORM_TEMPLATE,
-                        {
-                            "form": form,
-                            "page_title": "Duplicate Event",
-                            "source_image": source.image or None,
-                        },
-                    )
-            elif source.image and request.POST.get("copy_source_image"):
-                source.image.open()
-                event.image.save(
-                    source.image.name.split("/")[-1],
-                    ContentFile(source.image.read()),
-                    save=False,
-                )
-                source.image.close()
-            event.save()
-            if event.is_draft:
-                messages.success(request, "Event duplicated and saved as draft.")
-            else:
-                messages.success(request, "Event duplicated.")
-            return redirect("event_detail", slug=event.slug)
-        return render(
-            request,
-            EVENT_FORM_TEMPLATE,
-            {
-                "form": form,
-                "page_title": "Duplicate Event",
-                "source_image": source.image or None,
-            },
-        )
+        if not form.is_valid():
+            return self._render_form(request, form, source)
+
+        event = form.save(commit=False)
+        event.submitted_by = request.user
+        event.is_draft = request.POST.get("submit_action") == "draft"
+        image_file = form.cleaned_data.get("image")
+        if image_file:
+            if not _attach_processed_image(form, event, image_file):
+                return self._render_form(request, form, source)
+        elif source.image and request.POST.get("copy_source_image"):
+            source.image.open()
+            event.image.save(
+                source.image.name.split("/")[-1],
+                ContentFile(source.image.read()),
+                save=False,
+            )
+            source.image.close()
+        event.save()
+        if event.is_draft:
+            messages.success(request, "Event duplicated and saved as draft.")
+        else:
+            messages.success(request, "Event duplicated.")
+        return redirect("event_detail", slug=event.slug)
 
 
 class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
@@ -734,10 +714,7 @@ class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
 
     def post(self, request, slug):
         event = get_object_or_404(Event, slug=slug)
-        if event.submitted_by != request.user:
-            from django.core.exceptions import PermissionDenied
-
-            raise PermissionDenied
+        _require_owner(request, event)
         event.is_draft = not event.is_draft
         event.save(update_fields=["is_draft", "updated_at"])
         if event.is_draft:
