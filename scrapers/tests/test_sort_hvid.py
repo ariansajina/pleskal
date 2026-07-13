@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 
 from scrapers.sort_hvid import (
     _combine_dt,
+    _earliest_program_time,
     _expand_dates,
     _parse_date,
     _parse_schedule,
@@ -101,6 +102,24 @@ def test_parse_schedule_wraparound_range():
     assert 6 in result
 
 
+def test_parse_schedule_bare_time_no_weekday():
+    # One-off events (e.g. seminars) sometimes show only a bare time with no
+    # weekday name — should map to every weekday so the caller's actual date
+    # range narrows it down to the single real performance date.
+    result = _parse_schedule("16h30")
+    assert result == {wd: datetime.time(16, 30) for wd in range(7)}
+
+
+def test_parse_schedule_bare_time_colon_format():
+    result = _parse_schedule("16:30")
+    assert result == {wd: datetime.time(16, 30) for wd in range(7)}
+
+
+def test_parse_schedule_bare_time_period_format():
+    result = _parse_schedule("16.30")
+    assert result == {wd: datetime.time(16, 30) for wd in range(7)}
+
+
 def test_parse_schedule_invalid_falls_back_to_default():
     result = _parse_schedule("not-a-schedule")
     # Default: Mon-Fri at 20:00
@@ -112,6 +131,27 @@ def test_parse_schedule_invalid_falls_back_to_default():
 def test_parse_schedule_empty_falls_back_to_default():
     result = _parse_schedule("")
     assert len(result) == 5
+
+
+# ── _earliest_program_time ─────────────────────────────────────────────────────
+
+
+def test_earliest_program_time_finds_earliest():
+    text = "PROGRAM\n16:00 Doors open\n16:30 Presentation\n18:30 Closing"
+    assert _earliest_program_time(text) == datetime.time(16, 0)
+
+
+def test_earliest_program_time_period_separator():
+    text = "16.00 Doors open, 18.30 Closing"
+    assert _earliest_program_time(text) == datetime.time(16, 0)
+
+
+def test_earliest_program_time_no_times_returns_none():
+    assert _earliest_program_time("No times mentioned here.") is None
+
+
+def test_earliest_program_time_empty_returns_none():
+    assert _earliest_program_time("") is None
 
 
 # ── _expand_dates ─────────────────────────────────────────────────────────────
@@ -380,6 +420,47 @@ def test_scrape_detail_description_from_performance_content():
     result = scrape_detail("https://sort-hvid.dk/en/forestilling/desc/", session)
     assert result is not None
     assert "This is the description" in result[0]["description"]
+
+
+def test_scrape_detail_no_schedule_uses_program_time():
+    # A one-off seminar with no schedule <strong> tag, but a free-text
+    # "PROGRAM" itinerary in the description giving the actual start time.
+    html = """
+    <html><body>
+      <h1>Seminar Show</h1>
+      <strong>24. April 2026</strong>
+      <div class="performance-content">
+        <p>PROGRAM</p>
+        <p>16:00 Doors open</p>
+        <p>16:30 Presentation by someone</p>
+        <p>18:30 Closing performance</p>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail("https://sort-hvid.dk/en/forestilling/seminar/", session)
+    assert result is not None
+    assert len(result) == 1
+    start_dt = datetime.datetime.fromisoformat(result[0]["start_datetime"])
+    assert start_dt.astimezone(CPH_TZ).time() == datetime.time(16, 0)
+
+
+def test_scrape_detail_seminar_bare_time_no_weekday():
+    # One-off seminars show a single date and a bare time with no weekday
+    # name (e.g. "16h30" instead of "Tuesday @ 16h30").
+    html = """
+    <html><body>
+      <h1>Seminar Show</h1>
+      <strong>24. April 2026</strong>
+      <strong>16h30</strong>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail("https://sort-hvid.dk/en/forestilling/seminar/", session)
+    assert result is not None
+    assert len(result) == 1
+    start_dt = datetime.datetime.fromisoformat(result[0]["start_datetime"])
+    assert start_dt.astimezone(CPH_TZ).time() == datetime.time(16, 30)
 
 
 def test_scrape_detail_bad_end_date_falls_back_to_start():

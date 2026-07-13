@@ -111,21 +111,26 @@ def _parse_schedule(schedule_str: str) -> dict[int, datetime.time]:
         "Tuesday-Friday @ 20h00, Saturday @ 17h00"
         "Wednesday @ 19h00"
         "Tuesday, Thursday @ 20h00"
+        "16h30" (single one-off event with no weekday name)
 
     Each comma-separated segment may have:
       - A day range:  "Tuesday-Friday"  → expand to all weekdays in range
       - A day list:   "Tuesday, Thursday" is handled by splitting on comma first
       - A single day: "Saturday"
+      - No day at all: a bare time, used for one-off events with a single
+        performance date (the caller narrows this down via the actual date
+        range, so mapping it to every weekday is safe)
 
     Returns a dict mapping Python weekday ints (Mon=0) to datetime.time.
     Falls back to Mon–Fri at 20:00 if the string cannot be parsed at all.
     """
     result: dict[int, datetime.time] = {}
+    bare_time: datetime.time | None = None
 
     # Split on comma; each segment looks like "Day[range] @ HHhMM" or "Day[range] HHHxx"
     segments = [seg.strip() for seg in schedule_str.split(",")]
     for seg in segments:
-        time_match = re.search(r"(?:@\s*)?(\d{1,2})[Hh](\d{2})", seg)
+        time_match = re.search(r"(?:@\s*)?(\d{1,2})[Hh:.](\d{2})", seg)
         if not time_match:
             continue
         t = datetime.time(int(time_match.group(1)), int(time_match.group(2)))
@@ -133,7 +138,10 @@ def _parse_schedule(schedule_str: str) -> dict[int, datetime.time]:
         # Day spec is everything before the time (strip trailing @ or whitespace)
         day_spec = seg[: time_match.start()].strip().rstrip("@").strip()
 
-        if "-" in day_spec:
+        if not day_spec:
+            # No weekday name present at all (e.g. a one-off event's bare time)
+            bare_time = t
+        elif "-" in day_spec:
             # Range: "Tuesday-Friday"
             parts = [p.strip().lower() for p in day_spec.split("-", 1)]
             start_wd = WEEKDAY_MAP.get(parts[0])
@@ -150,6 +158,9 @@ def _parse_schedule(schedule_str: str) -> dict[int, datetime.time]:
             wd = WEEKDAY_MAP.get(day_spec.lower())
             if wd is not None:
                 result[wd] = t
+
+    if not result and bare_time is not None:
+        result = {wd: bare_time for wd in range(7)}
 
     if not result:
         log.warning(
@@ -180,6 +191,21 @@ def _expand_dates(
             pairs.append((current, schedule[current.weekday()]))
         current += one_day
     return pairs
+
+
+def _earliest_program_time(text: str) -> datetime.time | None:
+    """
+    Find the earliest HH:MM/HH.MM time mentioned in free-text event copy.
+
+    One-off events (e.g. seminars) sometimes carry no structured schedule
+    <strong> tag at all — instead the detail page description lists a
+    "PROGRAM" itinerary like "16:30 Presentation ...". Used as a last-resort
+    fallback so those events don't default to 20:00.
+    """
+    times: list[datetime.time] = []
+    for match in re.finditer(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\b", text):
+        times.append(datetime.time(int(match.group(1)), int(match.group(2))))
+    return min(times) if times else None
 
 
 def _combine_dt(date: datetime.date, t: datetime.time) -> datetime.datetime:
@@ -226,7 +252,7 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
         text = strong.get_text(" ", strip=True)
         if not date_range_str and re.search(r"\d+\.\s+\w+\s+\d{4}", text):
             date_range_str = text
-        elif not schedule_str and re.search(r"\d+[Hh]\d+", text):
+        elif not schedule_str and re.search(r"\d+[Hh:.]\d+", text):
             schedule_str = text
 
     if not date_range_str:
@@ -244,27 +270,6 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
     if not end_date:
         end_date = start_date
 
-    # Parse schedule; fall back to a single performance on start_date at 20:00
-    if schedule_str:
-        schedule = _parse_schedule(schedule_str)
-    else:
-        log.warning(
-            "No schedule string found at %s; defaulting to start date 20:00", url
-        )
-        schedule = {start_date.weekday(): datetime.time(20, 0)}
-
-    # Expand into individual (date, time) pairs
-    date_time_pairs = _expand_dates(start_date, end_date, schedule)
-    if not date_time_pairs:
-        log.warning(
-            "Schedule %r produced no dates in range %s–%s at %s",
-            schedule_str,
-            start_date,
-            end_date,
-            url,
-        )
-        return None
-
     # ── Description ───────────────────────────────────────────────────────────
     # Target .performance-content specifically to avoid:
     #   - .mobile: a hidden duplicate of the full page used for mobile layout
@@ -277,6 +282,31 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
             str(p) for p in content_el.find_all("p") if p.get_text(strip=True)
         )
         description = markdownify.markdownify(raw_html, heading_style="ATX").strip()
+
+    # Parse schedule; fall back to the earliest time mentioned in the
+    # description (e.g. a "PROGRAM" itinerary), else start_date at 20:00
+    if schedule_str:
+        schedule = _parse_schedule(schedule_str)
+    else:
+        fallback_time = _earliest_program_time(description) or datetime.time(20, 0)
+        log.warning(
+            "No schedule string found at %s; defaulting to start date %s",
+            url,
+            fallback_time,
+        )
+        schedule = {start_date.weekday(): fallback_time}
+
+    # Expand into individual (date, time) pairs
+    date_time_pairs = _expand_dates(start_date, end_date, schedule)
+    if not date_time_pairs:
+        log.warning(
+            "Schedule %r produced no dates in range %s–%s at %s",
+            schedule_str,
+            start_date,
+            end_date,
+            url,
+        )
+        return None
 
     # ── Image ─────────────────────────────────────────────────────────────────
     # Only GIFs are available; Pillow will extract the first frame on import.
