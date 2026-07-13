@@ -172,6 +172,17 @@ def test_parse_when_weekday_list_different_times():
     assert result[5] == [datetime.time(16, 0)]  # Sat
 
 
+def test_parse_when_kl_period_time_range():
+    # Danish "kl." (klokken) with a start—end time range and no weekday.
+    result = parse_when("kl. 16.30 — 17.30")
+    assert result == {-1: [datetime.time(16, 30)]}
+
+
+def test_parse_when_kl_no_period():
+    result = parse_when("kl 20.00")
+    assert result == {-1: [datetime.time(20, 0)]}
+
+
 def test_parse_when_empty_returns_none():
     assert parse_when("") is None
 
