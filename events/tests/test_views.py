@@ -1,6 +1,8 @@
 """Tests for event views."""
 
+import datetime
 import io
+import zoneinfo
 
 import pytest
 from django.contrib.messages import get_messages
@@ -12,6 +14,8 @@ from accounts.tests.factories import UserFactory
 from events.models import Event
 from events.tests.factories import EventFactory
 from events.views import EVENTS_PER_PAGE
+
+CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 
 
 def _make_image_upload(width=100, height=100, fmt="JPEG", name="test.jpg"):
@@ -398,6 +402,22 @@ class TestEventListView:
         assert resp.status_code == 200
         # Partial should not contain the full <html> tag
         assert b"<!DOCTYPE html>" not in resp.content
+
+    def test_day_divider_uses_local_date_not_utc_date(self, client):
+        """An event starting at 00:00 Copenhagen time (22:00 UTC the previous
+        day) must be grouped under its local date, not the UTC date."""
+        cph_midnight = datetime.datetime(2026, 8, 13, 0, 0, tzinfo=CPH_TZ)
+        assert cph_midnight.astimezone(datetime.UTC).day == 12
+
+        event = EventFactory.create(
+            title="Hungry Eyes",
+            start_datetime=cph_midnight,
+        )
+        resp = client.get(reverse("event_list"))
+        content = resp.content.decode()
+        title_pos = content.index(event.title)
+        assert "13 August" in content[:title_pos]
+        assert "12 August" not in content[:title_pos]
 
     def test_non_htmx_returns_full_page(self, client):
         EventFactory.create()
