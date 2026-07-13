@@ -193,6 +193,21 @@ def _expand_dates(
     return pairs
 
 
+def _earliest_program_time(text: str) -> datetime.time | None:
+    """
+    Find the earliest HH:MM/HH.MM time mentioned in free-text event copy.
+
+    One-off events (e.g. seminars) sometimes carry no structured schedule
+    <strong> tag at all — instead the detail page description lists a
+    "PROGRAM" itinerary like "16:30 Presentation ...". Used as a last-resort
+    fallback so those events don't default to 20:00.
+    """
+    times: list[datetime.time] = []
+    for match in re.finditer(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)\b", text):
+        times.append(datetime.time(int(match.group(1)), int(match.group(2))))
+    return min(times) if times else None
+
+
 def _combine_dt(date: datetime.date, t: datetime.time) -> datetime.datetime:
     """Combine date and time in CPH timezone, returned as UTC-aware datetime."""
     return datetime.datetime(
@@ -255,27 +270,6 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
     if not end_date:
         end_date = start_date
 
-    # Parse schedule; fall back to a single performance on start_date at 20:00
-    if schedule_str:
-        schedule = _parse_schedule(schedule_str)
-    else:
-        log.warning(
-            "No schedule string found at %s; defaulting to start date 20:00", url
-        )
-        schedule = {start_date.weekday(): datetime.time(20, 0)}
-
-    # Expand into individual (date, time) pairs
-    date_time_pairs = _expand_dates(start_date, end_date, schedule)
-    if not date_time_pairs:
-        log.warning(
-            "Schedule %r produced no dates in range %s–%s at %s",
-            schedule_str,
-            start_date,
-            end_date,
-            url,
-        )
-        return None
-
     # ── Description ───────────────────────────────────────────────────────────
     # Target .performance-content specifically to avoid:
     #   - .mobile: a hidden duplicate of the full page used for mobile layout
@@ -288,6 +282,31 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
             str(p) for p in content_el.find_all("p") if p.get_text(strip=True)
         )
         description = markdownify.markdownify(raw_html, heading_style="ATX").strip()
+
+    # Parse schedule; fall back to the earliest time mentioned in the
+    # description (e.g. a "PROGRAM" itinerary), else start_date at 20:00
+    if schedule_str:
+        schedule = _parse_schedule(schedule_str)
+    else:
+        fallback_time = _earliest_program_time(description) or datetime.time(20, 0)
+        log.warning(
+            "No schedule string found at %s; defaulting to start date %s",
+            url,
+            fallback_time,
+        )
+        schedule = {start_date.weekday(): fallback_time}
+
+    # Expand into individual (date, time) pairs
+    date_time_pairs = _expand_dates(start_date, end_date, schedule)
+    if not date_time_pairs:
+        log.warning(
+            "Schedule %r produced no dates in range %s–%s at %s",
+            schedule_str,
+            start_date,
+            end_date,
+            url,
+        )
+        return None
 
     # ── Image ─────────────────────────────────────────────────────────────────
     # Only GIFs are available; Pillow will extract the first frame on import.
