@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from scrapers.taornby import (
     RangeSlot,
@@ -273,6 +273,7 @@ _SECTION_HTML = """
 def test_get_blocks_preserves_paragraphs_without_inline_tag_splits():
     soup = BeautifulSoup(_SECTION_HTML, "lxml")
     section = soup.find("section")
+    assert isinstance(section, Tag)
     blocks = _get_blocks(section)
     # The inline <strong>/<em> split inside "In KABOOM, old objects..." must
     # not produce a spurious line break.
@@ -282,6 +283,7 @@ def test_get_blocks_preserves_paragraphs_without_inline_tag_splits():
 def test_build_records_end_to_end():
     soup = BeautifulSoup(_SECTION_HTML, "lxml")
     section = soup.find("section")
+    assert isinstance(section, Tag)
     records = build_records(section, TODAY, fallback_date=None)
     assert len(records) == 1
     record = records[0]
@@ -304,6 +306,7 @@ def test_build_records_skips_non_event_section():
     """
     soup = BeautifulSoup(html, "lxml")
     section = soup.find("section")
+    assert isinstance(section, Tag)
     assert build_records(section, TODAY, fallback_date=None) == []
 
 
@@ -322,6 +325,7 @@ def test_build_records_falls_back_when_no_date_found():
     """
     soup = BeautifulSoup(html, "lxml")
     section = soup.find("section")
+    assert isinstance(section, Tag)
     fallback = datetime.date(2026, 8, 20)
     records = build_records(section, TODAY, fallback_date=fallback)
     assert len(records) == 1
