@@ -220,8 +220,11 @@ def _parse_times_from_clause(clause: str) -> list[datetime.time]:
     '19.30, 20.00 & 20.30'.
     """
     times: list[datetime.time] = []
-    # Remove leading 'at', 'kl.', 'kl'
-    clause = re.sub(r"\b(at|kl\.?)\b", " ", clause, flags=re.IGNORECASE).strip()
+    # Remove leading 'at', 'kl.', 'kl'.  Note: the trailing '.' in 'kl.' is
+    # not itself a word character, so a trailing \b after \.? never actually
+    # matches when the period is present (no word boundary between '.' and
+    # the following space) — leaving a stray '.' that breaks time parsing.
+    clause = re.sub(r"\b(?:at|kl)\.?", " ", clause, flags=re.IGNORECASE).strip()
     # Split on separators: &, ,, +, 'and', whitespace sequences
     tokens = re.split(r"[&,+]|\band\b", clause, flags=re.IGNORECASE)
     for tok in tokens:

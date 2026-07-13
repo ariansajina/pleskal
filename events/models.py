@@ -163,6 +163,11 @@ class Event(models.Model):
         return self.latitude is not None and self.longitude is not None
 
     @property
+    def local_start_date(self):
+        """start_datetime's date in the local timezone (for day grouping)."""
+        return timezone.localtime(self.start_datetime).date()
+
+    @property
     def display_image_url(self) -> str:
         """URL of the event image, with per-publisher / logo fallbacks.
 
