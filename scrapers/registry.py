@@ -19,6 +19,7 @@ from scrapers.hautscene import scrape as scrape_hautscene
 from scrapers.kbhdanser import scrape as scrape_kbhdanser
 from scrapers.sort_hvid import scrape as scrape_sort_hvid
 from scrapers.sydhavnteater import scrape as scrape_sydhavnteater
+from scrapers.taornby import scrape as scrape_taornby
 from scrapers.toastercph import scrape as scrape_toastercph
 from scrapers.warehouse9 import scrape as scrape_warehouse9
 
@@ -113,6 +114,13 @@ _ALL_SOURCES = [
         external_source="sort-hvid",
         default_venue_name="Sort/Hvid",
         allowed_image_domains=frozenset({"sort-hvid.dk"}),
+    ),
+    ScraperSource(
+        name="taornby",
+        scrape=scrape_taornby,
+        external_source="taornby",
+        default_venue_name="Tårnbyparken",
+        allowed_image_domains=frozenset({"squarespace-cdn.com"}),
     ),
     ScraperSource(
         name="warehouse9",
