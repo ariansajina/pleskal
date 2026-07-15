@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ page_title|default:"Event" }} – pleskal{% endblock %}
 
@@ -71,6 +72,16 @@
                         <p class="form-field-error">{{ form.end_time.errors|join:", " }}</p>
                     {% endif %}
                 </div>
+            </div>
+
+            <div>
+                <label for="{{ form.end_date.id_for_label }}" class="form-label">
+                    End date <span class="form-help" style="text-transform:none;letter-spacing:0;">({{ form.end_date.help_text }})</span>
+                </label>
+                {{ form.end_date }}
+                {% if form.end_date.errors %}
+                    <p class="form-field-error">{{ form.end_date.errors|join:", " }}</p>
+                {% endif %}
             </div>
 
             {# Venue #}
@@ -182,24 +193,8 @@
         </form>
     </div>
 </div>
+{% endblock %}
 
-<script>
-    // Toggle price note field visibility based on is_free checkbox
-    const isFreeCheckbox = document.getElementById('{{ form.is_free.id_for_label }}');
-    const priceNoteWrapper = document.getElementById('price-note-wrapper');
-
-    function updatePriceNoteVisibility() {
-        if (isFreeCheckbox.checked) {
-            priceNoteWrapper.style.display = 'none';
-        } else {
-            priceNoteWrapper.style.display = 'block';
-        }
-    }
-
-    // Set initial state
-    updatePriceNoteVisibility();
-
-    // Update on checkbox change
-    isFreeCheckbox.addEventListener('change', updatePriceNoteVisibility);
-</script>
+{% block extra_scripts %}
+<script src="{% static 'js/event-form.js' %}" defer></script>
 {% endblock %}

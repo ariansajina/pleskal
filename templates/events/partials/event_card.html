@@ -2,7 +2,7 @@
     <div class="event-row">
         <div class="event-row__body">
             <div class="event-row__content">
-                <div class="event-title">{{ event.title }}</div>
+                <h3 class="event-title">{{ event.title }}</h3>
                 <div class="event-meta">
                     {% if event.start_datetime|date:"H:i" == "00:00" %}
                         <span>{{ event.start_datetime|date:"l, j F" }}</span>
@@ -27,12 +27,13 @@
                 <div class="event-tags">
                     <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
                     {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
+                    {% if event.is_draft %}<span class="badge badge--draft">Draft</span>{% endif %}
                 </div>
             </div>
         </div>
         <div class="event-row__thumb">
             <div class="event-row__thumb-inner">
-                <img src="{{ event.display_image_url }}" alt="{{ event.title }}" loading="lazy" decoding="async">
+                <img src="{{ event.display_image_url }}" alt="" loading="lazy" decoding="async">
             </div>
         </div>
     </div>

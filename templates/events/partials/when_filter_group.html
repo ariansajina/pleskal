@@ -1,5 +1,5 @@
-<div id="when-filter-group" class="filter-panel__group"{% if oob %} hx-swap-oob="true"{% endif %}>
-    <span class="filter-panel__group-label">When</span>
+<fieldset id="when-filter-group" class="filter-panel__group"{% if oob %} hx-swap-oob="true"{% endif %}>
+    <legend class="filter-panel__group-label">When</legend>
     {% if date_range_active %}
         <div style="display:flex;gap:var(--space-3);opacity:0.4;cursor:not-allowed;">
             <label style="display:flex;align-items:center;gap:var(--space-1);font-size:var(--text-sm);">
@@ -24,4 +24,4 @@
             </label>
         </div>
     {% endif %}
-</div>
+</fieldset>

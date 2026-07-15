@@ -145,6 +145,23 @@ class TestPublisherProfileView:
         response = client.get("/accounts/publishers/no-such-user/")
         assert response.status_code == 404
 
+    def test_draft_badge_shown_to_owner(self):
+        user = UserFactory.create(display_name="Draft Owner")
+        EventFactory.create(submitted_by=user, is_draft=True, title="Secret Draft")
+        client = Client()
+        client.force_login(user)
+        response = client.get(f"/accounts/publishers/{user.display_name_slug}/")
+        assert b"Secret Draft" in response.content
+        assert b'class="badge badge--draft"' in response.content
+
+    def test_draft_badge_never_shown_to_public(self):
+        user = UserFactory.create(display_name="Draft Owner Two")
+        EventFactory.create(submitted_by=user, is_draft=True, title="Hidden Draft")
+        client = Client()
+        response = client.get(f"/accounts/publishers/{user.display_name_slug}/")
+        assert b"Hidden Draft" not in response.content
+        assert b'class="badge badge--draft"' not in response.content
+
 
 @pytest.mark.django_db
 class TestEditProfileView:

@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="page-hero">
-    <div class="page-hero__ornrow">✦</div>
+    <div class="page-hero__ornrow" aria-hidden="true">✦</div>
     <h1 class="page-hero__title page-hero__title--sm">{{ publisher.public_name }}</h1>
     {% if publisher.bio %}
         <div class="page-hero__sub prose-content" style="text-align:left;">{{ publisher.bio|render_markdown }}</div>
@@ -34,7 +34,7 @@
             <h2 class="heading-section">Drafts</h2>
             <div class="event-list">
                 {% for event in drafts %}
-                    {% include "events/partials/event_card.html" with event=event show_draft_badge=True %}
+                    {% include "events/partials/event_card.html" with event=event %}
                 {% endfor %}
             </div>
         </section>

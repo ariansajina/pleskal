@@ -109,7 +109,7 @@
 
 {% block content %}
 <div class="page-hero">
-    <div class="page-hero__ornrow">✦ · ✦ · ✦</div>
+    <div class="page-hero__ornrow" aria-hidden="true">✦ · ✦ · ✦</div>
     <h1 class="page-hero__title page-hero__title--sm">Map</h1>
     <p class="page-hero__sub">Upcoming Copenhagen dance events, placed on the map.</p>
 </div>
@@ -139,7 +139,7 @@
                  aria-label="Map of upcoming events"></div>
         </div>
         <div class="map-side map-pane" data-map-pane="list">
-            <div id="event-map-results" aria-live="polite" aria-atomic="false">
+            <div id="event-map-results">
                 {% include "events/partials/event_map_results.html" %}
             </div>
         </div>
@@ -151,5 +151,6 @@
 {% block extra_scripts %}
 <script src="{% static 'vendor/leaflet/leaflet.js' %}" defer></script>
 <script src="{% static 'js/quick-date-filters.js' %}" defer></script>
+<script src="{% static 'js/filter-panel.js' %}" defer></script>
 <script src="{% static 'js/event-map.js' %}" defer></script>
 {% endblock %}

@@ -8,7 +8,9 @@ class ContentSecurityPolicyMiddleware:
     Policy:
       - default-src 'self'
       - script-src 'self' https://storage.ko-fi.com (HTMX is vendored, no inline
-        scripts needed; Ko-fi widget script is loaded from its CDN)
+        scripts needed; Ko-fi widget script is loaded from its CDN). Templates
+        must not use inline <script> blocks or onclick=/onchange=-style
+        attributes — put JS in static/js/*.js and load it with {% static %}.
       - style-src 'self' 'unsafe-inline' https://storage.ko-fi.com (Tailwind inline styles + Ko-fi widget CSS loaded inside srcdoc iframes)
       - img-src 'self' data: https://tile.openstreetmap.org (OSM raster tiles
         for the /map/ page are loaded directly from the tile server)

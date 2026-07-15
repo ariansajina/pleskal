@@ -5,6 +5,5 @@ document.addEventListener('DOMContentLoaded', function () {
     var nav = toggle.closest('.site-header').querySelector('.site-nav');
     var open = nav.classList.toggle('open');
     toggle.setAttribute('aria-expanded', open);
-    nav.setAttribute('aria-hidden', !open);
   });
 });
