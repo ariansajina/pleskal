@@ -42,9 +42,11 @@
   <style>
     /* ─── CSS Variables ─────────────────────────────────── */
     :root {
-      /* Fonts (native OS stacks — no webfont downloads) */
+      /* Fonts (native OS stacks — no webfont downloads). Didot is Apple's
+         native high-contrast didone serif, closest to the self-hosted
+         Playfair Display it replaces; other platforms fall back to Georgia. */
       --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      --font-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Cambria, serif;
+      --font-serif: Didot, Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Cambria, serif;
 
       /* Colors */
       --blue:          #3333CC;
