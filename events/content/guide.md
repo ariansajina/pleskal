@@ -119,7 +119,7 @@ Metropolis is Copenhagen's site-specific and public-space performance platform, 
 
 Copenhagen Circus Arts Festival (C!CAF) is a biennial festival presented by Kitt Johnson X-act that programmes high-quality international contemporary circus, focusing on works that erase the borders between circus and art. Recent editions have been hosted at Den Grå Hal in Christiania, drawing international companies and Copenhagen-based performers together.
 
-### [Tårnby Park Performance Festival](https://www.taarnbyparkstudio.dk/en/about-the-festival/)
+### [Tårnby Park Performance Festival](https://www.taarnby.art/)
 
 Tårnby Park Performance Festival is an annual community-rooted performance festival in Kastrup on Amager, founded in 2017 by performance artist Andreas Liebmann through Tårnby Park Studio in collaboration with the social-housing organisation Tårnbyhuse. The festival combines residency showings, international guest works, and citizen co-creation processeses.
 
