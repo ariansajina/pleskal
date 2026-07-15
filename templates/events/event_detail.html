@@ -171,7 +171,9 @@ details[open] summary::after { content: ''; }
 
     </article>
 </div>
+{% endblock %}
 
+{% block modals %}
 {% if event.has_map_location %}
     <div id="map-modal" class="map-modal" hidden role="dialog" aria-modal="true" aria-label="Map of {{ event.venue_name }}">
         <div class="map-modal__backdrop" data-close></div>

@@ -607,6 +607,10 @@
     {% now "Y" as current_year %}© {{ current_year }} pleskal · <a href="{% url 'about' %}">About</a>
   </footer>
 
+  {# ── MODALS (direct children of <body>, outside <main>, so page-level #}
+  {# inert() while a modal is open doesn't also make the modal inert) ── #}
+  {% block modals %}{% endblock %}
+
 {% block extra_scripts %}{% endblock %}
 
 {# ── KO-FI DONATION WIDGET (floating chat overlay, lazy-loaded) ────── #}
