@@ -4,6 +4,11 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!btn || !modal) return;
   var iframe = modal.querySelector("#map-modal-iframe");
   var closeBtn = modal.querySelector(".map-modal__close");
+  // Everything outside the modal, made inert while it's open so Tab can't
+  // walk out of the dialog and screen readers see it as unreachable.
+  var outsideEls = document.querySelectorAll(
+    "body > header, body > main, body > footer"
+  );
 
   function open() {
     var lat = parseFloat(btn.getAttribute("data-lat"));
@@ -18,6 +23,9 @@ document.addEventListener("DOMContentLoaded", function () {
       encodeURIComponent(lat + "," + lon);
     iframe.setAttribute("src", src);
     modal.removeAttribute("hidden");
+    outsideEls.forEach(function (el) {
+      el.setAttribute("inert", "");
+    });
     document.body.style.overflow = "hidden";
     if (closeBtn) closeBtn.focus();
     document.addEventListener("keydown", onKey);
@@ -26,6 +34,9 @@ document.addEventListener("DOMContentLoaded", function () {
   function close() {
     modal.setAttribute("hidden", "");
     iframe.setAttribute("src", "");
+    outsideEls.forEach(function (el) {
+      el.removeAttribute("inert");
+    });
     document.body.style.overflow = "";
     document.removeEventListener("keydown", onKey);
     btn.focus();

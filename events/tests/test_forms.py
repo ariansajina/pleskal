@@ -75,3 +75,66 @@ class TestEventFormUniqueness:
             creation=False,
         )
         assert form.is_valid(), form.errors
+
+
+@pytest.mark.django_db
+class TestEventFormMultiDay:
+    def _future_date_and_time(self):
+        future = timezone.localtime(timezone.now() + timezone.timedelta(days=7))
+        return future.date(), future.replace(minute=0, second=0, microsecond=0).time()
+
+    def test_end_date_defaults_to_start_date_when_blank(self):
+        date, start_time = self._future_date_and_time()
+        end_time = (
+            datetime.datetime.combine(date, start_time) + datetime.timedelta(hours=2)
+        ).time()
+        form = EventForm(
+            data=make_form_data(
+                "Festival", date, start_time, end_time=end_time.strftime("%H:%M")
+            ),
+            creation=True,
+        )
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["end_datetime"].date() == date
+
+    def test_multi_day_end_date_after_start_is_valid(self):
+        date, start_time = self._future_date_and_time()
+        end_date = date + datetime.timedelta(days=2)
+        form = EventForm(
+            data=make_form_data(
+                "Festival",
+                date,
+                start_time,
+                end_time="18:00",
+                end_date=end_date.strftime("%Y-%m-%d"),
+            ),
+            creation=True,
+        )
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["end_datetime"].date() == end_date
+
+    def test_end_date_before_start_date_is_invalid(self):
+        date, start_time = self._future_date_and_time()
+        end_date = date - datetime.timedelta(days=1)
+        form = EventForm(
+            data=make_form_data(
+                "Festival",
+                date,
+                start_time,
+                end_time="18:00",
+                end_date=end_date.strftime("%Y-%m-%d"),
+            ),
+            creation=True,
+        )
+        assert not form.is_valid()
+        assert "end_time" in form.errors
+
+    def test_editing_multi_day_event_prefills_end_date(self):
+        date, start_time = self._future_date_and_time()
+        start_dt = timezone.make_aware(datetime.datetime.combine(date, start_time))
+        end_dt = start_dt + datetime.timedelta(days=3)
+        event = EventFactory.create(
+            title="Festival", start_datetime=start_dt, end_datetime=end_dt
+        )
+        form = EventForm(instance=event, creation=False)
+        assert form.initial["end_date"] == end_dt.date()

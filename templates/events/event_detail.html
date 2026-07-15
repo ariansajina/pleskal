@@ -99,7 +99,7 @@ details[open] summary::after { content: ''; }
                     type="button"
                     data-share-title="{{ event.title }}"
                     data-share-text="{{ event.title }} – pleskal">Copy link</button>
-            <details style="position:relative;">
+            <details style="position:relative;" data-calendar-dropdown>
                 <summary class="btn btn--ghost btn--sm" style="list-style:none;cursor:pointer;">Add to calendar</summary>
                 <div style="position:absolute;top:calc(100% + 4px);left:0;z-index:20;background:var(--surface);border:1.5px solid var(--border);padding:var(--space-1);min-width:190px;display:flex;flex-direction:column;gap:var(--space-1);box-shadow:3px 3px 0 var(--border-light);">
                     <a href="{{ google_calendar_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Google Calendar &nearr;</a>
@@ -171,7 +171,9 @@ details[open] summary::after { content: ''; }
 
     </article>
 </div>
+{% endblock %}
 
+{% block modals %}
 {% if event.has_map_location %}
     <div id="map-modal" class="map-modal" hidden role="dialog" aria-modal="true" aria-label="Map of {{ event.venue_name }}">
         <div class="map-modal__backdrop" data-close></div>
@@ -192,15 +194,5 @@ details[open] summary::after { content: ''; }
 {% if event.has_map_location %}
     <script src="{% static 'js/show-map.js' %}"></script>
 {% endif %}
-<script>
-(function () {
-    var details = document.querySelector('details');
-    if (!details) return;
-    document.addEventListener('click', function (e) {
-        if (details.open && !details.contains(e.target)) {
-            details.open = false;
-        }
-    });
-}());
-</script>
+<script src="{% static 'js/calendar-dropdown.js' %}"></script>
 {% endblock %}

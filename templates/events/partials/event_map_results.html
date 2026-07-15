@@ -1,7 +1,7 @@
 {{ pin_data|json_script:"event-map-pins" }}
 
 <div class="map-summary text-sm text-muted" style="display:flex;justify-content:space-between;gap:var(--space-3);align-items:baseline;">
-    <span>
+    <span role="status">
         {% if events_with_coords %}
             {{ events_with_coords|length }} on map
         {% else %}

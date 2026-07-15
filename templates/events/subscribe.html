@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="page-hero">
-  <div class="page-hero__ornrow">✦ · · ✦ · · ✦</div>
+  <div class="page-hero__ornrow" aria-hidden="true">✦ · · ✦ · · ✦</div>
   <h1 class="page-hero__title">Subscribe</h1>
   <p class="page-hero__sub">Stay updated — directly in your calendar.</p>
 </div>
@@ -26,8 +26,8 @@
 
     <div class="filter-panel" style="margin-top:var(--space-4);">
 
-      <div class="filter-panel__group">
-        <span class="filter-panel__group-label">Category</span>
+      <fieldset class="filter-panel__group">
+        <legend class="filter-panel__group-label">Category</legend>
         <div class="filter-checkboxes">
           {% for value, label in category_choices %}
             <label>
@@ -36,11 +36,11 @@
             </label>
           {% endfor %}
         </div>
-      </div>
+      </fieldset>
 
       {% if publishers %}
-      <div class="filter-panel__group">
-        <span class="filter-panel__group-label">Publisher</span>
+      <fieldset class="filter-panel__group">
+        <legend class="filter-panel__group-label">Publisher</legend>
         <div class="filter-checkboxes">
           {% for pub in publishers %}
             <label>
@@ -55,7 +55,7 @@
             </label>
           {% endif %}
         </div>
-      </div>
+      </fieldset>
       {% endif %}
 
     </div>

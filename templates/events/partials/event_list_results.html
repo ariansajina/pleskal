@@ -2,18 +2,22 @@
 {% include "events/partials/when_filter_group.html" with oob=True %}
 {% endif %}
 
+<p class="text-sm text-muted" role="status" style="margin-bottom:var(--space-3);">
+    {{ page_obj.paginator.count }} event{{ page_obj.paginator.count|pluralize }} found
+</p>
+
 {% if events %}
     {% regroup events by local_start_date as events_by_date %}
 
     <div class="event-list">
         {% for date_group in events_by_date %}
-            <div class="section-rule">
+            <h2 class="section-rule">
                 {% if date_group.grouper >= week_start and date_group.grouper <= week_end %}
                     {{ date_group.grouper|date:"l" }}
                 {% else %}
                     {{ date_group.grouper|date:"l, j F" }}
                 {% endif %}
-            </div>
+            </h2>
             {% for event in date_group.list %}
                 {% include "events/partials/event_card.html" with event=event %}
             {% endfor %}

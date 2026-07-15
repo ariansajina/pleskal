@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="page-hero">
-    <div class="page-hero__ornrow">✦ · ✦ · ✦</div>
+    <div class="page-hero__ornrow" aria-hidden="true">✦ · ✦ · ✦</div>
     <h1 class="page-hero__title">pleskal</h1>
     <p class="page-hero__sub">Copenhagen's dance and performance art agenda.<br>A hyperlocal community-driven event calendar.</p>
 </div>
@@ -20,7 +20,7 @@
       loading…
     </p>
 
-    <div id="event-list" aria-live="polite" aria-atomic="false">
+    <div id="event-list">
         {% include "events/partials/event_list_results.html" %}
     </div>
 
@@ -29,4 +29,5 @@
 
 {% block extra_scripts %}
 <script src="{% static 'js/quick-date-filters.js' %}" defer></script>
+<script src="{% static 'js/filter-panel.js' %}" defer></script>
 {% endblock %}

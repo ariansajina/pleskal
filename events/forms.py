@@ -39,6 +39,16 @@ class EventForm(forms.ModelForm):
         input_formats=[TIME_FORMAT],
         required=False,
     )
+    end_date = forms.DateField(
+        label="End date",
+        help_text="Only needed for events that span multiple days.",
+        widget=forms.DateInput(
+            attrs={"type": "date", "class": "form-input"},
+            format=DATE_FORMAT,
+        ),
+        input_formats=[DATE_FORMAT],
+        required=False,
+    )
 
     class Meta:
         model = Event
@@ -69,6 +79,8 @@ class EventForm(forms.ModelForm):
             if self.instance.end_datetime:
                 local_end = timezone.localtime(self.instance.end_datetime)
                 self.initial["end_time"] = local_end.strftime(TIME_FORMAT)
+                if local_end.date() != local_start.date():
+                    self.initial["end_date"] = local_end.date()
         elif creation:
             # Default to today and next full hour for new events
             now = timezone.localtime(timezone.now())
@@ -89,6 +101,7 @@ class EventForm(forms.ModelForm):
                 self.fields[fname].widget.attrs.setdefault("class", "form-input")
         if "category" in self.fields:
             self.fields["category"].widget.attrs.setdefault("class", "form-select")
+        self.fields["is_free"].widget.attrs.setdefault("data-free-toggle", "1")
         self.fields["image"].required = False
         self.fields["description"].required = False
         self.fields["venue_address"].required = False
@@ -132,6 +145,7 @@ class EventForm(forms.ModelForm):
         date = cleaned.get("date")
         start_time = cleaned.get("start_time")
         end_time = cleaned.get("end_time")
+        end_date = cleaned.get("end_date") or date
 
         if date and start_time:
             start_dt = timezone.make_aware(datetime.datetime.combine(date, start_time))
@@ -140,7 +154,9 @@ class EventForm(forms.ModelForm):
             cleaned["start_datetime"] = start_dt
             cleaned["end_datetime"] = None
             if end_time:
-                end_dt = timezone.make_aware(datetime.datetime.combine(date, end_time))
+                end_dt = timezone.make_aware(
+                    datetime.datetime.combine(end_date, end_time)
+                )
                 if end_dt <= start_dt:
                     self.add_error("end_time", "End time must be after start time.")
                 else:
