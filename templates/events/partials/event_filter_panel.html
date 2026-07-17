@@ -19,7 +19,7 @@ Optional:
     show_when_filter is true.
 
 Layout: an always-visible quickbar (This week / Next week date chips + the
-"More filters" disclosure toggle + Clear button) with a collapsible panel
+"More filters" disclosure toggle + a Clear text link) with a collapsible panel
 (search, when, category, publisher, date range incl. This weekend/This
 month/Next month chips, is_free, wheelchair accessible) below it. The
 disclosure's open/closed state is view-computed (advanced_filters_open)
@@ -139,6 +139,6 @@ live inside the panel should force it open.
 
         <button type="button"
                 data-clear-filters="{{ filter_form_id }}"
-                class="filter-chip">Clear filters</button>
+                class="filter-clear-link">Clear</button>
     </div>
 </form>
