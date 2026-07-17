@@ -463,6 +463,41 @@ class TestEventListView:
         assert str(near.title).encode() in resp.content
         assert str(far.title).encode() not in resp.content
 
+    def test_quickbar_chips_rendered(self, client):
+        resp = client.get(reverse("event_list"))
+        assert resp.status_code == 200
+        assert b"This week" in resp.content
+        assert b"This weekend" in resp.content
+        assert b"Next week" in resp.content
+        assert b"Free" in resp.content
+        assert b"More filters" in resp.content
+
+    def test_advanced_filters_open_false_with_no_params(self, client):
+        resp = client.get(reverse("event_list"))
+        assert resp.context["advanced_filters_open"] is False
+
+    def test_advanced_filters_open_false_with_is_free_only(self, client):
+        resp = client.get(reverse("event_list") + "?is_free=1")
+        assert resp.context["advanced_filters_open"] is False
+
+    def test_advanced_filters_open_false_with_this_week_range(self, client):
+        ranges = client.get(reverse("event_list")).context["quick_date_ranges"]
+        date_from, date_to = ranges["this_week"]
+        resp = client.get(
+            reverse("event_list") + f"?date_from={date_from}&date_to={date_to}"
+        )
+        assert resp.context["advanced_filters_open"] is False
+
+    def test_advanced_filters_open_true_with_category(self, client):
+        resp = client.get(reverse("event_list") + "?category=workshop")
+        assert resp.context["advanced_filters_open"] is True
+
+    def test_advanced_filters_open_true_with_custom_date_range(self, client):
+        resp = client.get(
+            reverse("event_list") + "?date_from=2026-09-01&date_to=2026-09-05"
+        )
+        assert resp.context["advanced_filters_open"] is True
+
     def test_date_range_overrides_past_toggle(self, client):
         """When a date range is set, past=1 is ignored — all events in the
         range are shown regardless of whether they are upcoming or past."""

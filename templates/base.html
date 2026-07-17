@@ -389,9 +389,15 @@
     .page-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 
     /* ─── FILTER PANEL ──────────────────────────────────── */
+    .filter-quickbar {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: var(--space-2) var(--space-3); margin-bottom: var(--space-4);
+    }
+    .filter-quickbar > .filter-checkboxes { flex: 0 1 auto; }
+    .filter-quickbar > [data-clear-filters] { margin-left: auto; }
     .filter-panel {
       background: rgba(255,255,255,0.5); border: 1.5px solid var(--border-light);
-      padding: var(--space-4) var(--space-4); margin-bottom: var(--space-4);
+      padding: var(--space-4) var(--space-4); margin-top: var(--space-3);
       display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-8); align-items: flex-end;
     }
     .filter-panel__group { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -415,17 +421,18 @@
       pointer-events: none;
     }
 
+    .filter-disclosure { flex: 0 0 auto; }
+    .filter-disclosure[open] { flex-basis: 100%; }
     .filter-disclosure__summary {
-      display: block; list-style: none; cursor: pointer;
-      font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-      padding: 0.55rem 1.25rem; border: 1.5px solid var(--border-strong); color: var(--ink-muted);
-      margin-bottom: var(--space-4); background: rgba(255,255,255,0.5);
+      display: inline-flex; align-items: center; gap: 0.35em; list-style: none; cursor: pointer;
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 0.35rem 0.7rem; border: 1.5px solid var(--border-strong); color: var(--ink-muted);
+      background: transparent; transition: all 0.12s;
     }
     .filter-disclosure__summary::-webkit-details-marker { display: none; }
     .filter-disclosure__summary:hover { border-color: var(--blue); color: var(--blue); }
-    @media (min-width: 768px) {
-      .filter-disclosure > summary { display: none; }
-      .filter-disclosure > .filter-panel { display: flex !important; }
+    .filter-disclosure[open] > .filter-disclosure__summary {
+      border-color: var(--blue); color: var(--blue);
     }
     .filter-checkboxes input[type="checkbox"]:focus-visible + .filter-chip {
       outline: 2px solid var(--blue);

@@ -47,12 +47,41 @@ def _get_quick_date_ranges():
         next_month_start.year, next_month_start.month
     )[1]
     next_month_end = next_month_start.replace(day=next_month_last_day)
+    saturday = week_start + datetime.timedelta(days=5)
+    sunday = week_start + datetime.timedelta(days=6)
+    weekend_start = max(today, saturday)
     return {
         "this_week": (today.isoformat(), week_end.isoformat()),
+        "this_weekend": (weekend_start.isoformat(), sunday.isoformat()),
         "next_week": (next_week_start.isoformat(), next_week_end.isoformat()),
         "this_month": (month_start.isoformat(), month_end.isoformat()),
         "next_month": (next_month_start.isoformat(), next_month_end.isoformat()),
     }
+
+
+def _advanced_filters_open(
+    *,
+    search_query,
+    categories,
+    publisher_slugs,
+    is_wheelchair_accessible,
+    date_from,
+    date_to,
+    quick_date_ranges,
+):
+    """True when a filter that only lives inside the "More filters" panel is
+    active, so the disclosure should render open on page load."""
+    if search_query or categories or publisher_slugs or is_wheelchair_accessible:
+        return True
+    if date_from or date_to:
+        quickbar_ranges = {
+            quick_date_ranges["this_week"],
+            quick_date_ranges["this_weekend"],
+            quick_date_ranges["next_week"],
+        }
+        if (date_from or "", date_to or "") not in quickbar_ranges:
+            return True
+    return False
 
 
 def _attach_processed_image(form, event, image_file) -> bool:
@@ -383,6 +412,7 @@ class EventListView(RateLimitMixin, View):
         week_start = today - datetime.timedelta(days=today.weekday())
         week_end = week_start + datetime.timedelta(days=6)
         system_publishers, has_community_publishers = _list_filter_publishers()
+        is_wheelchair_accessible = request.GET.get("is_wheelchair_accessible") == "1"
         ctx = {
             "page_obj": page_obj,
             "base_query_string": base_query_string,
@@ -400,12 +430,20 @@ class EventListView(RateLimitMixin, View):
             "week_end": week_end,
             "date_range_active": date_range_active,
             "is_free": request.GET.get("is_free") == "1",
-            "is_wheelchair_accessible": request.GET.get("is_wheelchair_accessible")
-            == "1",
+            "is_wheelchair_accessible": is_wheelchair_accessible,
             "search_query": search_query,
             "upcoming_count": upcoming_count,
             "past_count": past_count,
             "quick_date_ranges": quick_date_ranges,
+            "advanced_filters_open": _advanced_filters_open(
+                search_query=search_query,
+                categories=categories,
+                publisher_slugs=publisher_slugs,
+                is_wheelchair_accessible=is_wheelchair_accessible,
+                date_from=date_from,
+                date_to=date_to,
+                quick_date_ranges=quick_date_ranges,
+            ),
         }
 
         # HTMX: return only the results partial
@@ -486,6 +524,8 @@ class EventMapView(RateLimitMixin, View):
         week_start = today - datetime.timedelta(days=today.weekday())
         week_end = week_start + datetime.timedelta(days=6)
         system_publishers, has_community_publishers = _list_filter_publishers()
+        quick_date_ranges = _get_quick_date_ranges()
+        is_wheelchair_accessible = request.GET.get("is_wheelchair_accessible") == "1"
 
         ctx = {
             "events_with_coords": with_coords,
@@ -503,10 +543,18 @@ class EventMapView(RateLimitMixin, View):
             "week_end": week_end,
             "date_range_active": filter_state["date_range_active"],
             "is_free": request.GET.get("is_free") == "1",
-            "is_wheelchair_accessible": request.GET.get("is_wheelchair_accessible")
-            == "1",
+            "is_wheelchair_accessible": is_wheelchair_accessible,
             "search_query": filter_state["search_query"],
-            "quick_date_ranges": _get_quick_date_ranges(),
+            "quick_date_ranges": quick_date_ranges,
+            "advanced_filters_open": _advanced_filters_open(
+                search_query=filter_state["search_query"],
+                categories=filter_state["categories"],
+                publisher_slugs=filter_state["publisher_slugs"],
+                is_wheelchair_accessible=is_wheelchair_accessible,
+                date_from=filter_state["date_from"],
+                date_to=filter_state["date_to"],
+                quick_date_ranges=quick_date_ranges,
+            ),
         }
 
         if request.headers.get("HX-Request"):
