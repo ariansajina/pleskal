@@ -32,6 +32,7 @@ Optional:
             <label class="filter-panel__group-label" for="{{ filter_form_id }}-q">Search</label>
             <input type="search" name="q" value="{{ search_query }}" id="{{ filter_form_id }}-q"
                    placeholder="Title, artist, venue, description…"
+                   maxlength="200"
                    hx-get="{{ filter_hx_url }}"
                    hx-target="{{ filter_hx_target }}"
                    hx-push-url="true"

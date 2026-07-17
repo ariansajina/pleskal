@@ -560,6 +560,20 @@ class TestEventListView:
         assert str(e1.title).encode() in resp.content
         assert str(e2.title).encode() in resp.content
 
+    def test_search_multi_word_matches_terms_across_fields(self, client):
+        match = EventFactory(title="Tango Evening", venue_name="Vega Concert Hall")
+        no_match = EventFactory(title="Tango Evening", venue_name="City Dance Studio")
+        resp = client.get(reverse("event_list") + "?q=Tango+Vega")
+        assert str(match.venue_name).encode() in resp.content
+        assert str(no_match.venue_name).encode() not in resp.content
+
+    def test_search_query_truncated_to_max_length(self, client):
+        match = EventFactory(title="Tango Evening Special")
+        long_query = "Tango" + "x" * 300
+        resp = client.get(reverse("event_list") + f"?q={long_query}")
+        assert resp.context["search_query"] == long_query[:200]
+        assert str(match.title).encode() not in resp.content
+
     def test_publisher_filter_by_single_system_user(self, client):
         """Filter by a single system user shows only their events."""
         system_user = UserFactory.create(

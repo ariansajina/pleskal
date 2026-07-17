@@ -24,6 +24,7 @@ from .sharing import apple_calendar_url, google_calendar_url, outlook_calendar_u
 EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
 MAX_UPCOMING_EVENTS_PER_USER = settings.MAX_UPCOMING_EVENTS_PER_USER
+SEARCH_QUERY_MAX_LENGTH = 200
 
 
 # ---------------------------------------------------------------------------
@@ -309,13 +310,13 @@ def _filtered_event_queryset(request):
         qs = qs.filter(is_wheelchair_accessible=True)
 
     # --- Filter: search ---
-    search_query = request.GET.get("q", "").strip()
-    if search_query:
+    search_query = request.GET.get("q", "").strip()[:SEARCH_QUERY_MAX_LENGTH]
+    for term in search_query.split():
         qs = qs.filter(
-            Q(title__icontains=search_query)
-            | Q(venue_name__icontains=search_query)
-            | Q(description__icontains=search_query)
-            | Q(submitted_by__display_name__icontains=search_query)
+            Q(title__icontains=term)
+            | Q(venue_name__icontains=term)
+            | Q(description__icontains=term)
+            | Q(submitted_by__display_name__icontains=term)
         )
 
     filter_state = {
