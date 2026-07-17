@@ -1,6 +1,7 @@
 // Drives the "More filters (N)" badge on the filter-disclosure summary.
 // Counts only filters that live inside the collapsible panel — the
-// quickbar's own date/Free chips are excluded since they're always visible.
+// quickbar's own This week/Next week chips are excluded since they're
+// always visible.
 document.addEventListener("DOMContentLoaded", function () {
   document.querySelectorAll("form[data-today]").forEach(function (form) {
     var summary = form.querySelector("[data-filter-count-label]");
@@ -16,6 +17,9 @@ document.addEventListener("DOMContentLoaded", function () {
       count += form.querySelectorAll(
         'input[type="checkbox"][name="publisher"]:checked'
       ).length;
+
+      var free = form.querySelector('input[type="checkbox"][name="is_free"]');
+      if (free && free.checked) count += 1;
 
       var wheelchair = form.querySelector(
         'input[type="checkbox"][name="is_wheelchair_accessible"]'
