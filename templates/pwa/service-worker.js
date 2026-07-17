@@ -11,7 +11,6 @@ const OFFLINE_URL = "/offline/";
 const PRECACHE_URLS = [
   OFFLINE_URL,
   "{% static 'css/output.css' %}",
-  "{% static 'css/fonts.css' %}",
   "{% static 'js/htmx.min.js' %}",
   "{% static 'js/nav.js' %}",
   "{% static 'js/quick-date-filters.js' %}",

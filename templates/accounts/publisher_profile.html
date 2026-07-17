@@ -56,7 +56,7 @@
     {% else %}
         {% if is_own_profile %}
             <div class="text-center text-muted" style="padding:var(--space-16) 0;">
-                <p style="font-family:'Playfair Display',serif;font-size:var(--text-lg);margin-bottom:var(--space-3);">No events yet.</p>
+                <p style="font-family:var(--font-serif);font-size:var(--text-lg);margin-bottom:var(--space-3);">No events yet.</p>
                 <a href="{% url 'event_create' %}" class="link-accent">Submit your first event →</a>
             </div>
         {% else %}
