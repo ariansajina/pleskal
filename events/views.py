@@ -64,6 +64,7 @@ def _advanced_filters_open(
     search_query,
     categories,
     publisher_slugs,
+    is_free,
     is_wheelchair_accessible,
     date_from,
     date_to,
@@ -71,12 +72,17 @@ def _advanced_filters_open(
 ):
     """True when a filter that only lives inside the "More filters" panel is
     active, so the disclosure should render open on page load."""
-    if search_query or categories or publisher_slugs or is_wheelchair_accessible:
+    if (
+        search_query
+        or categories
+        or publisher_slugs
+        or is_free
+        or is_wheelchair_accessible
+    ):
         return True
     if date_from or date_to:
         quickbar_ranges = {
             quick_date_ranges["this_week"],
-            quick_date_ranges["this_weekend"],
             quick_date_ranges["next_week"],
         }
         if (date_from or "", date_to or "") not in quickbar_ranges:
@@ -412,6 +418,7 @@ class EventListView(RateLimitMixin, View):
         week_start = today - datetime.timedelta(days=today.weekday())
         week_end = week_start + datetime.timedelta(days=6)
         system_publishers, has_community_publishers = _list_filter_publishers()
+        is_free = request.GET.get("is_free") == "1"
         is_wheelchair_accessible = request.GET.get("is_wheelchair_accessible") == "1"
         ctx = {
             "page_obj": page_obj,
@@ -429,7 +436,7 @@ class EventListView(RateLimitMixin, View):
             "week_start": week_start,
             "week_end": week_end,
             "date_range_active": date_range_active,
-            "is_free": request.GET.get("is_free") == "1",
+            "is_free": is_free,
             "is_wheelchair_accessible": is_wheelchair_accessible,
             "search_query": search_query,
             "upcoming_count": upcoming_count,
@@ -439,6 +446,7 @@ class EventListView(RateLimitMixin, View):
                 search_query=search_query,
                 categories=categories,
                 publisher_slugs=publisher_slugs,
+                is_free=is_free,
                 is_wheelchair_accessible=is_wheelchair_accessible,
                 date_from=date_from,
                 date_to=date_to,
@@ -525,6 +533,7 @@ class EventMapView(RateLimitMixin, View):
         week_end = week_start + datetime.timedelta(days=6)
         system_publishers, has_community_publishers = _list_filter_publishers()
         quick_date_ranges = _get_quick_date_ranges()
+        is_free = request.GET.get("is_free") == "1"
         is_wheelchair_accessible = request.GET.get("is_wheelchair_accessible") == "1"
 
         ctx = {
@@ -542,7 +551,7 @@ class EventMapView(RateLimitMixin, View):
             "week_start": week_start,
             "week_end": week_end,
             "date_range_active": filter_state["date_range_active"],
-            "is_free": request.GET.get("is_free") == "1",
+            "is_free": is_free,
             "is_wheelchair_accessible": is_wheelchair_accessible,
             "search_query": filter_state["search_query"],
             "quick_date_ranges": quick_date_ranges,
@@ -550,6 +559,7 @@ class EventMapView(RateLimitMixin, View):
                 search_query=filter_state["search_query"],
                 categories=filter_state["categories"],
                 publisher_slugs=filter_state["publisher_slugs"],
+                is_free=is_free,
                 is_wheelchair_accessible=is_wheelchair_accessible,
                 date_from=filter_state["date_from"],
                 date_to=filter_state["date_to"],

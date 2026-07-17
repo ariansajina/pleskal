@@ -467,18 +467,33 @@ class TestEventListView:
         resp = client.get(reverse("event_list"))
         assert resp.status_code == 200
         assert b"This week" in resp.content
-        assert b"This weekend" in resp.content
         assert b"Next week" in resp.content
-        assert b"Free" in resp.content
         assert b"More filters" in resp.content
+
+    def test_this_weekend_and_free_moved_into_panel(self, client):
+        """Only This week/Next week are quickbar chips now; This weekend
+        (a date chip) and Free (a checkbox) live inside the panel."""
+        resp = client.get(reverse("event_list"))
+        content = resp.content.decode()
+        quickbar = content[
+            content.index('class="filter-quickbar"') : content.index(
+                'class="filter-disclosure"'
+            )
+        ]
+        assert "This weekend" not in quickbar
+        assert 'name="is_free"' not in quickbar
+
+        panel = content[content.index('class="filter-disclosure"') :]
+        assert "This weekend" in panel
+        assert 'name="is_free"' in panel
 
     def test_advanced_filters_open_false_with_no_params(self, client):
         resp = client.get(reverse("event_list"))
         assert resp.context["advanced_filters_open"] is False
 
-    def test_advanced_filters_open_false_with_is_free_only(self, client):
+    def test_advanced_filters_open_true_with_is_free_only(self, client):
         resp = client.get(reverse("event_list") + "?is_free=1")
-        assert resp.context["advanced_filters_open"] is False
+        assert resp.context["advanced_filters_open"] is True
 
     def test_advanced_filters_open_false_with_this_week_range(self, client):
         ranges = client.get(reverse("event_list")).context["quick_date_ranges"]

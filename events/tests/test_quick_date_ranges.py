@@ -56,6 +56,7 @@ class TestAdvancedFiltersOpen:
             "search_query": "",
             "categories": [],
             "publisher_slugs": [],
+            "is_free": False,
             "is_wheelchair_accessible": False,
             "date_from": "",
             "date_to": "",
@@ -67,10 +68,10 @@ class TestAdvancedFiltersOpen:
     def test_no_params_closed(self):
         assert self._open() is False
 
-    def test_is_free_alone_does_not_open(self):
-        # is_free isn't part of the signature (it lives outside the panel);
-        # confirm the default (no panel-only filters) stays closed.
-        assert self._open() is False
+    def test_is_free_opens(self):
+        # is_free now lives inside the panel (only This week/Next week are
+        # in the quickbar), so it must force the disclosure open.
+        assert self._open(is_free=True) is True
 
     def test_date_range_matching_this_week_stays_closed(self):
         assert (
@@ -81,13 +82,23 @@ class TestAdvancedFiltersOpen:
             is False
         )
 
-    def test_date_range_matching_this_weekend_stays_closed(self):
+    def test_date_range_matching_next_week_stays_closed(self):
+        assert (
+            self._open(
+                date_from="2026-07-20",
+                date_to="2026-07-26",
+            )
+            is False
+        )
+
+    def test_date_range_matching_this_weekend_opens(self):
+        # This weekend moved into the panel, so it's no longer exempt.
         assert (
             self._open(
                 date_from="2026-07-18",
                 date_to="2026-07-19",
             )
-            is False
+            is True
         )
 
     def test_category_opens(self):
