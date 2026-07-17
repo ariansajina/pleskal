@@ -40,13 +40,55 @@
   <script src="{% static 'js/pwa.js' %}" defer></script>
 
   <style>
+    /* ─── Self-hosted fonts ─────────────────────────────── */
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url('{% static "fonts/inter-400.woff2" %}') format('woff2');
+    }
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url('{% static "fonts/inter-500.woff2" %}') format('woff2');
+    }
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url('{% static "fonts/inter-600.woff2" %}') format('woff2');
+    }
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url('{% static "fonts/inter-700.woff2" %}') format('woff2');
+    }
+    @font-face {
+      font-family: 'Playfair Display';
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url('{% static "fonts/playfair-display-700.woff2" %}') format('woff2');
+    }
+    @font-face {
+      font-family: 'Playfair Display';
+      font-style: italic;
+      font-weight: 900;
+      font-display: swap;
+      src: url('{% static "fonts/playfair-display-italic-900.woff2" %}') format('woff2');
+    }
+
     /* ─── CSS Variables ─────────────────────────────────── */
     :root {
-      /* Fonts (native OS stacks — no webfont downloads). Didot is Apple's
-         native high-contrast didone serif, closest to the self-hosted
-         Playfair Display it replaces; other platforms fall back to Georgia. */
-      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      --font-serif: Didot, Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Cambria, serif;
+      /* Fonts: self-hosted Playfair Display (headings) + Inter (body/UI). */
+      --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-serif: "Playfair Display", Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Cambria, serif;
 
       /* Colors */
       --blue:          #3333CC;
