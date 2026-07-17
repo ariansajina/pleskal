@@ -35,6 +35,23 @@ class TestEventMapView:
         assert resp.status_code == 200
         assert b"<!DOCTYPE html>" in resp.content
 
+    def test_quickbar_chips_rendered(self, client):
+        resp = client.get(reverse("event_map"))
+        assert resp.status_code == 200
+        assert b"This week" in resp.content
+        assert b"This weekend" in resp.content
+        assert b"Next week" in resp.content
+        assert b"Free" in resp.content
+        assert b"More filters" in resp.content
+
+    def test_advanced_filters_open_false_with_no_params(self, client):
+        resp = client.get(reverse("event_map"))
+        assert resp.context["advanced_filters_open"] is False
+
+    def test_advanced_filters_open_true_with_category(self, client):
+        resp = client.get(reverse("event_map") + "?category=workshop")
+        assert resp.context["advanced_filters_open"] is True
+
     def test_htmx_request_returns_partial(self, client):
         resp = client.get(reverse("event_map"), HTTP_HX_REQUEST="true")
         assert resp.status_code == 200
