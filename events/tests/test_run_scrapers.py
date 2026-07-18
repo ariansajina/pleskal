@@ -9,6 +9,7 @@ scrape function).
 
 import datetime
 from dataclasses import replace
+from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
@@ -107,6 +108,55 @@ class TestRunScrapersSentryReporting:
         call_command("run_scrapers", only=["hautscene"])
 
         assert captured == []
+
+
+@pytest.mark.django_db
+class TestRunScrapersGeocodingBackfill:
+    """run_scrapers is the scrape-cron entry point, so it's the recovery path
+    for events that saved without coordinates (H2/H3): it must re-run
+    backfill_geocoding on every pass."""
+
+    def test_backfill_runs_after_scrapers(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        event = EventFactory.create(
+            venue_name="Dansehallerne", latitude=None, longitude=None
+        )
+        with patch(
+            "events.management.commands.backfill_geocoding.geocode",
+            return_value=(55.6761, 12.5683),
+        ):
+            call_command("run_scrapers", only=["hautscene"])
+        event.refresh_from_db()
+        assert event.latitude == pytest.approx(55.6761)
+        assert event.longitude == pytest.approx(12.5683)
+
+    def test_dry_run_passed_through_to_backfill(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        event = EventFactory.create(
+            venue_name="Dansehallerne", latitude=None, longitude=None
+        )
+        with patch(
+            "events.management.commands.backfill_geocoding.geocode",
+            return_value=(55.6761, 12.5683),
+        ):
+            call_command("run_scrapers", only=["hautscene"], dry_run=True)
+        event.refresh_from_db()
+        assert event.latitude is None
+
+    def test_backfill_failure_is_captured_and_does_not_abort_run(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = []
+        monkeypatch.setattr(
+            run_scrapers.sentry_sdk, "capture_exception", captured.append
+        )
+        boom = RuntimeError("backfill boom")
+
+        with patch(
+            "events.management.commands.run_scrapers.call_command", side_effect=boom
+        ):
+            call_command("run_scrapers", only=["hautscene"])  # must not raise
+
+        assert captured == [boom]
 
 
 @pytest.mark.django_db

@@ -8,19 +8,28 @@
             No mapped events
         {% endif %}
     </span>
-    {% if events_without_coords %}
-        <a href="#no-map-location" class="link-accent text-sm">
-            +{{ events_without_coords|length }} without location
-        </a>
-    {% endif %}
 </div>
 
-{% if events_with_coords %}
-    <div class="event-list">
-        {% for event in events_with_coords %}
-            {% include "events/partials/event_card.html" with event=event %}
+{% if pin_data %}
+    <ul class="map-index" aria-label="Events on map">
+        {% for group in pin_data %}
+            <li class="map-index-group">
+                <div class="map-index-venue">{{ group.venue_name }}</div>
+                <ul class="map-index-events">
+                    {% for event in group.events %}
+                        <li>
+                            <button type="button" class="map-index-entry"
+                                    data-pin-index="{{ forloop.parentloop.counter0 }}"
+                                    data-event-slug="{{ event.slug }}">
+                                <span class="map-index-title">{{ event.title }}</span>
+                                <span class="map-index-date">{{ event.start_display }}</span>
+                            </button>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </li>
         {% endfor %}
-    </div>
+    </ul>
 {% else %}
     <p class="text-base text-muted text-center" style="padding:var(--space-6) 0;">
         No upcoming events match these filters.
@@ -30,13 +39,10 @@
 {% if events_without_coords %}
     <section id="no-map-location" style="margin-top:var(--space-6);">
         <div class="section-rule">No map location</div>
-        <p class="text-sm text-muted" style="margin-bottom:var(--space-3);">
-            These events don't have coordinates yet, so they aren't pinned on the map.
+        <p class="text-sm text-muted">
+            <a href="{% url 'event_list' %}{% if base_query_string %}?{{ base_query_string }}{% endif %}" class="link-accent">
+                +{{ events_without_coords|length }} event{{ events_without_coords|length|pluralize }} without a location — view in list
+            </a>
         </p>
-        <div class="event-list">
-            {% for event in events_without_coords %}
-                {% include "events/partials/event_card.html" with event=event %}
-            {% endfor %}
-        </div>
     </section>
 {% endif %}

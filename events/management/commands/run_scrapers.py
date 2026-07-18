@@ -177,6 +177,27 @@ class Command(BaseCommand):
                 if tmp_path and os.path.exists(tmp_path):
                     os.unlink(tmp_path)
 
+        # ── Geocoding backfill ────────────────────────────────────────────
+        # Recovery path for events that saved without coordinates (a transient
+        # Nominatim failure, or a definitive miss that's since become
+        # resolvable — e.g. a venue address typo fixed upstream). Runs on
+        # every cron pass so gaps don't linger; failures are reported to
+        # Sentry but never fail the overall run.
+        self.stdout.write("")
+        self.stdout.write(self.style.HTTP_INFO("Backfilling geocoding..."))
+        try:
+            backfill_kwargs: dict = {}
+            if dry_run:
+                backfill_kwargs["dry_run"] = True
+            call_command("backfill_geocoding", **backfill_kwargs)
+        except Exception as exc:
+            self._report_to_sentry(exc, "backfill_geocoding")
+            self.stderr.write(
+                self.style.ERROR(
+                    f"backfill_geocoding FAILED:\n{traceback.format_exc()}"
+                )
+            )
+
         # ── Summary ────────────────────────────────────────────────────
         self.stdout.write("")
         self.stdout.write(self.style.HTTP_INFO("Summary:"))

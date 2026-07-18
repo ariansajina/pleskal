@@ -196,6 +196,29 @@ class TestEventMapView:
         assert near.slug in pin_slugs
         assert far.slug not in pin_slugs
 
+    def test_explicit_date_range_shows_past_events(self, client):
+        """A date range in the past must not be silently emptied by the
+        map's default upcoming-only filter — same override as the list
+        view's "past" toggle."""
+        from events.models import Event as EventModel
+
+        past = EventModel(
+            title="Past Mapped Show",
+            start_datetime=timezone.now() - timezone.timedelta(days=3),
+            venue_name="Venue",
+            category="social",
+            latitude=55.6761,
+            longitude=12.5683,
+        )
+        past.save()
+        date_from = (timezone.now() - timezone.timedelta(days=5)).strftime("%Y-%m-%d")
+        date_to = (timezone.now() - timezone.timedelta(days=1)).strftime("%Y-%m-%d")
+        resp = client.get(
+            reverse("event_map") + f"?date_from={date_from}&date_to={date_to}"
+        )
+        pin_slugs = _pin_slugs(resp)
+        assert past.slug in pin_slugs
+
     def test_publisher_filter_respected(self, client):
         system_user = UserFactory.create(
             is_system_account=True, display_name="Dansehallerne"

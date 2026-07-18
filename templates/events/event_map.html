@@ -36,6 +36,62 @@
         min-width: 0;
     }
 
+    .map-index {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    .map-index-venue {
+        font-family: var(--font-serif);
+        font-weight: 700;
+        font-size: var(--text-sm);
+        color: var(--blue);
+        margin-bottom: var(--space-1);
+    }
+    .map-index-events {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .map-index-entry {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--space-2);
+        width: 100%;
+        padding: var(--space-1) 0;
+        border-top: 1px solid var(--border-light);
+        background: none;
+        border-left: none;
+        border-right: none;
+        border-bottom: none;
+        text-align: left;
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+    }
+    .map-index-events li:first-child .map-index-entry {
+        border-top: none;
+    }
+    .map-index-entry:hover .map-index-title,
+    .map-index-entry:focus-visible .map-index-title {
+        color: var(--blue);
+        text-decoration: underline;
+    }
+    .map-index-title {
+        font-weight: 600;
+        font-size: var(--text-sm);
+    }
+    .map-index-date {
+        font-size: var(--text-sm);
+        color: var(--ink-muted);
+        white-space: nowrap;
+    }
+
     .map-popup-venue {
         font-family: var(--font-serif);
         font-weight: 700;

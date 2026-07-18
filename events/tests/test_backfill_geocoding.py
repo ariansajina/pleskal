@@ -64,6 +64,22 @@ class TestBackfillGeocodingCommand:
         assert mock_geocode.call_count == 2
         assert Event.objects.filter(latitude__isnull=False).count() == 2
 
+    def test_picks_up_row_with_only_one_null_coordinate(self):
+        """has_map_location requires both coordinates, so a row with just one
+        set (e.g. a partial write) must still be picked up for backfill."""
+        event = EventFactory.create(
+            venue_name="Dansehallerne", latitude=55.0, longitude=None
+        )
+        with patch(
+            "events.management.commands.backfill_geocoding.geocode",
+            return_value=(55.6761, 12.5683),
+        ) as mock_geocode:
+            call_command("backfill_geocoding", stdout=io.StringIO())
+        mock_geocode.assert_called_once()
+        event.refresh_from_db()
+        assert event.latitude == pytest.approx(55.6761)
+        assert event.longitude == pytest.approx(12.5683)
+
     def test_miss_is_reported_and_coords_stay_null(self):
         event = EventFactory.create(venue_name="Nowhere", latitude=None)
         buf = io.StringIO()

@@ -6,6 +6,7 @@ will not retry venues that previously resolved to no result.
 """
 
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 
 from events.geocoding import geocode
 from events.models import Event
@@ -31,7 +32,11 @@ class Command(BaseCommand):
         limit = options.get("limit")
         dry_run = options.get("dry_run", False)
 
-        qs = Event.objects.filter(latitude__isnull=True).exclude(venue_name="")
+        # has_map_location requires both coordinates, so a row missing just one
+        # (e.g. a partial write) still needs to be picked up here.
+        qs = Event.objects.filter(
+            Q(latitude__isnull=True) | Q(longitude__isnull=True)
+        ).exclude(venue_name="")
         qs = qs.order_by("created_at")
         if limit:
             qs = qs[:limit]

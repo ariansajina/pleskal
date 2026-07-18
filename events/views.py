@@ -90,6 +90,15 @@ def _advanced_filters_open(
     return False
 
 
+def _format_event_start(start_datetime) -> str:
+    """Human-readable start time matching the event card's date formatting."""
+    from django.utils.dateformat import format as date_format
+
+    if start_datetime.time() == datetime.time(0, 0):
+        return date_format(start_datetime, "l, j F")
+    return date_format(start_datetime, "l, j F · H:i")
+
+
 def _attach_processed_image(form, event, image_file) -> bool:
     """Process the upload onto event.image; on invalid image, add a form error."""
     try:
@@ -365,6 +374,56 @@ def _filtered_event_queryset(request):
     return qs, filter_state
 
 
+def _filter_panel_context(request, filter_state):
+    """Shared filter-panel context for the event list and map views.
+
+    Builds the quick date ranges, publisher badges, and selected-filter
+    state consumed by ``events/partials/event_filter_panel.html`` on both
+    pages, from the ``filter_state`` returned by ``_filtered_event_queryset``.
+    """
+    categories = filter_state["categories"]
+    publisher_slugs = filter_state["publisher_slugs"]
+    date_from = filter_state["date_from"]
+    date_to = filter_state["date_to"]
+    search_query = filter_state["search_query"]
+
+    today = datetime.date.today()
+    week_start = today - datetime.timedelta(days=today.weekday())
+    week_end = week_start + datetime.timedelta(days=6)
+    system_publishers, has_community_publishers = _list_filter_publishers()
+    quick_date_ranges = _get_quick_date_ranges()
+    is_free = request.GET.get("is_free") == "1"
+    is_wheelchair_accessible = request.GET.get("is_wheelchair_accessible") == "1"
+
+    return {
+        "category_choices": EventCategory.choices,
+        "selected_categories": categories,
+        "system_publishers": system_publishers,
+        "has_community_publishers": has_community_publishers,
+        "selected_publishers": publisher_slugs,
+        "date_from": date_from or "",
+        "date_to": date_to or "",
+        "today": today.isoformat(),
+        "week_start": week_start,
+        "week_end": week_end,
+        "date_range_active": filter_state["date_range_active"],
+        "is_free": is_free,
+        "is_wheelchair_accessible": is_wheelchair_accessible,
+        "search_query": search_query,
+        "quick_date_ranges": quick_date_ranges,
+        "advanced_filters_open": _advanced_filters_open(
+            search_query=search_query,
+            categories=categories,
+            publisher_slugs=publisher_slugs,
+            is_free=is_free,
+            is_wheelchair_accessible=is_wheelchair_accessible,
+            date_from=date_from,
+            date_to=date_to,
+            quick_date_ranges=quick_date_ranges,
+        ),
+    }
+
+
 class EventListView(RateLimitMixin, View):
     rate_limit_key = "event_list"
     rate_limit_limit = 20
@@ -378,11 +437,6 @@ class EventListView(RateLimitMixin, View):
         from django.shortcuts import render
 
         qs, filter_state = _filtered_event_queryset(request)
-        categories = filter_state["categories"]
-        publisher_slugs = filter_state["publisher_slugs"]
-        date_from = filter_state["date_from"]
-        date_to = filter_state["date_to"]
-        search_query = filter_state["search_query"]
         date_range_active = filter_state["date_range_active"]
 
         # --- Counts for upcoming/past toggle (computed after other filters) ---
@@ -413,46 +467,15 @@ class EventListView(RateLimitMixin, View):
         params.pop("page", None)
         base_query_string = params.urlencode()
 
-        quick_date_ranges = _get_quick_date_ranges()
-        today = datetime.date.today()
-        week_start = today - datetime.timedelta(days=today.weekday())
-        week_end = week_start + datetime.timedelta(days=6)
-        system_publishers, has_community_publishers = _list_filter_publishers()
-        is_free = request.GET.get("is_free") == "1"
-        is_wheelchair_accessible = request.GET.get("is_wheelchair_accessible") == "1"
         ctx = {
             "page_obj": page_obj,
             "base_query_string": base_query_string,
             "events": page_obj.object_list,
-            "category_choices": EventCategory.choices,
-            "selected_categories": categories,
-            "system_publishers": system_publishers,
-            "has_community_publishers": has_community_publishers,
-            "selected_publishers": publisher_slugs,
             "show_past": show_past,
-            "date_from": date_from or "",
-            "date_to": date_to or "",
-            "today": today.isoformat(),
-            "week_start": week_start,
-            "week_end": week_end,
-            "date_range_active": date_range_active,
-            "is_free": is_free,
-            "is_wheelchair_accessible": is_wheelchair_accessible,
-            "search_query": search_query,
             "upcoming_count": upcoming_count,
             "past_count": past_count,
-            "quick_date_ranges": quick_date_ranges,
-            "advanced_filters_open": _advanced_filters_open(
-                search_query=search_query,
-                categories=categories,
-                publisher_slugs=publisher_slugs,
-                is_free=is_free,
-                is_wheelchair_accessible=is_wheelchair_accessible,
-                date_from=date_from,
-                date_to=date_to,
-                quick_date_ranges=quick_date_ranges,
-            ),
         }
+        ctx.update(_filter_panel_context(request, filter_state))
 
         # HTMX: return only the results partial
         if request.headers.get("HX-Request"):
@@ -489,10 +512,14 @@ class EventMapView(RateLimitMixin, View):
 
         qs, filter_state = _filtered_event_queryset(request)
 
-        # Map view shows upcoming events only — past events are browsed via the
-        # list view's "past" toggle.
-        now = timezone.now()
-        events = list(qs.filter(start_datetime__gte=now).order_by("start_datetime"))
+        # Map view shows upcoming events only, unless an explicit date range is
+        # set — same override as the list view's "past" toggle, so a range that
+        # includes past dates isn't silently emptied out.
+        if filter_state["date_range_active"]:
+            events = list(qs.order_by("start_datetime"))
+        else:
+            now = timezone.now()
+            events = list(qs.filter(start_datetime__gte=now).order_by("start_datetime"))
 
         with_coords = [e for e in events if e.has_map_location]
         without_coords = [e for e in events if not e.has_map_location]
@@ -521,6 +548,7 @@ class EventMapView(RateLimitMixin, View):
                     "category": event.category,
                     "category_display": event.get_category_display(),
                     "start_datetime": event.start_datetime.isoformat(),
+                    "start_display": _format_event_start(event.start_datetime),
                     "url": reverse("event_detail", args=[event.slug]),
                 }
             )
@@ -528,44 +556,16 @@ class EventMapView(RateLimitMixin, View):
             {**group_meta[key], "events": events} for key, events in groups.items()
         ]
 
-        today = datetime.date.today()
-        week_start = today - datetime.timedelta(days=today.weekday())
-        week_end = week_start + datetime.timedelta(days=6)
-        system_publishers, has_community_publishers = _list_filter_publishers()
-        quick_date_ranges = _get_quick_date_ranges()
-        is_free = request.GET.get("is_free") == "1"
-        is_wheelchair_accessible = request.GET.get("is_wheelchair_accessible") == "1"
+        params = request.GET.copy()
+        base_query_string = params.urlencode()
 
         ctx = {
             "events_with_coords": with_coords,
             "events_without_coords": without_coords,
             "pin_data": pin_data,
-            "category_choices": EventCategory.choices,
-            "selected_categories": filter_state["categories"],
-            "system_publishers": system_publishers,
-            "has_community_publishers": has_community_publishers,
-            "selected_publishers": filter_state["publisher_slugs"],
-            "date_from": filter_state["date_from"] or "",
-            "date_to": filter_state["date_to"] or "",
-            "today": today.isoformat(),
-            "week_start": week_start,
-            "week_end": week_end,
-            "date_range_active": filter_state["date_range_active"],
-            "is_free": is_free,
-            "is_wheelchair_accessible": is_wheelchair_accessible,
-            "search_query": filter_state["search_query"],
-            "quick_date_ranges": quick_date_ranges,
-            "advanced_filters_open": _advanced_filters_open(
-                search_query=filter_state["search_query"],
-                categories=filter_state["categories"],
-                publisher_slugs=filter_state["publisher_slugs"],
-                is_free=is_free,
-                is_wheelchair_accessible=is_wheelchair_accessible,
-                date_from=filter_state["date_from"],
-                date_to=filter_state["date_to"],
-                quick_date_ranges=quick_date_ranges,
-            ),
+            "base_query_string": base_query_string,
         }
+        ctx.update(_filter_panel_context(request, filter_state))
 
         if request.headers.get("HX-Request"):
             return render(request, self.partial_template_name, ctx)
