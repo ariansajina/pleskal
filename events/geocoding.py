@@ -98,11 +98,6 @@ def _geocode_remote(query: str) -> tuple[tuple[float, float] | None, bool]:
     """
     _wait_for_rate_limit()
 
-    user_agent = getattr(
-        settings,
-        "GEOCODING_USER_AGENT",
-        "pleskal/1.0 (https://pleskal.dk)",
-    )
     try:
         response = requests.get(
             NOMINATIM_URL,
@@ -111,8 +106,9 @@ def _geocode_remote(query: str) -> tuple[tuple[float, float] | None, bool]:
                 "format": "json",
                 "limit": 1,
                 "addressdetails": 0,
+                "countrycodes": "dk",
             },
-            headers={"User-Agent": user_agent},
+            headers={"User-Agent": settings.GEOCODING_USER_AGENT},
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()

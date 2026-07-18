@@ -57,6 +57,7 @@ class TestGeocodeSuccess:
         assert kwargs["params"]["q"] == "Dansehallerne, Copenhagen, Denmark"
         assert kwargs["params"]["format"] == "json"
         assert kwargs["params"]["limit"] == 1
+        assert kwargs["params"]["countrycodes"] == "dk"
         assert kwargs["timeout"] == geocoding.REQUEST_TIMEOUT_SECONDS
 
 

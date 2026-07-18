@@ -48,6 +48,11 @@
         month: "short",
         hour: "2-digit",
         minute: "2-digit",
+        // Pin explicitly to the viewer's own timezone rather than the
+        // server's (Copenhagen) — the event's ISO timestamp carries a UTC
+        // offset, so a viewer browsing from abroad must see it converted to
+        // their local time, not Copenhagen's.
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
     } catch (e) {
       return d.toISOString();

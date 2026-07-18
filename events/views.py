@@ -512,10 +512,14 @@ class EventMapView(RateLimitMixin, View):
 
         qs, filter_state = _filtered_event_queryset(request)
 
-        # Map view shows upcoming events only — past events are browsed via the
-        # list view's "past" toggle.
-        now = timezone.now()
-        events = list(qs.filter(start_datetime__gte=now).order_by("start_datetime"))
+        # Map view shows upcoming events only, unless an explicit date range is
+        # set — same override as the list view's "past" toggle, so a range that
+        # includes past dates isn't silently emptied out.
+        if filter_state["date_range_active"]:
+            events = list(qs.order_by("start_datetime"))
+        else:
+            now = timezone.now()
+            events = list(qs.filter(start_datetime__gte=now).order_by("start_datetime"))
 
         with_coords = [e for e in events if e.has_map_location]
         without_coords = [e for e in events if not e.has_map_location]
