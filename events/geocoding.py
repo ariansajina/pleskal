@@ -5,8 +5,9 @@ Nominatim's usage policy requires:
 - No more than 1 request per second.
 - No bulk geocoding from a request handler.
 
-This module enforces the rate limit with a process-wide lock and swallows any
-HTTP/parsing/timeout error so callers never have to deal with failures.
+This module enforces the rate limit with a cache-backed lock (shared across
+worker processes, not just threads) and swallows any HTTP/parsing/timeout
+error so callers never have to deal with failures.
 
 Results are cached in Django's cache (the shared database cache in
 production), keyed by the normalized query. Copenhagen has a small recurring
@@ -20,7 +21,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import threading
 import time
 
 import requests
@@ -37,18 +37,31 @@ GEOCODE_CACHE_TTL = 60 * 60 * 24 * 30  # positive results: 30 days
 GEOCODE_NEGATIVE_TTL = 60 * 60 * 24 * 7  # definitive "no result": 7 days
 _NEGATIVE = "negative"
 
-_rate_lock = threading.Lock()
-_last_call_at: float = 0.0
+# Coordinates the rate limit across every worker process via the shared cache
+# (a per-process lock, e.g. threading.Lock, would let each gunicorn worker run
+# its own independent 1 req/s budget, exceeding Nominatim's policy overall).
+_RATE_LOCK_KEY = "geocode:rate-lock"
+_RATE_LOCK_TIMEOUT_SECONDS = 10  # auto-expires if a worker dies mid-call
+_LAST_CALL_AT_KEY = "geocode:last-call-at"
+_LAST_CALL_AT_TTL = 300
+_LOCK_POLL_INTERVAL_SECONDS = 0.05
 
 
 def _wait_for_rate_limit() -> None:
-    """Block until at least MIN_INTERVAL_SECONDS have elapsed since the last call."""
-    global _last_call_at
-    with _rate_lock:
-        elapsed = time.monotonic() - _last_call_at
-        if elapsed < MIN_INTERVAL_SECONDS:
-            time.sleep(MIN_INTERVAL_SECONDS - elapsed)
-        _last_call_at = time.monotonic()
+    """Block until at least MIN_INTERVAL_SECONDS have elapsed since the last
+    Nominatim call made by any process."""
+    while not cache.add(_RATE_LOCK_KEY, 1, _RATE_LOCK_TIMEOUT_SECONDS):
+        time.sleep(_LOCK_POLL_INTERVAL_SECONDS)
+    try:
+        last_call_at = cache.get(_LAST_CALL_AT_KEY)
+        now = time.time()
+        if last_call_at is not None:
+            elapsed = now - last_call_at
+            if elapsed < MIN_INTERVAL_SECONDS:
+                time.sleep(MIN_INTERVAL_SECONDS - elapsed)
+        cache.set(_LAST_CALL_AT_KEY, time.time(), _LAST_CALL_AT_TTL)
+    finally:
+        cache.delete(_RATE_LOCK_KEY)
 
 
 def _cache_key(query: str) -> str:

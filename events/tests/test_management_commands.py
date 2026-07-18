@@ -1211,3 +1211,74 @@ class TestImageBackfillOnUnchangedEvent:
         ) as mock_download:
             call_command("import_events", "dansehallerne", str(f))
         mock_download.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestGeocodingPreWarm:
+    """Coordinates are pre-resolved outside the DB transaction (see base_import's
+    pre-warm pass) so Event.save() geocodes from the cache rather than blocking
+    the transaction on a Nominatim call."""
+
+    def test_geocode_called_before_any_db_write(self, settings, tmp_path):
+        settings.GEOCODING_ENABLED = True
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+
+        call_order = []
+
+        def fake_geocode_remote(query):
+            call_order.append(("geocode", query))
+            return (55.0, 12.0), True
+
+        original_save = Event.save
+
+        def tracking_save(self, *args, **kwargs):
+            call_order.append(("save", self.venue_name))
+            return original_save(self, *args, **kwargs)
+
+        with (
+            patch("events.geocoding._geocode_remote", side_effect=fake_geocode_remote),
+            patch.object(Event, "save", tracking_save),
+        ):
+            call_command("import_events", "dansehallerne", str(f))
+
+        assert call_order[0][0] == "geocode"
+        assert all(call_order[i][0] == "save" for i in range(1, len(call_order)))
+
+    def test_geocode_deduped_across_records_sharing_a_venue(self, settings, tmp_path):
+        settings.GEOCODING_ENABLED = True
+        second_event = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/2",
+            "title": "Test Dance Event 2",
+        }
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT, second_event], f)
+
+        with patch(
+            "events.geocoding._geocode_remote", return_value=((55.0, 12.0), True)
+        ) as mock_geocode_remote:
+            call_command("import_events", "dansehallerne", str(f))
+
+        assert mock_geocode_remote.call_count == 1
+        assert Event.objects.filter(external_source="dansehallerne").count() == 2
+
+    def test_geocoding_disabled_skips_prewarm(self, settings, tmp_path):
+        settings.GEOCODING_ENABLED = False
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+
+        with patch("events.management.commands.base_import.geocode") as mock_geocode:
+            call_command("import_events", "dansehallerne", str(f))
+
+        mock_geocode.assert_not_called()
+
+    def test_dry_run_skips_prewarm(self, settings, tmp_path):
+        settings.GEOCODING_ENABLED = True
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+
+        with patch("events.management.commands.base_import.geocode") as mock_geocode:
+            call_command("import_events", "dansehallerne", str(f), dry_run=True)
+
+        mock_geocode.assert_not_called()

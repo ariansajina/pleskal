@@ -185,6 +185,20 @@ class TestGeocodingOnSave:
             event.save()
         assert mock_geocode.call_count == 2
 
+    def test_venue_change_with_failed_regeocode_clears_stale_coords(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch(
+            "events.geocoding.geocode", return_value=(55.0, 12.0)
+        ) as mock_geocode:
+            event = EventFactory.create(venue_name="HAUT", venue_address="Skindergade")
+            assert event.latitude == pytest.approx(55.0)
+            mock_geocode.return_value = None
+            event.venue_name = "New Venue"  # ty: ignore[invalid-assignment]
+            event.venue_address = ""  # ty: ignore[invalid-assignment]
+            event.save()
+        assert event.latitude is None
+        assert event.longitude is None
+
     def test_geocode_returning_none_leaves_coords_unset(self, settings):
         settings.GEOCODING_ENABLED = True
         with patch("events.geocoding.geocode", return_value=None):

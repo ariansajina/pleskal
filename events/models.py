@@ -232,6 +232,9 @@ class Event(models.Model):
         if not needs_geocode:
             return
 
+        if not self._state.adding:
+            self.latitude = self.longitude = None  # ty: ignore[invalid-assignment]
+
         from .geocoding import geocode
 
         try:

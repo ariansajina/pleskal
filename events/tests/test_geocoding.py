@@ -5,16 +5,19 @@ from unittest.mock import Mock, patch
 
 import pytest
 import requests
+from django.core.cache import cache
 
 from events import geocoding
 
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
-    """Reset the module-level rate-limit clock before each test."""
-    geocoding._last_call_at = 0.0
+    """Reset the cache-backed rate-limit state before each test."""
+    cache.delete(geocoding._RATE_LOCK_KEY)
+    cache.delete(geocoding._LAST_CALL_AT_KEY)
     yield
-    geocoding._last_call_at = 0.0
+    cache.delete(geocoding._RATE_LOCK_KEY)
+    cache.delete(geocoding._LAST_CALL_AT_KEY)
 
 
 def _mock_response(status_code=200, json_data=None, raise_http=False):
@@ -145,13 +148,12 @@ class TestRateLimit:
         def fake_sleep(seconds):
             sleep_calls.append(seconds)
 
-        # Freeze monotonic so the first call sees a "recent" prior call.
-        times = iter([100.0, 100.0, 100.0, 100.0])
-        monkeypatch.setattr(geocoding.time, "monotonic", lambda: next(times))
+        # Freeze time so the first call sees a "recent" prior call.
+        monkeypatch.setattr(geocoding.time, "time", lambda: 100.0)
         monkeypatch.setattr(geocoding.time, "sleep", fake_sleep)
 
-        # Simulate a prior call that happened "just now".
-        geocoding._last_call_at = 100.0
+        # Simulate a prior call (by any process) that happened "just now".
+        cache.set(geocoding._LAST_CALL_AT_KEY, 100.0, geocoding._LAST_CALL_AT_TTL)
 
         with patch("events.geocoding.requests.get") as m_get:
             m_get.return_value = _mock_response(json_data=[])
@@ -164,8 +166,8 @@ class TestRateLimit:
         sleep_calls: list[float] = []
         monkeypatch.setattr(geocoding.time, "sleep", lambda s: sleep_calls.append(s))
         # Far in the future: interval has passed.
-        monkeypatch.setattr(geocoding.time, "monotonic", lambda: 10_000.0)
-        geocoding._last_call_at = 0.0
+        monkeypatch.setattr(geocoding.time, "time", lambda: 10_000.0)
+        cache.set(geocoding._LAST_CALL_AT_KEY, 0.0, geocoding._LAST_CALL_AT_TTL)
 
         with patch("events.geocoding.requests.get") as m_get:
             m_get.return_value = _mock_response(json_data=[])
@@ -175,14 +177,14 @@ class TestRateLimit:
 
     def test_last_call_timestamp_updates(self, monkeypatch):
         monkeypatch.setattr(geocoding.time, "sleep", lambda s: None)
-        monkeypatch.setattr(geocoding.time, "monotonic", lambda: 500.0)
-        geocoding._last_call_at = 0.0
+        monkeypatch.setattr(geocoding.time, "time", lambda: 500.0)
+        cache.set(geocoding._LAST_CALL_AT_KEY, 0.0, geocoding._LAST_CALL_AT_TTL)
 
         with patch("events.geocoding.requests.get") as m_get:
             m_get.return_value = _mock_response(json_data=[])
             geocoding.geocode("Copenhagen")
 
-        assert geocoding._last_call_at == 500.0
+        assert cache.get(geocoding._LAST_CALL_AT_KEY) == 500.0
 
 
 def test_rate_limit_does_not_exceed_policy_under_threads():

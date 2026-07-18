@@ -16,6 +16,7 @@
   var mapInstance = null;
   var markerLayer = null;
   var hasFitBoundsOnce = false;
+  var markersByIndex = [];
 
   function readPins() {
     var node = document.getElementById("event-map-pins");
@@ -103,12 +104,19 @@
     }
 
     var latLngs = [];
-    groups.forEach(function (group) {
+    markersByIndex = [];
+    groups.forEach(function (group, index) {
       var lat = Number(group.lat);
       var lng = Number(group.lng);
-      if (!isFinite(lat) || !isFinite(lng)) return;
+      if (!isFinite(lat) || !isFinite(lng)) {
+        markersByIndex[index] = null;
+        return;
+      }
       var events = Array.isArray(group.events) ? group.events : [];
-      if (!events.length) return;
+      if (!events.length) {
+        markersByIndex[index] = null;
+        return;
+      }
       var title =
         events.length === 1
           ? events[0].title
@@ -116,6 +124,7 @@
       var marker = window.L.marker([lat, lng], { title: title });
       marker.bindPopup(buildPopup(group), { maxWidth: 320 });
       marker.addTo(markerLayer);
+      markersByIndex[index] = marker;
       latLngs.push([lat, lng]);
     });
 
@@ -157,6 +166,14 @@
   function refresh() {
     if (!mapInstance) return;
     renderMarkers(readPins());
+  }
+
+  function focusPin(index) {
+    if (!mapInstance) return;
+    var marker = markersByIndex[index];
+    if (!marker) return;
+    mapInstance.setView(marker.getLatLng(), Math.max(mapInstance.getZoom(), 15));
+    marker.openPopup();
   }
 
   function setupMobileTabs() {
@@ -221,6 +238,18 @@
   document.body.addEventListener("htmx:afterSwap", function (evt) {
     if (evt.target && evt.target.id === "event-map-results") {
       refresh();
+    }
+  });
+
+  document.body.addEventListener("click", function (evt) {
+    var entry = evt.target.closest("[data-pin-index]");
+    if (!entry) return;
+    var index = parseInt(entry.getAttribute("data-pin-index"), 10);
+    if (isNaN(index)) return;
+    focusPin(index);
+    var mapTab = document.querySelector('[data-map-tab="map"]');
+    if (mapTab && window.matchMedia("(max-width: 900px)").matches) {
+      mapTab.click();
     }
   });
 })();

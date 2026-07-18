@@ -18,10 +18,12 @@ import urllib.request
 from pathlib import Path
 
 import sentry_sdk
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
+from events.geocoding import geocode
 from events.models import (
     MAX_PRICE_NOTE_LENGTH,
     MAX_SOURCE_URL_LENGTH,
@@ -270,6 +272,30 @@ class BaseEventImportCommand(BaseCommand):
                 image_names[key] = self._resolve_image_storage_name(
                     rec, has_existing_image, skip_images
                 )
+
+        # ── Pre-resolve venue coordinates up front, outside any DB transaction ──
+        # Event.save() geocodes synchronously via Nominatim (1.1s+ per call,
+        # serialized by a global rate limit); doing that inline inside the
+        # transaction below would hold a Postgres transaction open for the
+        # whole import. Warming the shared geocode cache here — deduped by
+        # query, since most records share a venue — means the per-event
+        # save() inside the transaction hits the cache instead of the
+        # network, mirroring the image pre-resolution above.
+        if not dry_run and getattr(settings, "GEOCODING_ENABLED", True):
+            geocode_queries: set[str] = set()
+            for key, rec in incoming.items():
+                existing_event = existing.get(key)
+                venue_name = rec.get("venue_name", self.default_venue_name)
+                venue_address = rec.get("venue_address", "")
+                needs_geocode = existing_event is None or (
+                    existing_event.venue_name != venue_name
+                    or existing_event.venue_address != venue_address
+                )
+                if needs_geocode and venue_name:
+                    probe = Event(venue_name=venue_name, venue_address=venue_address)
+                    geocode_queries.add(probe._build_geocode_query())
+            for query in geocode_queries:
+                geocode(query)
 
         with transaction.atomic():
             # ── Upsert ────────────────────────────────────────────────────────
