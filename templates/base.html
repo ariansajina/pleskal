@@ -30,6 +30,9 @@
   {# Compiled Tailwind CSS #}
   <link rel="stylesheet" href="{% static 'css/output.css' %}">
 
+  {# Preload the wordmark's display face so it doesn't flash in unstyled #}
+  <link rel="preload" href="{% static 'fonts/atkinson-hyperlegible-700-italic.woff2' %}" as="font" type="font/woff2" crossorigin>
+
   {# HTMX #}
   <script src="{% static 'js/htmx.min.js' %}" defer></script>
 
@@ -42,53 +45,41 @@
   <style>
     /* ─── Self-hosted fonts ─────────────────────────────── */
     @font-face {
-      font-family: 'Inter';
+      font-family: 'Atkinson Hyperlegible';
       font-style: normal;
       font-weight: 400;
       font-display: swap;
-      src: url('{% static "fonts/inter-400.woff2" %}') format('woff2');
+      src: url('{% static "fonts/atkinson-hyperlegible-400.woff2" %}') format('woff2');
     }
     @font-face {
-      font-family: 'Inter';
-      font-style: normal;
-      font-weight: 500;
-      font-display: swap;
-      src: url('{% static "fonts/inter-500.woff2" %}') format('woff2');
-    }
-    @font-face {
-      font-family: 'Inter';
-      font-style: normal;
-      font-weight: 600;
-      font-display: swap;
-      src: url('{% static "fonts/inter-600.woff2" %}') format('woff2');
-    }
-    @font-face {
-      font-family: 'Inter';
-      font-style: normal;
-      font-weight: 700;
-      font-display: swap;
-      src: url('{% static "fonts/inter-700.woff2" %}') format('woff2');
-    }
-    @font-face {
-      font-family: 'Playfair Display';
-      font-style: normal;
-      font-weight: 700;
-      font-display: swap;
-      src: url('{% static "fonts/playfair-display-700.woff2" %}') format('woff2');
-    }
-    @font-face {
-      font-family: 'Playfair Display';
+      font-family: 'Atkinson Hyperlegible';
       font-style: italic;
-      font-weight: 900;
+      font-weight: 400;
       font-display: swap;
-      src: url('{% static "fonts/playfair-display-italic-900.woff2" %}') format('woff2');
+      src: url('{% static "fonts/atkinson-hyperlegible-400-italic.woff2" %}') format('woff2');
+    }
+    @font-face {
+      font-family: 'Atkinson Hyperlegible';
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url('{% static "fonts/atkinson-hyperlegible-700.woff2" %}') format('woff2');
+    }
+    @font-face {
+      font-family: 'Atkinson Hyperlegible';
+      font-style: italic;
+      font-weight: 700;
+      font-display: swap;
+      src: url('{% static "fonts/atkinson-hyperlegible-700-italic.woff2" %}') format('woff2');
     }
 
     /* ─── CSS Variables ─────────────────────────────────── */
     :root {
-      /* Fonts: self-hosted Playfair Display (headings) + Inter (body/UI). */
-      --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      --font-serif: "Playfair Display", Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Cambria, serif;
+      /* Fonts: self-hosted Atkinson Hyperlegible for everything — the
+         accessibility-first pick (Braille Institute), disambiguated glyphs
+         (I/l/1, O/0, rn/m) at every weight/style. */
+      --font-sans: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-serif: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
       /* Colors */
       --blue:          #3333CC;
@@ -241,7 +232,7 @@
     }
     .page-hero__title {
       font-family: var(--font-serif);
-      font-weight: 900; font-style: italic;
+      font-weight: 700; font-style: italic;
       font-size: var(--text-display); color: var(--blue);
       line-height: 1.05; letter-spacing: -0.02em; margin-bottom: var(--space-4);
     }
@@ -407,7 +398,7 @@
 
     /* ─── GUIDE PAGE (Markdown directory) ───────────────── */
     .guide-content h1 {
-      font-family: var(--font-serif); font-style: italic; font-weight: 900;
+      font-family: var(--font-serif); font-style: italic; font-weight: 700;
       font-size: var(--text-xl); color: var(--blue); line-height: 1.15;
       margin: 0 0 0.5em; letter-spacing: -0.01em;
     }
@@ -515,7 +506,7 @@
     .form-stack { display: flex; flex-direction: column; gap: var(--space-4); }
     .form-stack--tight { gap: var(--space-3); }
     .heading-page {
-      font-family: var(--font-serif); font-weight: 900; font-style: italic;
+      font-family: var(--font-serif); font-weight: 700; font-style: italic;
       font-size: var(--text-xl); color: var(--blue); margin-bottom: var(--space-8);
     }
     .heading-section {
