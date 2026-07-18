@@ -32,10 +32,13 @@ document.addEventListener("DOMContentLoaded", function () {
       var dateFrom = form.querySelector('[name="date_from"]');
       var dateTo = form.querySelector('[name="date_to"]');
       if (dateFrom && dateTo && dateFrom.value && dateTo.value) {
-        var quickbar = form.querySelector(".filter-quickbar");
-        var quickbarChipActive =
-          quickbar &&
-          quickbar.querySelector("[data-quick-date-filter][data-active]");
+        // Scoped to the quickbar's own row (This week/Next week), not the
+        // panel's date chips (This weekend/This month/Next month) — those
+        // live inside .filter-panel, a sibling of that row, and should
+        // count as an active panel filter like any other panel field.
+        var quickbarChipActive = form.querySelector(
+          ".filter-quickbar > .filter-checkboxes [data-quick-date-filter][data-active]"
+        );
         if (!quickbarChipActive) count += 1;
       }
 
