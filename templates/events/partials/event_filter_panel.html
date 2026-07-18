@@ -34,6 +34,14 @@ which visually relocates the "More filters" toggle chip out of the quickbar
 row. Keeping <details> to just the summary means the toggle's own box never
 resizes, so it stays put; only the (separate) panel flex item claims the
 full row width.
+
+The Clear link is placed BEFORE the panel in the flex-wrap flow (right after
+</details>), not after, for the same reason: flex-wrap lays out items in DOM
+order, and an earlier item's line placement isn't affected by a later
+sibling's width. With Clear after the panel, opening the panel (which
+forces a line break via flex-basis:100%) would push Clear down onto a new
+line along with it. Placing Clear before the panel keeps it pinned to the
+toggle row regardless of open/closed state.
 {% endcomment %}
 <form id="{{ filter_form_id }}"
       data-today="{{ today }}"
@@ -58,6 +66,10 @@ full row width.
                 More filters <span data-filter-count></span> <span aria-hidden="true">▾</span>
             </summary>
         </details>
+
+        <button type="button"
+                data-clear-filters="{{ filter_form_id }}"
+                class="filter-clear-link">Clear</button>
 
         <div class="filter-panel" id="{{ filter_form_id }}-panel">
 
@@ -146,9 +158,5 @@ full row width.
             </div>
 
         </div>
-
-        <button type="button"
-                data-clear-filters="{{ filter_form_id }}"
-                class="filter-clear-link">Clear</button>
     </div>
 </form>
