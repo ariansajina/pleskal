@@ -25,6 +25,23 @@ month/Next month chips, is_free, wheelchair accessible) below it. The
 disclosure's open/closed state is view-computed (advanced_filters_open)
 rather than duplicated in template conditions, since only filters that
 live inside the panel should force it open.
+
+The panel markup is a SIBLING of <details>, not nested inside it (linked by
+aria-controls instead) — shown/hidden via the `.filter-disclosure[open] ~
+.filter-panel` CSS selector in base.html. Nesting it inside <details> would
+make the details element itself grow to the panel's full width when open,
+which visually relocates the "More filters" toggle chip out of the quickbar
+row. Keeping <details> to just the summary means the toggle's own box never
+resizes, so it stays put; only the (separate) panel flex item claims the
+full row width.
+
+The Clear link is placed BEFORE the panel in the flex-wrap flow (right after
+</details>), not after, for the same reason: flex-wrap lays out items in DOM
+order, and an earlier item's line placement isn't affected by a later
+sibling's width. With Clear after the panel, opening the panel (which
+forces a line break via flex-basis:100%) would push Clear down onto a new
+line along with it. Placing Clear before the panel keeps it pinned to the
+toggle row regardless of open/closed state.
 {% endcomment %}
 <form id="{{ filter_form_id }}"
       data-today="{{ today }}"
@@ -45,100 +62,101 @@ live inside the panel should force it open.
         </div>
 
         <details class="filter-disclosure" {% if advanced_filters_open %}open{% endif %}>
-            <summary class="filter-disclosure__summary" data-filter-count-label>
+            <summary class="filter-disclosure__summary" data-filter-count-label aria-controls="{{ filter_form_id }}-panel">
                 More filters <span data-filter-count></span> <span aria-hidden="true">▾</span>
             </summary>
-            <div class="filter-panel">
-
-                <div class="filter-panel__group" style="flex:1;min-width:160px;">
-                    <label class="filter-panel__group-label" for="{{ filter_form_id }}-q">Search</label>
-                    <input type="search" name="q" value="{{ search_query }}" id="{{ filter_form_id }}-q"
-                           placeholder="Title, artist, venue, description…"
-                           maxlength="200"
-                           hx-get="{{ filter_hx_url }}"
-                           hx-target="{{ filter_hx_target }}"
-                           hx-push-url="true"
-                           hx-trigger="keyup changed delay:400ms"
-                           hx-include="#{{ filter_form_id }}"
-                           class="form-input">
-                </div>
-
-                {% if show_when_filter %}
-                    {% include "events/partials/when_filter_group.html" %}
-                {% endif %}
-
-                <fieldset class="filter-panel__group">
-                    <legend class="filter-panel__group-label">Category</legend>
-                    <div class="filter-checkboxes">
-                        {% for value, label in category_choices %}
-                            <label>
-                                <input type="checkbox" name="category" value="{{ value }}"
-                                       {% if value in selected_categories %}checked{% endif %}>
-                                <span class="filter-chip">{{ label }}</span>
-                            </label>
-                        {% endfor %}
-                    </div>
-                </fieldset>
-
-                <fieldset class="filter-panel__group">
-                    <legend class="filter-panel__group-label">Publisher</legend>
-                    <div class="filter-checkboxes">
-                        {% for publisher in system_publishers %}
-                            <label>
-                                <input type="checkbox" name="publisher" value="{{ publisher.display_name_slug }}"
-                                       {% if publisher.display_name_slug in selected_publishers %}checked{% endif %}>
-                                <span class="filter-chip">{{ publisher.public_name }}</span>
-                            </label>
-                        {% endfor %}
-                        {% if has_community_publishers %}
-                        <label>
-                            <input type="checkbox" name="publisher" value="other"
-                                   {% if "other" in selected_publishers %}checked{% endif %}>
-                            <span class="filter-chip">Other</span>
-                        </label>
-                        {% endif %}
-                    </div>
-                </fieldset>
-
-                <fieldset class="filter-panel__group">
-                    <legend class="filter-panel__group-label">Date range</legend>
-                    <div style="display:flex;gap:var(--space-2);align-items:center;">
-                        <input type="date" name="date_from" value="{{ date_from }}" class="form-input" style="width:auto;" aria-label="From date">
-                        <span class="text-sm text-muted">–</span>
-                        <input type="date" name="date_to" value="{{ date_to }}" class="form-input" style="width:auto;" aria-label="To date">
-                    </div>
-                    <div class="filter-checkboxes" style="margin-top:var(--space-2);">
-                        <button type="button" class="filter-chip"
-                                data-quick-date-filter
-                                data-date-from="{{ quick_date_ranges.this_weekend.0 }}"
-                                data-date-to="{{ quick_date_ranges.this_weekend.1 }}">This weekend</button>
-                        <button type="button" class="filter-chip"
-                                data-quick-date-filter
-                                data-date-from="{{ quick_date_ranges.this_month.0 }}"
-                                data-date-to="{{ quick_date_ranges.this_month.1 }}">This month</button>
-                        <button type="button" class="filter-chip"
-                                data-quick-date-filter
-                                data-date-from="{{ quick_date_ranges.next_month.0 }}"
-                                data-date-to="{{ quick_date_ranges.next_month.1 }}">Next month</button>
-                    </div>
-                </fieldset>
-
-                <div class="filter-panel__group" style="justify-content:flex-end;">
-                    <label class="form-check">
-                        <input type="checkbox" name="is_free" value="1" {% if is_free %}checked{% endif %}>
-                        <span class="text-sm">Free only</span>
-                    </label>
-                    <label class="form-check" style="margin-top:var(--space-2);">
-                        <input type="checkbox" name="is_wheelchair_accessible" value="1" {% if is_wheelchair_accessible %}checked{% endif %}>
-                        <span class="text-sm">Wheelchair accessible</span>
-                    </label>
-                </div>
-
-            </div>
         </details>
 
         <button type="button"
                 data-clear-filters="{{ filter_form_id }}"
                 class="filter-clear-link">Clear</button>
+
+        <div class="filter-panel" id="{{ filter_form_id }}-panel">
+
+            <div class="filter-panel__group" style="flex:1;min-width:160px;">
+                <label class="filter-panel__group-label" for="{{ filter_form_id }}-q">Search</label>
+                <input type="search" name="q" value="{{ search_query }}" id="{{ filter_form_id }}-q"
+                       placeholder="Title, artist, venue, description…"
+                       maxlength="200"
+                       hx-get="{{ filter_hx_url }}"
+                       hx-target="{{ filter_hx_target }}"
+                       hx-push-url="true"
+                       hx-trigger="keyup changed delay:400ms"
+                       hx-include="#{{ filter_form_id }}"
+                       class="form-input">
+            </div>
+
+            {% if show_when_filter %}
+                {% include "events/partials/when_filter_group.html" %}
+            {% endif %}
+
+            <fieldset class="filter-panel__group">
+                <legend class="filter-panel__group-label">Category</legend>
+                <div class="filter-checkboxes">
+                    {% for value, label in category_choices %}
+                        <label>
+                            <input type="checkbox" name="category" value="{{ value }}"
+                                   {% if value in selected_categories %}checked{% endif %}>
+                            <span class="filter-chip">{{ label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+
+            <fieldset class="filter-panel__group">
+                <legend class="filter-panel__group-label">Publisher</legend>
+                <div class="filter-checkboxes">
+                    {% for publisher in system_publishers %}
+                        <label>
+                            <input type="checkbox" name="publisher" value="{{ publisher.display_name_slug }}"
+                                   {% if publisher.display_name_slug in selected_publishers %}checked{% endif %}>
+                            <span class="filter-chip">{{ publisher.public_name }}</span>
+                        </label>
+                    {% endfor %}
+                    {% if has_community_publishers %}
+                    <label>
+                        <input type="checkbox" name="publisher" value="other"
+                               {% if "other" in selected_publishers %}checked{% endif %}>
+                        <span class="filter-chip">Other</span>
+                    </label>
+                    {% endif %}
+                </div>
+            </fieldset>
+
+            <fieldset class="filter-panel__group">
+                <legend class="filter-panel__group-label">Date range</legend>
+                <div style="display:flex;gap:var(--space-2);align-items:center;">
+                    <input type="date" name="date_from" value="{{ date_from }}" class="form-input" style="width:auto;" aria-label="From date">
+                    <span class="text-sm text-muted">–</span>
+                    <input type="date" name="date_to" value="{{ date_to }}" class="form-input" style="width:auto;" aria-label="To date">
+                </div>
+                <div class="filter-checkboxes" style="margin-top:var(--space-2);">
+                    <button type="button" class="filter-chip"
+                            data-quick-date-filter
+                            data-date-from="{{ quick_date_ranges.this_weekend.0 }}"
+                            data-date-to="{{ quick_date_ranges.this_weekend.1 }}">This weekend</button>
+                    <button type="button" class="filter-chip"
+                            data-quick-date-filter
+                            data-date-from="{{ quick_date_ranges.this_month.0 }}"
+                            data-date-to="{{ quick_date_ranges.this_month.1 }}">This month</button>
+                    <button type="button" class="filter-chip"
+                            data-quick-date-filter
+                            data-date-from="{{ quick_date_ranges.next_month.0 }}"
+                            data-date-to="{{ quick_date_ranges.next_month.1 }}">Next month</button>
+                </div>
+            </fieldset>
+
+            <div class="filter-panel__group" style="justify-content:flex-end;">
+                <label class="form-check">
+                    <input type="checkbox" name="is_free" value="1" {% if is_free %}checked{% endif %}>
+                    <span class="text-sm">Free only</span>
+                </label>
+                <label class="form-check" style="margin-top:var(--space-2);">
+                    <input type="checkbox" name="is_wheelchair_accessible" value="1" {% if is_wheelchair_accessible %}checked{% endif %}>
+                    <span class="text-sm">Wheelchair accessible</span>
+                </label>
+            </div>
+
+        </div>
     </div>
 </form>
