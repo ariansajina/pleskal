@@ -106,15 +106,17 @@ def _split_location(location: str) -> tuple[str, str]:
     """Split an iCal LOCATION into (venue_name, venue_address).
 
     The feed formats LOCATION as "Warehouse9, <street>, <city>, ...".  We take
-    the first comma-separated part as the venue name and the remainder as the
-    address.
+    the first comma-separated part as the venue name and the second as the
+    street address; any trailing city/postcode/country parts are dropped so
+    the address stays a bare street, matching the other scrapers' convention
+    (Event._build_geocode_query appends ", Copenhagen, Denmark" itself).
     """
     location = (location or "").strip()
     if not location:
         return VENUE_NAME, ""
     parts = [p.strip() for p in location.split(",")]
     venue_name = parts[0] or VENUE_NAME
-    venue_address = ", ".join(parts[1:]).strip()
+    venue_address = parts[1].strip() if len(parts) > 1 else ""
     return venue_name[:MAX_VENUE_LENGTH], venue_address[:MAX_VENUE_LENGTH]
 
 
