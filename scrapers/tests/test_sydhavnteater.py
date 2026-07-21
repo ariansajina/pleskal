@@ -6,6 +6,7 @@ from scrapers.sydhavnteater import (
     CATEGORY_MAP,
     CPH_TZ,
     _extract_where,
+    _stage_address,
     build_records,
     is_upcoming,
     parse_description,
@@ -210,6 +211,7 @@ def test_build_records_single_day_no_schedule():
     assert records[0]["title"] == "Test Event"
     assert records[0]["source_url"] == "https://sydhavnteater.dk/event/test-event"
     assert records[0]["venue_name"] == "Kapelscenen"
+    assert records[0]["venue_address"] == "Vestre Kirkegård"
     assert records[0]["category"] == "performance"
     assert records[0]["is_free"] is True
     assert records[0]["external_source"] == "sydhavnteater"
@@ -241,16 +243,39 @@ def test_build_records_is_free_with_ticket_link():
 def test_build_records_default_venue():
     records = build_records(_make_event(stage=[]))
     assert records[0]["venue_name"] == "Sydhavn Teater"
+    assert records[0]["venue_address"] == ""
 
 
 def test_build_records_where_overrides_stage():
     sections = [{"data": [{"titleEnglish": "Where", "textEnglish": "Valbyparken"}]}]
     records = build_records(_make_event(sections=sections))
     assert records[0]["venue_name"] == "Valbyparken"
+    assert records[0]["venue_address"] == ""
+
+
+def test_build_records_stage_name_spacing_variant_still_resolves():
+    """The directions page spells stage names with a space; the CMS doesn't."""
+    records = build_records(_make_event(stage=[{"title": "Annex scenen"}]))
+    assert records[0]["venue_address"] == "Borgbjergsvej 44"
 
 
 def test_extract_where_returns_empty_when_missing():
     assert _extract_where(_make_event()) == ""
+
+
+# ── _stage_address ───────────────────────────────────────────────────────────
+
+
+def test_stage_address_known_stage():
+    assert _stage_address("Kapelscenen") == "Vestre Kirkegård"
+
+
+def test_stage_address_ignores_whitespace_and_case():
+    assert _stage_address("annex SCENEN") == "Borgbjergsvej 44"
+
+
+def test_stage_address_unknown_stage_returns_empty():
+    assert _stage_address("Sydhavn Teater") == ""
 
 
 def test_extract_where_case_insensitive():
