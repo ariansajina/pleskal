@@ -66,6 +66,27 @@ GRAPHQL_QUERY = """
 }
 """
 
+# The CMS only exposes a stage *name* (e.g. "Kapelscenen"), which isn't
+# itself geocodable -- these physical addresses come from the venue's own
+# "Find vej" (directions) page and let Event._build_geocode_query() resolve
+# a stage to an actual pin instead of falling back to the theatre's default
+# venue name. Keyed by stage name with whitespace stripped and lowercased,
+# since the CMS and the directions page don't always agree on spacing (e.g.
+# "Kapelscenen" vs. "Kapel scenen").
+STAGE_ADDRESSES = {
+    "kapelscenen": "Vestre Kirkegård",
+    "annexscenen": "Borgbjergsvej 44",
+    "foyerscenen": "Vestre Kirkegård",
+    "kontor": "Wagnersvej 19",
+}
+
+
+def _stage_address(venue_name: str) -> str:
+    """Look up the physical address for a stage/space name, if known."""
+    normalized = re.sub(r"\s+", "", venue_name).lower()
+    return STAGE_ADDRESSES.get(normalized, "")
+
+
 # Map Craft CMS category titles → pleskal EventCategory values
 CATEGORY_MAP = {
     "forestillinger": "performance",
@@ -438,6 +459,7 @@ def build_records(event: dict) -> list[dict]:
     where_str = _extract_where(event)
     if where_str:
         venue_name = where_str
+    venue_address = _stage_address(venue_name)
 
     categories = event.get("category") or []
     raw_category = categories[0]["title"].lower() if categories else ""
@@ -491,7 +513,7 @@ def build_records(event: dict) -> list[dict]:
                 "start_datetime": start_dt.isoformat(),
                 "end_datetime": None,
                 "venue_name": venue_name,
-                "venue_address": "",
+                "venue_address": venue_address,
                 "category": category,
                 "is_free": is_free,
                 "is_wheelchair_accessible": False,

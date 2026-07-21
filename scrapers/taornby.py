@@ -35,6 +35,10 @@ BASE_URL = "https://www.taarnby.art"
 PROGRAM_URL = f"{BASE_URL}/kunstnere-1"
 EXTERNAL_SOURCE = "taornby"
 DEFAULT_VENUE = "Tårnbyparken"
+# The festival is in Tårnby municipality, not Copenhagen -- Event's default
+# geocoding query assumes Copenhagen when no address is given, which is wrong
+# here, so every record supplies its own full, self-contained address.
+VENUE_MUNICIPALITY = "Tårnby, Denmark"
 DEFAULT_TIME = datetime.time(12, 0)
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 
@@ -606,7 +610,7 @@ def _make_record(
         "start_datetime": start_dt.isoformat(),
         "end_datetime": end_dt.isoformat() if end_dt else None,
         "venue_name": venue_name,
-        "venue_address": "",
+        "venue_address": f"{venue_name}, {VENUE_MUNICIPALITY}",
         "category": category,
         "is_free": False,
         "is_wheelchair_accessible": False,

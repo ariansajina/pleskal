@@ -94,7 +94,15 @@ def test_format_description_empty():
 def test_split_location_name_and_address():
     name, address = _split_location("Warehouse9, Rosenlunds Allé 5, Copenhagen")
     assert name == "Warehouse9"
-    assert address == "Rosenlunds Allé 5, Copenhagen"
+    assert address == "Rosenlunds Allé 5"
+
+
+def test_split_location_drops_city_postcode_country():
+    name, address = _split_location(
+        "Warehouse9, Rosenlunds Allé 5, Copenhagen, 2720, Denmark"
+    )
+    assert name == "Warehouse9"
+    assert address == "Rosenlunds Allé 5"
 
 
 def test_split_location_empty_falls_back_to_venue_name():

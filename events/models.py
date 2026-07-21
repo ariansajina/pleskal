@@ -181,10 +181,17 @@ class Event(models.Model):
         return static(path)
 
     def _build_geocode_query(self) -> str:
-        """Build the Nominatim query string for this event's venue."""
-        if self.venue_address:
-            return f"{self.venue_address}, Copenhagen, Denmark"
-        return f"{self.venue_name}, Copenhagen, Denmark"
+        """Build the Nominatim query string for this event's venue.
+
+        venue_address/venue_name are expected to be a bare street (no city or
+        country); those are appended here. If a scraper's address already
+        includes them, appending again would duplicate tokens and confuse
+        Nominatim, so skip it in that case.
+        """
+        base = str(self.venue_address or self.venue_name)
+        if "denmark" in base.lower():
+            return base
+        return f"{base}, Copenhagen, Denmark"
 
     def get_display_description(self):
         """Return description with scraped event disclaimer prepended."""
