@@ -291,6 +291,7 @@ def test_build_records_end_to_end():
     assert "By Andreas Haglund" in record["description"]
     assert "Feral Fantasies is a solo by Andreas Haglund" in record["description"]
     assert record["venue_name"] == "Tårnbyparken"
+    assert record["venue_address"] == "Tårnbyparken, Tårnby, Denmark"
     assert record["start_datetime"] == "2026-08-22T17:00:00+00:00"
     assert record["end_datetime"] == "2026-08-22T17:50:00+00:00"
     assert record["external_source"] == "taornby"

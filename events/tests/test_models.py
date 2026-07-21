@@ -167,6 +167,19 @@ class TestGeocodingOnSave:
         assert query.lower().count("denmark") == 1
         assert query.lower().count("copenhagen") == 1
 
+    def test_insert_with_address_outside_copenhagen_is_not_relocated(self, settings):
+        settings.GEOCODING_ENABLED = True
+        with patch(
+            "events.geocoding.geocode", return_value=(55.0, 12.0)
+        ) as mock_geocode:
+            EventFactory.create(
+                venue_name="Tårnbyparken",
+                venue_address="Tårnbyparken, Tårnby, Denmark",
+            )
+        query = mock_geocode.call_args[0][0]
+        assert query == "Tårnbyparken, Tårnby, Denmark"
+        assert "Copenhagen" not in query
+
     def test_update_without_address_change_does_not_regeocode(self, settings):
         settings.GEOCODING_ENABLED = True
         with patch(
