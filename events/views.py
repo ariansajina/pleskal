@@ -450,11 +450,11 @@ class EventListView(RateLimitMixin, View):
         # silently discard half the results with no visible explanation.
         show_past = request.GET.get("past") == "1"
         if date_range_active:
-            qs = qs.order_by("start_datetime")
+            qs = qs.order_by("start_datetime", "id")
         elif show_past:
-            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime")
+            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime", "-id")
         else:
-            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
+            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime", "id")
 
         # --- Pagination ---
         paginator = Paginator(qs, EVENTS_PER_PAGE)
@@ -516,10 +516,12 @@ class EventMapView(RateLimitMixin, View):
         # set — same override as the list view's "past" toggle, so a range that
         # includes past dates isn't silently emptied out.
         if filter_state["date_range_active"]:
-            events = list(qs.order_by("start_datetime"))
+            events = list(qs.order_by("start_datetime", "id"))
         else:
             now = timezone.now()
-            events = list(qs.filter(start_datetime__gte=now).order_by("start_datetime"))
+            events = list(
+                qs.filter(start_datetime__gte=now).order_by("start_datetime", "id")
+            )
 
         with_coords = [e for e in events if e.has_map_location]
         without_coords = [e for e in events if not e.has_map_location]

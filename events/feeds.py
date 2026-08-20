@@ -31,7 +31,7 @@ def _upcoming_qs(
     qs = Event.objects.filter(
         start_datetime__gte=timezone.now(),
         is_draft=False,
-    ).order_by("start_datetime")
+    ).order_by("start_datetime", "id")
     if categories:
         valid = {c.value for c in EventCategory}
         clean = [c for c in categories if c in valid]

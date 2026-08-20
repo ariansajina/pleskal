@@ -177,16 +177,16 @@ class PublisherProfileView(View):
         show_past = request.GET.get("past") == "1"
         now = timezone.now()
         if show_past:
-            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime")
+            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime", "-id")
         else:
-            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime")
+            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime", "id")
 
         drafts = None
         if is_own_profile:
             drafts = (
                 Event.objects.filter(submitted_by=publisher, is_draft=True)
                 .select_related("submitted_by")
-                .order_by("start_datetime")
+                .order_by("start_datetime", "id")
             )
 
         return render(

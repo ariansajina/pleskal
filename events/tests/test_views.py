@@ -6,6 +6,7 @@ import zoneinfo
 
 import pytest
 from django.contrib.messages import get_messages
+from django.db.models import FETCH_RAISE
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -1385,3 +1386,62 @@ class TestEventDrafts:
         )
         assert b"Published One" in resp.content
         assert b"Draft One" in resp.content
+
+
+@pytest.mark.django_db
+class TestEventOrderingIsDeterministic:
+    """Ordering must break ties, or pagination can repeat or skip rows.
+
+    Events are free to share a `start_datetime` — the unique constraint is on
+    `(title, start_datetime)`, and all-day events all land on 00:00 — so
+    ordering by `start_datetime` alone leaves the database free to return tied
+    rows in a different order per query. Across a page boundary that shows the
+    same event twice while another never appears. Django 6.1's
+    `QuerySet.totally_ordered` detects exactly this.
+    """
+
+    def test_default_model_ordering_is_total(self):
+        assert Event.objects.all().totally_ordered
+
+    @pytest.mark.parametrize("query", ["", "?past=1", "?date_from=2020-01-01"])
+    def test_list_view_paginated_queryset_is_totally_ordered(self, client, query):
+        EventFactory.create()
+        resp = client.get(reverse("event_list") + query)
+        assert resp.context["page_obj"].paginator.object_list.totally_ordered
+
+    def test_pagination_across_tied_start_datetimes_is_stable(self, client):
+        """Every tied event appears exactly once across all pages."""
+        when = timezone.now() + timezone.timedelta(days=30)
+        total = EVENTS_PER_PAGE + 15
+        for i in range(total):
+            EventFactory.create(title=f"Tie Event {i:03d}", start_datetime=when)
+
+        seen = []
+        for page in (1, 2):
+            resp = client.get(reverse("event_list") + f"?page={page}")
+            seen += [e.pk for e in resp.context["page_obj"].object_list]
+
+        assert len(seen) == total
+        assert len(set(seen)) == total, "an event was repeated across pages"
+
+
+@pytest.mark.django_db
+class TestEventListAvoidsNPlusOneQueries:
+    """The card template reads `event.submitted_by.public_name` for every row,
+    so the list queryset must select_related it or each row costs a query.
+
+    Django 6.1's FETCH_RAISE turns any lazy related-object load into an error,
+    which fails loudly if the select_related is ever dropped.
+    """
+
+    def test_list_queryset_has_submitted_by_preloaded(self, client):
+        for i in range(3):
+            EventFactory.create(
+                title=f"NPlusOne {i}", submitted_by=UserFactory.create()
+            )
+
+        resp = client.get(reverse("event_list"))
+        qs = resp.context["page_obj"].paginator.object_list
+
+        for event in qs.fetch_mode(FETCH_RAISE):
+            assert event.submitted_by.public_name

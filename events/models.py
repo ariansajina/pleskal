@@ -91,7 +91,7 @@ class Event(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["start_datetime"]
+        ordering = ["start_datetime", "id"]
         constraints = [
             models.UniqueConstraint(
                 fields=["title", "start_datetime"],
