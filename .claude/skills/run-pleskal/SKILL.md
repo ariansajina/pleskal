@@ -15,7 +15,7 @@ directory. The driver is `.claude/skills/run-pleskal/driver.sh`.
 Individual steps (useful when iterating):
 
 ```bash
-.claude/skills/run-pleskal/driver.sh setup    # create .venv, install deps, build CSS
+.claude/skills/run-pleskal/driver.sh setup    # uv sync --dev (versions from uv.lock), build CSS
 .claude/skills/run-pleskal/driver.sh seed     # migrate + create a smoke-test user/event
 .claude/skills/run-pleskal/driver.sh start    # start dev server on :8000 in background
 .claude/skills/run-pleskal/driver.sh smoke    # curl the home page, detail page, iCal feed
@@ -47,21 +47,17 @@ direct model access (see the seed step in `driver.sh` for the pattern:
 `driver.sh setup` does this; the commands, verified in this container:
 
 ```bash
-uv venv --python 3.13 .venv
-.venv/bin/python -m ensurepip --upgrade
-.venv/bin/python -m pip install --ignore-requires-python \
-  "django>=6.0.3" "psycopg[binary]>=3.2" "django-markdownx>=4.0" "nh3>=0.2" \
-  "django-storages[boto3]>=1.14" "django-axes>=7.0" "django-environ>=0.12" \
-  "pillow>=12.2.0" "gunicorn>=23.0" "sentry-sdk[django]>=2.0" "whitenoise>=6.8" \
-  "icalendar>=6.0" "pytest-xdist>=3.8.0" "zxcvbn>=4.4" "requests>=2.32.5" \
-  "beautifulsoup4>=4.14.3" "lxml>=6.0.2" "django-anymail[resend]>=10.0" \
-  "markdownify>=1.2.2" "django-allauth>=65.15.0" "argon2-cffi>=25.1.0" \
-  "resend>=2.26.0" "pillow-heif>=1.3.0" \
-  "ruff>=0.9" "pytest>=8.0" "pytest-django>=4.9" "pytest-cov>=6.0" \
-  "factory-boy>=3.3" "ty>=0.0.23" "pre-commit>=4.0"
+uv sync --dev
 npm install
 npm run css:build
 ```
+
+`uv sync --dev` creates `.venv` and installs the exact versions in
+`uv.lock`. **This skill deliberately keeps no dependency list of its
+own** — the project's `pyproject.toml`/`uv.lock` are the single source
+of truth, so dependency upgrades need no change here. If you find
+yourself about to paste package names or version pins into this file or
+into `driver.sh`, don't: fix the project's lockfile instead.
 
 ## Run (human path)
 
@@ -81,34 +77,22 @@ are all optional and unset here).
 
 ## Gotchas
 
-- **`pyproject.toml` requires `python>=3.14`, but `uv sync` can't get
-  there in a network-restricted sandbox.** `uv sync`/`uv python install`
-  fetch a standalone CPython 3.14 build from a GitHub release URL
-  (`github.com/astral-sh/python-build-standalone/...`); this
-  environment's outbound proxy only allowlists `pypi.org` /
-  `files.pythonhosted.org` (see `/root/.ccr/README.md`), so that
-  download 403s. `apt-get install python3.14` also fails the same way
-  — it comes from the `deadsnakes` PPA, not Ubuntu's own repos, and
-  that host isn't allowlisted either. Workaround: build the venv on
-  the system's Python 3.13 (`uv venv --python 3.13 .venv`) and install
-  deps with `pip install --ignore-requires-python` instead of
-  `uv sync`/`uv pip install -e .` — the app runs fine on 3.13, the
-  `>=3.14` floor is aspirational/CI-only (CI itself installs Python
-  3.13 via `actions/setup-python`, so this isn't even inconsistent
-  with what actually ships).
 - **Don't `pip install -e .`** — setuptools refuses with "Multiple
   top-level packages discovered in a flat-layout" because this repo
   has no `[tool.setuptools]` package config (it's a Django app, not a
-  distributable package; `manage.py` puts the repo root on
-  `sys.path` directly). Install the dependency list directly instead
-  (see Build above) — nothing needs the `pleskal` project itself
-  "installed".
-- **`ensurepip` in a fresh `uv venv`**: `uv venv` does not bundle pip.
-  Run `.venv/bin/python -m ensurepip --upgrade` once before any `pip
-  install` in that venv, or `uv pip install` fails resolving
-  `requires-python` the same way `uv sync` does (see above) — plain
-  `pip` with `--ignore-requires-python` is the only installer that
-  will take a 3.13 interpreter here.
+  distributable package; `manage.py` puts the repo root on `sys.path`
+  directly). `uv sync --dev` is the supported path and does not try to
+  build the project itself.
+- **`requires-python` decides which interpreter `uv sync` needs.** It
+  is `>=3.13` and the container's system Python satisfies it, so the
+  sync resolves locally. If it is ever raised above the interpreters
+  available here, `uv sync`/`uv python install` will try to fetch a
+  standalone CPython from a GitHub release URL
+  (`github.com/astral-sh/python-build-standalone/...`) and 403 — this
+  environment's proxy only allowlists `pypi.org` /
+  `files.pythonhosted.org` (see `/root/.ccr/README.md`). The fix is to
+  make a satisfying interpreter available, not to re-pin dependencies
+  here.
 - **No `PASSWORD_PEPPER` / `SECRET_KEY` in `.env` locally** → Django
   raises on startup. The driver generates a throwaway pepper and uses
   a fixed dev secret key; don't reuse these for anything real.
@@ -117,14 +101,17 @@ are all optional and unset here).
 
 ## Troubleshooting
 
-- `ModuleNotFoundError: No module named 'pip'` right after `uv venv` →
-  run `.venv/bin/python -m ensurepip --upgrade` first.
 - `error: Multiple top-level packages discovered in a flat-layout` →
-  you ran `pip install -e .`; don't — see Gotchas above.
-- `Because the current Python version (3.13.12) does not satisfy
-  Python>=3.14 ... cannot be used` → you used `uv sync` or `uv pip
-  install -e .` (both enforce `requires-python`); use `pip install
-  --ignore-requires-python <deps>` instead.
+  you ran `pip install -e .`; don't — use `uv sync --dev`, see Gotchas
+  above.
+- `Because the current Python version ... does not satisfy
+  Python>=X ... cannot be used` → the project's `requires-python` is
+  above every interpreter uv can find, and it cannot download one here.
+  See the `requires-python` gotcha above; don't work around it by
+  installing packages by hand.
+- Stale packages after a dependency change (`ModuleNotFoundError`, an
+  unexpected version) → re-run `driver.sh setup`. `uv sync --dev`
+  reconciles `.venv` with `uv.lock`, adding and removing as needed.
 - Server up but `/` 500s with a settings error mentioning
   `PASSWORD_PEPPER` or `SECRET_KEY` → export them before
   `runserver`/`migrate` (see Run (human path) above).
