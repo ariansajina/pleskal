@@ -2,6 +2,7 @@ import sys as _sys
 from pathlib import Path
 
 import environ
+from django.utils.csp import CSP
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -84,7 +85,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
     "allauth.account.middleware.AccountMiddleware",
-    "config.middleware.ContentSecurityPolicyMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -99,6 +100,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.csp",
                 "events.context_processors.feature_flags",
             ],
         },
@@ -226,6 +228,44 @@ if env("R2_BUCKET_NAME", default=None):
     AWS_QUERYSTRING_AUTH = False
     AWS_S3_FILE_OVERWRITE = False
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=31536000"}
+
+# Content Security Policy
+#
+# Served by Django's built-in ContentSecurityPolicyMiddleware. Directive order
+# here is the order they appear in the header.
+#
+# script-src has no 'unsafe-inline'/'unsafe-hashes': inline <script> blocks and
+# onclick=/onchange=-style attributes are blocked outright, so JS belongs in
+# static/js/*.js loaded with {% static %}. config/tests/test_csp_inline.py
+# guards against reintroducing them.
+#
+# style-src keeps 'unsafe-inline' because the templates carry a large number of
+# inline style="..." attributes plus the design system's <style> block in
+# base.html. Dropping it requires moving those into stylesheets first.
+
+_KOFI_HOST = "https://storage.ko-fi.com"
+_TILE_HOST = "https://tile.openstreetmap.org"
+
+_img_src = [CSP.SELF, "data:", _TILE_HOST, _KOFI_HOST]
+if _r2_domain := globals().get("AWS_S3_CUSTOM_DOMAIN"):
+    _img_src.append(f"https://{_r2_domain}")
+
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF, _KOFI_HOST],
+    "style-src": [CSP.SELF, CSP.UNSAFE_INLINE, _KOFI_HOST],
+    "img-src": _img_src,
+    "font-src": [CSP.SELF],
+    "connect-src": [CSP.SELF, _TILE_HOST, _KOFI_HOST, "https://ko-fi.com"],
+    "frame-ancestors": [CSP.NONE],
+    "frame-src": ["https://www.openstreetmap.org", "https://ko-fi.com"],
+    "base-uri": [CSP.SELF],
+    "form-action": [CSP.SELF],
+}
+
+# The custom CSP middleware this replaced also set Referrer-Policy on every
+# response; SecurityMiddleware owns that header, so keep the same value.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 # Email
 

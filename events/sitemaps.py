@@ -11,7 +11,7 @@ class EventSitemap(Sitemap):
     priority = 0.7
 
     def items(self):
-        return Event.objects.filter(is_draft=False).order_by("-start_datetime")
+        return Event.objects.filter(is_draft=False).order_by("-start_datetime", "-id")
 
     def lastmod(self, obj):
         return obj.updated_at

@@ -6,6 +6,7 @@ import zoneinfo
 
 import pytest
 from django.contrib.messages import get_messages
+from django.db.models import FETCH_RAISE
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -406,8 +407,14 @@ class TestEventListView:
     def test_day_divider_uses_local_date_not_utc_date(self, client):
         """An event starting at 00:00 Copenhagen time (22:00 UTC the previous
         day) must be grouped under its local date, not the UTC date."""
-        cph_midnight = datetime.datetime(2026, 8, 13, 0, 0, tzinfo=CPH_TZ)
-        assert cph_midnight.astimezone(datetime.UTC).day == 12
+        # Far enough out to fall outside the current week, so the divider
+        # renders the full "j F" date instead of just the weekday name.
+        local_date = timezone.localdate() + datetime.timedelta(days=10)
+        cph_midnight = datetime.datetime(
+            local_date.year, local_date.month, local_date.day, 0, 0, tzinfo=CPH_TZ
+        )
+        utc_date = cph_midnight.astimezone(datetime.UTC).date()
+        assert utc_date == local_date - datetime.timedelta(days=1)
 
         event = EventFactory.create(
             title="Hungry Eyes",
@@ -416,8 +423,8 @@ class TestEventListView:
         resp = client.get(reverse("event_list"))
         content = resp.content.decode()
         title_pos = content.index(event.title)
-        assert "13 August" in content[:title_pos]
-        assert "12 August" not in content[:title_pos]
+        assert f"{local_date.day} {local_date:%B}" in content[:title_pos]
+        assert f"{utc_date.day} {utc_date:%B}" not in content[:title_pos]
 
     def test_non_htmx_returns_full_page(self, client):
         EventFactory.create()
@@ -1379,3 +1386,62 @@ class TestEventDrafts:
         )
         assert b"Published One" in resp.content
         assert b"Draft One" in resp.content
+
+
+@pytest.mark.django_db
+class TestEventOrderingIsDeterministic:
+    """Ordering must break ties, or pagination can repeat or skip rows.
+
+    Events are free to share a `start_datetime` — the unique constraint is on
+    `(title, start_datetime)`, and all-day events all land on 00:00 — so
+    ordering by `start_datetime` alone leaves the database free to return tied
+    rows in a different order per query. Across a page boundary that shows the
+    same event twice while another never appears. Django 6.1's
+    `QuerySet.totally_ordered` detects exactly this.
+    """
+
+    def test_default_model_ordering_is_total(self):
+        assert Event.objects.all().totally_ordered
+
+    @pytest.mark.parametrize("query", ["", "?past=1", "?date_from=2020-01-01"])
+    def test_list_view_paginated_queryset_is_totally_ordered(self, client, query):
+        EventFactory.create()
+        resp = client.get(reverse("event_list") + query)
+        assert resp.context["page_obj"].paginator.object_list.totally_ordered
+
+    def test_pagination_across_tied_start_datetimes_is_stable(self, client):
+        """Every tied event appears exactly once across all pages."""
+        when = timezone.now() + timezone.timedelta(days=30)
+        total = EVENTS_PER_PAGE + 15
+        for i in range(total):
+            EventFactory.create(title=f"Tie Event {i:03d}", start_datetime=when)
+
+        seen = []
+        for page in (1, 2):
+            resp = client.get(reverse("event_list") + f"?page={page}")
+            seen += [e.pk for e in resp.context["page_obj"].object_list]
+
+        assert len(seen) == total
+        assert len(set(seen)) == total, "an event was repeated across pages"
+
+
+@pytest.mark.django_db
+class TestEventListAvoidsNPlusOneQueries:
+    """The card template reads `event.submitted_by.public_name` for every row,
+    so the list queryset must select_related it or each row costs a query.
+
+    Django 6.1's FETCH_RAISE turns any lazy related-object load into an error,
+    which fails loudly if the select_related is ever dropped.
+    """
+
+    def test_list_queryset_has_submitted_by_preloaded(self, client):
+        for i in range(3):
+            EventFactory.create(
+                title=f"NPlusOne {i}", submitted_by=UserFactory.create()
+            )
+
+        resp = client.get(reverse("event_list"))
+        qs = resp.context["page_obj"].paginator.object_list
+
+        for event in qs.fetch_mode(FETCH_RAISE):
+            assert event.submitted_by.public_name

@@ -1,6 +1,6 @@
 """Guards against re-introducing markup the site's CSP silently blocks.
 
-The CSP (config/middleware.py) sends `script-src 'self'` with no
+The CSP (`SECURE_CSP` in config/settings.py) sends `script-src 'self'` with no
 `'unsafe-inline'`/`'unsafe-hashes'`, so any inline `<script>` (without a
 `src`) or inline event-handler attribute (`onclick=`, `onchange=`, ...) is
 executed by the browser as-is but never actually runs. These regressions are

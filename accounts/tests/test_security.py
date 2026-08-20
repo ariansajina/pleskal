@@ -79,6 +79,24 @@ class TestAxesLockout:
         assert resp.status_code == 302  # still logs in fine
 
 
+TILE_HOST = "https://tile.openstreetmap.org"
+
+
+def _csp_sources(response, directive):
+    """Return one CSP directive's source expressions as an exact-match list.
+
+    Splitting into whole tokens keeps the assertions exact: a substring check
+    against the raw header would also pass for a host that merely contains the
+    expected one (`https://tile.openstreetmap.org.example.com`).
+    """
+    header = response["Content-Security-Policy"]
+    for part in header.split("; "):
+        name, _, values = part.partition(" ")
+        if name == directive:
+            return values.split()
+    raise AssertionError(f"{directive} missing from Content-Security-Policy: {header}")
+
+
 @pytest.mark.django_db
 class TestCSPHeader:
     """Content-Security-Policy header is present on all responses."""
@@ -115,3 +133,25 @@ class TestCSPHeader:
         resp = client.get(reverse("event_list"))
         csp = resp["Content-Security-Policy"]
         assert "frame-src https://www.openstreetmap.org" in csp
+
+    def test_csp_script_src_has_no_unsafe_inline(self, client):
+        """Inline <script> and on*= handlers must stay blocked."""
+        sources = _csp_sources(client.get(reverse("event_list")), "script-src")
+        assert "'unsafe-inline'" not in sources
+        assert "'unsafe-hashes'" not in sources
+
+    def test_referrer_policy_preserved(self, client):
+        """SecurityMiddleware owns this header now that the custom CSP
+        middleware (which used to set it) is gone."""
+        resp = client.get(reverse("event_list"))
+        assert resp["Referrer-Policy"] == "strict-origin-when-cross-origin"
+
+    def test_csp_img_src_allows_map_tiles_and_data_uris(self, client):
+        """Leaflet tiles and the data: URIs used by inline icons must load."""
+        sources = _csp_sources(client.get(reverse("event_list")), "img-src")
+        assert "'self'" in sources
+        assert "data:" in sources
+        # Counted rather than `host in sources`: equality cannot match a
+        # lookalike host, and `in` against a URL literal is what CodeQL's
+        # incomplete-URL-substring-sanitization rule flags.
+        assert sources.count(TILE_HOST) == 1

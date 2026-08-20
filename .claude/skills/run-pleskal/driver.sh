@@ -29,25 +29,10 @@ export SERVER_EMAIL="${SERVER_EMAIL:-pleskal <onboarding@resend.dev>}"
 PY="$VENV/bin/python"
 
 do_setup() {
-  # pyproject.toml requires-python is >=3.14, which uv can only satisfy by
-  # downloading a standalone interpreter from a GitHub release URL. In
-  # network-restricted sandboxes that download is blocked (403), so build a
-  # 3.13 venv directly and force the install past the version guard - the
-  # app itself runs fine on 3.13.
-  if [ ! -x "$PY" ]; then
-    uv venv --python 3.13 "$VENV"
-    "$PY" -m ensurepip --upgrade >/dev/null
-  fi
-  "$PY" -m pip install -q --ignore-requires-python \
-    "django>=6.0.3" "psycopg[binary]>=3.2" "django-markdownx>=4.0" "nh3>=0.2" \
-    "django-storages[boto3]>=1.14" "django-axes>=7.0" "django-environ>=0.12" \
-    "pillow>=12.2.0" "gunicorn>=23.0" "sentry-sdk[django]>=2.0" "whitenoise>=6.8" \
-    "icalendar>=6.0" "pytest-xdist>=3.8.0" "zxcvbn>=4.4" "requests>=2.32.5" \
-    "beautifulsoup4>=4.14.3" "lxml>=6.0.2" "django-anymail[resend]>=10.0" \
-    "markdownify>=1.2.2" "django-allauth>=65.15.0" "argon2-cffi>=25.1.0" \
-    "resend>=2.26.0" "pillow-heif>=1.3.0" \
-    "ruff>=0.9" "pytest>=8.0" "pytest-django>=4.9" "pytest-cov>=6.0" \
-    "factory-boy>=3.3" "ty>=0.0.23" "pre-commit>=4.0"
+  # Install exactly what the project pins. uv.lock is the single source of
+  # truth for versions - this skill deliberately keeps no dependency list of
+  # its own, so upgrades in pyproject.toml/uv.lock need no change here.
+  uv sync --dev
   npm install --silent
   npm run css:build --silent
   echo "setup: OK"

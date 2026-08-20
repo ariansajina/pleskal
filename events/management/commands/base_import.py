@@ -62,8 +62,10 @@ def _validate_field_lengths(rec: dict, title_for_log: str) -> tuple[bool, str | 
         if isinstance(value, str) and len(value) > max_length:
             return (
                 False,
-                f"Field '{field}' exceeds max length of {max_length} "
-                f"({len(value)} chars): {value[:100]}...",
+                (
+                    f"Field '{field}' exceeds max length of {max_length} "
+                    f"({len(value)} chars): {value[:100]}..."
+                ),
             )
 
     return True, None

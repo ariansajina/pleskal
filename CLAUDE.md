@@ -27,7 +27,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 ## Project Structure
 
 ```
-config/          # Django project settings, URLs, CSP middleware, rate limiting, PWA endpoints
+config/          # Django project settings (incl. SECURE_CSP), URLs, rate limiting, PWA endpoints
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
 events/          # Dance events app (CRUD, feeds, image processing, geocoding, map view, sharing)
 scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9)
@@ -80,7 +80,6 @@ config/
   settings.py        # Django settings
   urls.py            # Root URL conf (includes /health/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's upload/markdownify views with login_required (its default urls.py mounts them unauthenticated)
   ratelimit.py       # Cache-based RateLimitMixin
-  middleware.py      # ContentSecurityPolicyMiddleware
   pwa.py             # PWA endpoints: manifest, service worker, offline fallback page
 
 scrapers/
@@ -221,7 +220,7 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 - Image uploads: Pillow-validated (not Content-Type), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min IP lockout)
 - Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's `incr()` TTL behavior; limits per endpoint listed below
-- CSP: `ContentSecurityPolicyMiddleware` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
+- CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
 
