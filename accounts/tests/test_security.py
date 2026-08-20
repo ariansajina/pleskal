@@ -115,3 +115,32 @@ class TestCSPHeader:
         resp = client.get(reverse("event_list"))
         csp = resp["Content-Security-Policy"]
         assert "frame-src https://www.openstreetmap.org" in csp
+
+    def test_csp_script_src_has_no_unsafe_inline(self, client):
+        """Inline <script> and on*= handlers must stay blocked."""
+        resp = client.get(reverse("event_list"))
+        script_src = next(
+            d
+            for d in resp["Content-Security-Policy"].split("; ")
+            if d.startswith("script-src ")
+        )
+        assert "unsafe-inline" not in script_src
+        assert "unsafe-hashes" not in script_src
+
+    def test_referrer_policy_preserved(self, client):
+        """SecurityMiddleware owns this header now that the custom CSP
+        middleware (which used to set it) is gone."""
+        resp = client.get(reverse("event_list"))
+        assert resp["Referrer-Policy"] == "strict-origin-when-cross-origin"
+
+    def test_csp_img_src_allows_map_tiles_and_data_uris(self, client):
+        """Leaflet tiles and the data: URIs used by inline icons must load."""
+        resp = client.get(reverse("event_list"))
+        img_src = next(
+            d
+            for d in resp["Content-Security-Policy"].split("; ")
+            if d.startswith("img-src ")
+        )
+        assert "'self'" in img_src
+        assert "data:" in img_src
+        assert "https://tile.openstreetmap.org" in img_src
