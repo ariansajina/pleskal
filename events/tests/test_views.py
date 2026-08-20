@@ -406,8 +406,14 @@ class TestEventListView:
     def test_day_divider_uses_local_date_not_utc_date(self, client):
         """An event starting at 00:00 Copenhagen time (22:00 UTC the previous
         day) must be grouped under its local date, not the UTC date."""
-        cph_midnight = datetime.datetime(2026, 8, 13, 0, 0, tzinfo=CPH_TZ)
-        assert cph_midnight.astimezone(datetime.UTC).day == 12
+        # Far enough out to fall outside the current week, so the divider
+        # renders the full "j F" date instead of just the weekday name.
+        local_date = timezone.localdate() + datetime.timedelta(days=10)
+        cph_midnight = datetime.datetime(
+            local_date.year, local_date.month, local_date.day, 0, 0, tzinfo=CPH_TZ
+        )
+        utc_date = cph_midnight.astimezone(datetime.UTC).date()
+        assert utc_date == local_date - datetime.timedelta(days=1)
 
         event = EventFactory.create(
             title="Hungry Eyes",
@@ -416,8 +422,8 @@ class TestEventListView:
         resp = client.get(reverse("event_list"))
         content = resp.content.decode()
         title_pos = content.index(event.title)
-        assert "13 August" in content[:title_pos]
-        assert "12 August" not in content[:title_pos]
+        assert f"{local_date.day} {local_date:%B}" in content[:title_pos]
+        assert f"{utc_date.day} {utc_date:%B}" not in content[:title_pos]
 
     def test_non_htmx_returns_full_page(self, client):
         EventFactory.create()
