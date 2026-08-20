@@ -79,6 +79,21 @@ class TestAxesLockout:
         assert resp.status_code == 302  # still logs in fine
 
 
+def _csp_sources(response, directive):
+    """Return one CSP directive's source expressions as an exact-match list.
+
+    Splitting into whole tokens keeps the assertions exact: a substring check
+    against the raw header would also pass for a host that merely contains the
+    expected one (`https://tile.openstreetmap.org.example.com`).
+    """
+    header = response["Content-Security-Policy"]
+    for part in header.split("; "):
+        name, _, values = part.partition(" ")
+        if name == directive:
+            return values.split()
+    raise AssertionError(f"{directive} missing from Content-Security-Policy: {header}")
+
+
 @pytest.mark.django_db
 class TestCSPHeader:
     """Content-Security-Policy header is present on all responses."""
@@ -118,14 +133,9 @@ class TestCSPHeader:
 
     def test_csp_script_src_has_no_unsafe_inline(self, client):
         """Inline <script> and on*= handlers must stay blocked."""
-        resp = client.get(reverse("event_list"))
-        script_src = next(
-            d
-            for d in resp["Content-Security-Policy"].split("; ")
-            if d.startswith("script-src ")
-        )
-        assert "unsafe-inline" not in script_src
-        assert "unsafe-hashes" not in script_src
+        sources = _csp_sources(client.get(reverse("event_list")), "script-src")
+        assert "'unsafe-inline'" not in sources
+        assert "'unsafe-hashes'" not in sources
 
     def test_referrer_policy_preserved(self, client):
         """SecurityMiddleware owns this header now that the custom CSP
@@ -135,12 +145,7 @@ class TestCSPHeader:
 
     def test_csp_img_src_allows_map_tiles_and_data_uris(self, client):
         """Leaflet tiles and the data: URIs used by inline icons must load."""
-        resp = client.get(reverse("event_list"))
-        img_src = next(
-            d
-            for d in resp["Content-Security-Policy"].split("; ")
-            if d.startswith("img-src ")
-        )
-        assert "'self'" in img_src
-        assert "data:" in img_src
-        assert "https://tile.openstreetmap.org" in img_src
+        sources = _csp_sources(client.get(reverse("event_list")), "img-src")
+        assert "'self'" in sources
+        assert "data:" in sources
+        assert "https://tile.openstreetmap.org" in sources
