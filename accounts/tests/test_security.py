@@ -79,6 +79,9 @@ class TestAxesLockout:
         assert resp.status_code == 302  # still logs in fine
 
 
+TILE_HOST = "https://tile.openstreetmap.org"
+
+
 def _csp_sources(response, directive):
     """Return one CSP directive's source expressions as an exact-match list.
 
@@ -148,4 +151,7 @@ class TestCSPHeader:
         sources = _csp_sources(client.get(reverse("event_list")), "img-src")
         assert "'self'" in sources
         assert "data:" in sources
-        assert "https://tile.openstreetmap.org" in sources
+        # Counted rather than `host in sources`: equality cannot match a
+        # lookalike host, and `in` against a URL literal is what CodeQL's
+        # incomplete-URL-substring-sanitization rule flags.
+        assert sources.count(TILE_HOST) == 1
