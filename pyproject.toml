@@ -56,9 +56,15 @@ select = [
     "B",   # flake8-bugbear: catch likely bugs and opinionated design problems
     "SIM", # flake8-simplify: suggest simplifications to existing code constructs
     "S",   # flake8-bandit: detect common security vulnerabilities
+    "LOG", # flake8-logging: misuse of the logging module
+    "ISC", # flake8-implicit-str-concat: implicit concatenation that hides missing commas
+    "DJ",  # flake8-django: Django-specific anti-patterns
 ]
 ignore = [
-    "E501", # line too long: not enforced, handled by the formatter
+    "E501",  # line too long: not enforced, handled by the formatter
+    "DJ012", # model body ordering: the `objects` / `DoesNotExist` declarations are
+             # deliberately placed before the fields so `ty` resolves them, and the
+             # rule fires inconsistently across models that share that pattern.
 ]
 
 [tool.ruff.lint.per-file-ignores]
