@@ -41,46 +41,40 @@ _MINIMAL_META_HTML = """
 # ── collect_workshop_urls ─────────────────────────────────────────────────────
 
 
-def test_collect_workshop_urls_extracts_matching_hrefs():
+def test_collect_workshop_urls_extracts_event_permalinks():
     html = """
     <html><body>
-      <a href="/en/professionals/workshop/101/">Workshop 1</a>
-      <a href="/en/professionals/masterclass/202">Workshop 2</a>
+      <a href="/en/2026/05/02/body-awareness/">Workshop 1</a>
+      <a href="https://dansehallerne.dk/en/2026/06/11/floorwork/">Workshop 2</a>
       <a href="/en/about/">Not a workshop</a>
+      <a href="/en/professionals/workshop/101/">Retired ID route</a>
     </body></html>
     """
     session = _mock_session(html)
     urls = collect_workshop_urls(session)
-    assert len(urls) == 2
-    assert "https://dansehallerne.dk/en/professionals/workshop/101/" in urls
-    assert "https://dansehallerne.dk/en/professionals/masterclass/202" in urls
+    assert urls == [
+        "https://dansehallerne.dk/en/2026/05/02/body-awareness/",
+        "https://dansehallerne.dk/en/2026/06/11/floorwork/",
+    ]
 
 
-def test_collect_workshop_urls_ignores_public_program_links():
-    # Links under /en/public-program/ should NOT be picked up by the workshops scraper
-    html = """
-    <html><body>
-      <a href="/en/public-program/workshop/456/">Public programme event</a>
-      <a href="/en/professionals/workshop/789/">Professionals event</a>
-    </body></html>
-    """
-    session = _mock_session(html)
-    urls = collect_workshop_urls(session)
-    assert len(urls) == 1
-    assert "https://dansehallerne.dk/en/professionals/workshop/789/" in urls
-    assert all("/en/public-program/" not in u for u in urls)
+def test_collect_workshop_urls_reads_the_professionals_listing():
+    # The listing crawled is what separates this scraper from the public
+    # programme one, so it must fetch /en/professionals/.
+    session = _mock_session("<html><body></body></html>")
+    collect_workshop_urls(session)
+    assert session.get.call_args.args[0] == "https://dansehallerne.dk/en/professionals/"
 
 
 def test_collect_workshop_urls_deduplicates():
     html = """
     <html><body>
-      <a href="/en/professionals/workshop/101/">First link</a>
-      <a href="/en/professionals/workshop/101/">Duplicate link</a>
+      <a href="/en/2026/05/02/body-awareness/">First link</a>
+      <a href="/en/2026/05/02/body-awareness/">Duplicate link</a>
     </body></html>
     """
     session = _mock_session(html)
-    urls = collect_workshop_urls(session)
-    assert len(urls) == 1
+    assert len(collect_workshop_urls(session)) == 1
 
 
 # ── scrape_detail ─────────────────────────────────────────────────────────────
@@ -297,11 +291,3 @@ def test_scrape_detail_source_url_falls_back_to_fetched_url():
     session = _mock_session(_MINIMAL_META_HTML)
     url = "https://dansehallerne.dk/en/professionals/workshop/101/"
     assert scrape_detail(url, session)[0]["source_url"] == url
-
-
-def test_collect_workshop_urls_resolves_document_relative_hrefs():
-    html = '<html><body><a href="workshop/101/">Workshop</a></body></html>'
-    session = _mock_session(html)
-    assert collect_workshop_urls(session) == [
-        "https://dansehallerne.dk/en/professionals/workshop/101/"
-    ]

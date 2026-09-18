@@ -18,7 +18,6 @@ from __future__ import annotations
 import datetime
 import logging
 import re
-from urllib.parse import urljoin
 
 import requests
 
@@ -32,6 +31,7 @@ from scrapers.base import (
     write_output,
 )
 from scrapers.dansehallerne import (
+    collect_listing_urls,
     parse_date_string,
     parse_description,
     parse_image_url,
@@ -50,22 +50,7 @@ log = logging.getLogger(__name__)
 
 def collect_workshop_urls(session: requests.Session) -> list[str]:
     """Return all unique workshop detail URLs from the professionals listing."""
-    soup = get_soup(WORKSHOPS_URL, session)
-    seen: set[str] = set()
-    urls: list[str] = []
-
-    for a in soup.find_all("a", href=True):
-        href = str(a.get("href", ""))
-        # Resolve against the listing page, not the bare domain, so a
-        # document-relative href ("workshop/101/") keeps its directory.
-        url = urljoin(WORKSHOPS_URL, href)
-        # Only accept paths like /en/professionals/<type>/<id>/
-        if url not in seen and re.search(r"/en/professionals/[^/]+/\d+/?$", url):
-            seen.add(url)
-            urls.append(url)
-
-    log.info("Found %d workshop URLs on listing page", len(urls))
-    return urls
+    return collect_listing_urls(WORKSHOPS_URL, session)
 
 
 # ── Detail page ───────────────────────────────────────────────────────────────
