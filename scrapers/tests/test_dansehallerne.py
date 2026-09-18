@@ -472,6 +472,16 @@ def test_collect_event_urls_extracts_event_permalinks():
     ]
 
 
+def test_collect_event_urls_reads_the_public_programme_listing():
+    # The listing crawled is what separates this scraper from the workshops
+    # one, so it must fetch /en/public-program/.
+    session = _mock_session("<html><body></body></html>")
+    collect_event_urls(session)
+    assert (
+        session.get.call_args.args[0] == "https://dansehallerne.dk/en/public-program/"
+    )
+
+
 def test_collect_event_urls_accepts_danish_permalinks():
     html = '<html><body><a href="/da/2026/04/27/blackmilk/">Event</a></body></html>'
     session = _mock_session(html)

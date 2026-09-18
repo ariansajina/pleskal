@@ -13,10 +13,11 @@ from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
+from django.utils import timezone
 
 from accounts.tests.factories import UserFactory
 from events.management.commands import run_scrapers
-from events.models import Event
+from events.models import Event, EventCategory
 from events.tests.factories import EventFactory
 from scrapers.registry import SOURCES
 
@@ -106,6 +107,117 @@ class TestRunScrapersSentryReporting:
         )
 
         call_command("run_scrapers", only=["hautscene"])
+
+        assert captured == []
+
+
+@pytest.mark.django_db
+class TestRunScrapersEmptyScrape:
+    """A scraper that breaks outright returns 0 events, which skips the import
+    and so never reaches the importer's stale-deletion guard. That path has to
+    report the regression itself, or a source's events sit stale unnoticed."""
+
+    @staticmethod
+    def _capture_messages(monkeypatch):
+        captured = []
+        monkeypatch.setattr(
+            run_scrapers.sentry_sdk,
+            "capture_message",
+            lambda message, **kwargs: captured.append((message, kwargs)),
+        )
+        return captured
+
+    def test_zero_events_with_stale_events_is_reported(self, monkeypatch):
+        EventFactory.create_batch(
+            2,
+            external_source="hautscene",
+            start_datetime=timezone.now() + datetime.timedelta(days=7),
+        )
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = self._capture_messages(monkeypatch)
+
+        call_command("run_scrapers", only=["hautscene"])
+
+        assert len(captured) == 1
+        message, kwargs = captured[0]
+        assert "hautscene" in message
+        assert "0 events" in message
+        assert kwargs["level"] == "warning"
+
+    def test_zero_events_with_no_stale_events_is_quiet(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = self._capture_messages(monkeypatch)
+
+        call_command("run_scrapers", only=["hautscene"])
+
+        assert captured == []
+
+    def test_only_future_events_count_as_stale(self, monkeypatch):
+        # A source whose events have all been and gone is a calendar that ran
+        # out, not a broken scraper.
+        EventFactory.create_batch(
+            3,
+            external_source="hautscene",
+            start_datetime=timezone.now() - datetime.timedelta(days=7),
+        )
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = self._capture_messages(monkeypatch)
+
+        call_command("run_scrapers", only=["hautscene"])
+
+        assert captured == []
+
+    def test_another_sources_events_are_not_counted(self, monkeypatch):
+        EventFactory.create_batch(
+            2,
+            external_source="sort-hvid",
+            start_datetime=timezone.now() + datetime.timedelta(days=7),
+        )
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = self._capture_messages(monkeypatch)
+
+        call_command("run_scrapers", only=["hautscene"])
+
+        assert captured == []
+
+    def test_category_scope_limits_what_a_shared_source_answers_for(self, monkeypatch):
+        # dansehallerne and dansehallerne_workshops share one external_source
+        # and split it by category, so the workshops scraper coming back empty
+        # must not be blamed for the performances still in the database.
+        EventFactory.create_batch(
+            2,
+            external_source="dansehallerne",
+            category=EventCategory.PERFORMANCE,
+            start_datetime=timezone.now() + datetime.timedelta(days=7),
+        )
+        _patched_sources(
+            monkeypatch, lambda **kwargs: [], name="dansehallerne_workshops"
+        )
+        captured = self._capture_messages(monkeypatch)
+
+        call_command("run_scrapers", only=["dansehallerne_workshops"])
+
+        assert captured == []
+
+        EventFactory.create(
+            external_source="dansehallerne",
+            category=EventCategory.WORKSHOP,
+            start_datetime=timezone.now() + datetime.timedelta(days=7),
+        )
+        call_command("run_scrapers", only=["dansehallerne_workshops"])
+
+        assert len(captured) == 1
+
+    def test_dry_run_does_not_page(self, monkeypatch):
+        EventFactory.create_batch(
+            2,
+            external_source="hautscene",
+            start_datetime=timezone.now() + datetime.timedelta(days=7),
+        )
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = self._capture_messages(monkeypatch)
+
+        call_command("run_scrapers", only=["hautscene"], dry_run=True)
 
         assert captured == []
 

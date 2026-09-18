@@ -24,8 +24,9 @@ import traceback
 import sentry_sdk
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
-from scrapers.registry import SOURCES
+from scrapers.registry import SOURCES, ScraperSource
 
 log = logging.getLogger(__name__)
 
@@ -142,7 +143,16 @@ class Command(BaseCommand):
                     self.stdout.write(
                         self.style.WARNING(f"No events from {name}, skipping import")
                     )
-                    results.append((name, True, "0 events scraped"))
+                    stale = self._report_empty_scrape(name, cfg, dry_run)
+                    results.append(
+                        (
+                            name,
+                            True,
+                            f"0 events scraped, {stale} future event(s) left stale"
+                            if stale
+                            else "0 events scraped",
+                        )
+                    )
                     continue
 
                 # ── Write temp JSON ────────────────────────────────────
@@ -215,6 +225,55 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS("\nAll scrapers completed successfully.")
             )
+
+    def _report_empty_scrape(self, name: str, cfg: ScraperSource, dry_run: bool) -> int:
+        """Flag a source that scraped nothing but still has events on the site.
+
+        An empty scrape skips the import entirely, so the importer's
+        stale-deletion guard — which catches a source returning implausibly
+        few events — never gets to run. A scraper broken outright (a listing
+        whose markup or URL scheme moved upstream) therefore reports OK while
+        its events sit in the database going stale, which is how the
+        dansehallerne listing change went unnoticed until its stored links had
+        rotted. Returns the number of future events left stranded, 0 when
+        there is nothing to flag.
+
+        A source holding no future events of its own is a calendar that has
+        simply run out rather than evidence of breakage, so only the
+        regression is reported.
+        """
+        from events.management.commands.base_import import CATEGORY_MAP
+        from events.models import Event
+
+        existing = Event.objects.filter(
+            external_source=cfg.external_source,
+            start_datetime__gte=timezone.now(),
+        )
+        # Sources sharing an external_source split it by category, so each one
+        # is only answerable for the events within its own scope.
+        if cfg.category_scope is not None:
+            existing = existing.filter(
+                category__in=[
+                    CATEGORY_MAP[c] for c in cfg.category_scope if c in CATEGORY_MAP
+                ]
+            )
+        stale_count = existing.count()
+        if not stale_count:
+            return 0
+
+        message = (
+            f"Scraper '{name}' returned 0 events while {stale_count} future "
+            "event(s) for it remain in the database. An empty scrape skips the "
+            "import, so those events are now stale and their links may no "
+            "longer resolve — the source's listing page has most likely changed."
+        )
+        self.stderr.write(self.style.ERROR(f"  {message}"))
+        # A dry run previews; it shouldn't page anyone.
+        if not dry_run:
+            with sentry_sdk.new_scope() as scope:
+                scope.set_tag("scraper", name)
+                sentry_sdk.capture_message(message, level="warning")
+        return stale_count
 
     @staticmethod
     def _report_to_sentry(exc: Exception, scraper_name: str) -> None:
