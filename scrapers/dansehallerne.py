@@ -19,7 +19,7 @@ import datetime
 import logging
 import re
 import zoneinfo
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import markdownify
 import requests
@@ -37,6 +37,16 @@ from scrapers.base import (
 
 BASE_URL = "https://dansehallerne.dk"
 PROGRAM_URL = f"{BASE_URL}/en/public-program/"
+HOST = "dansehallerne.dk"
+
+# An event's page is a date-based permalink: /en/2026/04/27/blackmilk/.
+# The listings used to link events through section-scoped ID routes
+# (/en/public-program/<type>/<id>/, /en/professionals/<type>/<id>/); those now
+# redirect away, so matching them found nothing and both scrapers came back
+# empty. What identifies an event page is the permalink shape, not the
+# section it was linked from — the listing crawled is what separates the
+# public programme from the professionals programme.
+EVENT_PATH_RE = re.compile(r"/(?:en|da)/\d{4}/\d{2}/\d{2}/[^/]+/?")
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 
 # Map dansehallerne type strings → pleskal EventCategory values
@@ -58,24 +68,35 @@ log = logging.getLogger(__name__)
 # ── Listing page ──────────────────────────────────────────────────────────────
 
 
-def collect_event_urls(session: requests.Session) -> list[str]:
-    """Return all unique event detail URLs from the public programme listing."""
-    soup = get_soup(PROGRAM_URL, session)
+def collect_listing_urls(listing_url: str, session: requests.Session) -> list[str]:
+    """Return the unique event permalinks linked from *listing_url*."""
+    soup = get_soup(listing_url, session)
     seen: set[str] = set()
     urls: list[str] = []
 
     for a in soup.find_all("a", href=True):
         href = str(a.get("href", ""))
         # Resolve against the listing page, not the bare domain, so a
-        # document-relative href ("performance/23486/") keeps its directory.
-        url = urljoin(PROGRAM_URL, href)
-        # Only accept paths like /en/public-program/<type>/<id>/
-        if url not in seen and re.search(r"/en/public-program/[^/]+/\d+/?$", url):
-            seen.add(url)
-            urls.append(url)
+        # document-relative href ("2026/04/27/blackmilk/") keeps its directory.
+        parts = urlsplit(urljoin(listing_url, href))
+        # A permalink carries no query or fragment, and one appended to it
+        # would split an event across two source_urls in the importer's key.
+        url = urlunsplit(parts._replace(query="", fragment=""))
+        host = (parts.hostname or "").removeprefix("www.")
+        if host != HOST or not EVENT_PATH_RE.fullmatch(parts.path):
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
 
-    log.info("Found %d event URLs on listing page", len(urls))
+    log.info("Found %d event URLs on %s", len(urls), listing_url)
     return urls
+
+
+def collect_event_urls(session: requests.Session) -> list[str]:
+    """Return all unique event detail URLs from the public programme listing."""
+    return collect_listing_urls(PROGRAM_URL, session)
 
 
 # ── Date string parser ────────────────────────────────────────────────────────

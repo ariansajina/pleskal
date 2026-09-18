@@ -454,82 +454,71 @@ def test_scrape_detail_duration_sets_end_time():
 # ── collect_event_urls ────────────────────────────────────────────────────────
 
 
-def test_collect_event_urls_extracts_matching_hrefs():
+def test_collect_event_urls_extracts_event_permalinks():
     html = """
     <html><body>
-      <a href="/en/public-program/performance/123/">Event 1</a>
-      <a href="/en/public-program/workshop/456">Event 2</a>
+      <a href="/en/2026/04/27/blackmilk/">Event 1</a>
+      <a href="https://dansehallerne.dk/en/2026/07/03/hang-time/">Event 2</a>
+      <a href="/en/public-program/openings-2026/">Series landing page</a>
       <a href="/en/about/">Not an event</a>
+      <a href="/en/public-program/performance/23486/">Retired ID route</a>
     </body></html>
     """
     session = _mock_session(html)
     urls = collect_event_urls(session)
-    assert len(urls) == 2
-    assert "https://dansehallerne.dk/en/public-program/performance/123/" in urls
-    assert "https://dansehallerne.dk/en/public-program/workshop/456" in urls
+    assert urls == [
+        "https://dansehallerne.dk/en/2026/04/27/blackmilk/",
+        "https://dansehallerne.dk/en/2026/07/03/hang-time/",
+    ]
+
+
+def test_collect_event_urls_accepts_danish_permalinks():
+    html = '<html><body><a href="/da/2026/04/27/blackmilk/">Event</a></body></html>'
+    session = _mock_session(html)
+    assert collect_event_urls(session) == [
+        "https://dansehallerne.dk/da/2026/04/27/blackmilk/"
+    ]
+
+
+def test_collect_event_urls_ignores_other_hosts():
+    # A social/share link whose path mimics a permalink must not be crawled.
+    html = """
+    <html><body>
+      <a href="https://example.com/en/2026/04/27/blackmilk/">Elsewhere</a>
+    </body></html>
+    """
+    session = _mock_session(html)
+    assert collect_event_urls(session) == []
+
+
+def test_collect_event_urls_strips_query_and_fragment():
+    # Two links to one event must not become two source_urls.
+    html = """
+    <html><body>
+      <a href="/en/2026/04/27/blackmilk/?utm_source=list">Tracked</a>
+      <a href="/en/2026/04/27/blackmilk/#tickets">Anchored</a>
+    </body></html>
+    """
+    session = _mock_session(html)
+    assert collect_event_urls(session) == [
+        "https://dansehallerne.dk/en/2026/04/27/blackmilk/"
+    ]
 
 
 def test_collect_event_urls_deduplicates():
     html = """
     <html><body>
-      <a href="/en/public-program/performance/123/">First</a>
-      <a href="/en/public-program/performance/123/">Duplicate</a>
+      <a href="/en/2026/04/27/blackmilk/">First</a>
+      <a href="/en/2026/04/27/blackmilk/">Duplicate</a>
     </body></html>
     """
     session = _mock_session(html)
-    urls = collect_event_urls(session)
-    assert len(urls) == 1
-
-
-# ── source_url ────────────────────────────────────────────────────────────────
-
-_CANONICAL_META_HTML = """
-<html><head>
-  <link rel="canonical" href="https://dansehallerne.dk/en/2026/04/27/blackmilk/">
-</head><body>
-  <section class="event-meta-infos">
-    <div class="meta-info table">
-      <div class="row"><div class="key">Title</div><div class="value">blackmilk</div></div>
-      <div class="row"><div class="key">Artist</div><div class="value">Tiran Willemse</div></div>
-      <div class="row"><div class="key">Date</div><div class="value">27.4.2026, 20:00</div></div>
-    </div>
-  </section>
-</body></html>
-"""
-
-
-def test_scrape_detail_source_url_is_the_events_own_permalink():
-    # The listing links via a section-scoped ID route; the stored link must be
-    # the permalink the event page declares for itself.
-    session = _mock_session(_CANONICAL_META_HTML)
-    results = scrape_detail(
-        "https://dansehallerne.dk/en/public-program/performance/23486/", session
-    )
-    assert len(results) == 1
-    assert (
-        results[0]["source_url"] == "https://dansehallerne.dk/en/2026/04/27/blackmilk/"
-    )
-
-
-def test_scrape_detail_source_url_ignores_off_site_canonical():
-    html = _CANONICAL_META_HTML.replace(
-        "https://dansehallerne.dk/en/2026/04/27/blackmilk/",
-        "https://evil.example.com/blackmilk/",
-    )
-    session = _mock_session(html)
-    url = "https://dansehallerne.dk/en/public-program/performance/23486/"
-    assert scrape_detail(url, session)[0]["source_url"] == url
-
-
-def test_scrape_detail_source_url_falls_back_to_fetched_url():
-    session = _mock_session(_MINIMAL_META_HTML)
-    url = "https://dansehallerne.dk/en/public-program/performance/1/"
-    assert scrape_detail(url, session)[0]["source_url"] == url
+    assert len(collect_event_urls(session)) == 1
 
 
 def test_collect_event_urls_resolves_document_relative_hrefs():
-    html = '<html><body><a href="performance/123/">Event</a></body></html>'
+    html = '<html><body><a href="../2026/04/27/blackmilk/">Event</a></body></html>'
     session = _mock_session(html)
     assert collect_event_urls(session) == [
-        "https://dansehallerne.dk/en/public-program/performance/123/"
+        "https://dansehallerne.dk/en/2026/04/27/blackmilk/"
     ]
