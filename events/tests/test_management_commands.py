@@ -197,6 +197,58 @@ class TestImportDansehallerneCRUD:
         call_command("import_events", "dansehallerne", str(f), no_delete=True)
         assert Event.objects.filter(external_source="dansehallerne").count() == 1
 
+    def test_changed_source_url_updates_event_in_place(self, tmp_path):
+        # A source re-addressing an event (same title, same start, new URL)
+        # must not read as delete + create: the pleskal slug has to survive.
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_events", "dansehallerne", str(f))
+        original = Event.objects.get(external_source="dansehallerne")
+
+        moved = {**SAMPLE_EVENT, "source_url": "https://dansehallerne.dk/en/real/"}
+        _write_json([moved], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        assert Event.objects.filter(external_source="dansehallerne").count() == 1
+        event = Event.objects.get(external_source="dansehallerne")
+        assert event.pk == original.pk
+        assert event.slug == original.slug
+        assert event.source_url == "https://dansehallerne.dk/en/real/"
+
+    def test_changed_source_url_does_not_steal_a_still_listed_event(self, tmp_path):
+        # A second record with the same title and start must not adopt an
+        # event that is still listed under its own URL in the same import.
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_events", "dansehallerne", str(f))
+        original = Event.objects.get(external_source="dansehallerne")
+
+        twin = {**SAMPLE_EVENT, "source_url": "https://dansehallerne.dk/event/2"}
+        _write_json([SAMPLE_EVENT, twin], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        assert Event.objects.filter(external_source="dansehallerne").count() == 1
+        event = Event.objects.get(external_source="dansehallerne")
+        assert event.pk == original.pk
+        assert event.source_url == SAMPLE_EVENT["source_url"]
+
+    def test_different_title_at_new_url_is_a_new_event(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        other = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/2",
+            "title": "A Different Event",
+        }
+        _write_json([other], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        events = Event.objects.filter(external_source="dansehallerne")
+        assert events.count() == 1
+        assert events.get().title == "A Different Event"
+
     def test_skips_record_with_bad_datetime(self, tmp_path):
         f = tmp_path / "events.json"
         bad = {**SAMPLE_EVENT, "start_datetime": "not-a-date"}

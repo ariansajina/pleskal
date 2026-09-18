@@ -83,7 +83,7 @@ config/
   pwa.py             # PWA endpoints: manifest, service worker, offline fallback page
 
 scrapers/
-  base.py                      # Shared utilities (get_soup, scrape_url_list, etc.)
+  base.py                      # Shared utilities (get_soup, canonical_url, scrape_url_list, etc.)
   dansehallerne.py             # Dansehallerne scraper
   dansehallerne_workshops.py   # Dansehallerne workshops scraper
   hautscene.py                 # HAUT Scene scraper

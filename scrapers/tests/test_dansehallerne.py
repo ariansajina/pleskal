@@ -479,3 +479,57 @@ def test_collect_event_urls_deduplicates():
     session = _mock_session(html)
     urls = collect_event_urls(session)
     assert len(urls) == 1
+
+
+# ── source_url ────────────────────────────────────────────────────────────────
+
+_CANONICAL_META_HTML = """
+<html><head>
+  <link rel="canonical" href="https://dansehallerne.dk/en/2026/04/27/blackmilk/">
+</head><body>
+  <section class="event-meta-infos">
+    <div class="meta-info table">
+      <div class="row"><div class="key">Title</div><div class="value">blackmilk</div></div>
+      <div class="row"><div class="key">Artist</div><div class="value">Tiran Willemse</div></div>
+      <div class="row"><div class="key">Date</div><div class="value">27.4.2026, 20:00</div></div>
+    </div>
+  </section>
+</body></html>
+"""
+
+
+def test_scrape_detail_source_url_is_the_events_own_permalink():
+    # The listing links via a section-scoped ID route; the stored link must be
+    # the permalink the event page declares for itself.
+    session = _mock_session(_CANONICAL_META_HTML)
+    results = scrape_detail(
+        "https://dansehallerne.dk/en/public-program/performance/23486/", session
+    )
+    assert len(results) == 1
+    assert (
+        results[0]["source_url"] == "https://dansehallerne.dk/en/2026/04/27/blackmilk/"
+    )
+
+
+def test_scrape_detail_source_url_ignores_off_site_canonical():
+    html = _CANONICAL_META_HTML.replace(
+        "https://dansehallerne.dk/en/2026/04/27/blackmilk/",
+        "https://evil.example.com/blackmilk/",
+    )
+    session = _mock_session(html)
+    url = "https://dansehallerne.dk/en/public-program/performance/23486/"
+    assert scrape_detail(url, session)[0]["source_url"] == url
+
+
+def test_scrape_detail_source_url_falls_back_to_fetched_url():
+    session = _mock_session(_MINIMAL_META_HTML)
+    url = "https://dansehallerne.dk/en/public-program/performance/1/"
+    assert scrape_detail(url, session)[0]["source_url"] == url
+
+
+def test_collect_event_urls_resolves_document_relative_hrefs():
+    html = '<html><body><a href="performance/123/">Event</a></body></html>'
+    session = _mock_session(html)
+    assert collect_event_urls(session) == [
+        "https://dansehallerne.dk/en/public-program/performance/123/"
+    ]

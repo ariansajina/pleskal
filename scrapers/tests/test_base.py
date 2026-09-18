@@ -7,9 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from bs4 import BeautifulSoup
 
 from scrapers.base import (
     build_arg_parser,
+    canonical_url,
     get_crawl_delay,
     get_soup,
     make_session,
@@ -232,3 +234,75 @@ def test_write_output_prints_count(tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert "2" in captured.out
+
+
+# ── canonical_url ─────────────────────────────────────────────────────────────
+
+
+def _canonical_soup(html: str) -> BeautifulSoup:
+    return BeautifulSoup(html, "lxml")
+
+
+def test_canonical_url_prefers_link_rel_canonical():
+    html = """
+    <html><head>
+      <link rel="canonical" href="https://example.dk/en/2026/04/27/blackmilk/">
+    </head></html>
+    """
+    assert (
+        canonical_url(
+            _canonical_soup(html), "https://example.dk/en/public-program/perf/23486/"
+        )
+        == "https://example.dk/en/2026/04/27/blackmilk/"
+    )
+
+
+def test_canonical_url_accepts_multi_valued_rel():
+    html = '<link rel="canonical alternate" href="https://example.dk/en/real/">'
+    assert (
+        canonical_url(_canonical_soup(html), "https://example.dk/en/section/1/")
+        == "https://example.dk/en/real/"
+    )
+
+
+def test_canonical_url_resolves_relative_href():
+    html = '<link rel="canonical" href="/en/2026/04/27/blackmilk/">'
+    assert (
+        canonical_url(
+            _canonical_soup(html), "https://example.dk/en/public-program/perf/23486/"
+        )
+        == "https://example.dk/en/2026/04/27/blackmilk/"
+    )
+
+
+def test_canonical_url_falls_back_to_og_url():
+    html = '<meta property="og:url" content="https://example.dk/en/real-event/">'
+    assert (
+        canonical_url(_canonical_soup(html), "https://example.dk/en/section/1/")
+        == "https://example.dk/en/real-event/"
+    )
+
+
+def test_canonical_url_ignores_other_hosts():
+    html = '<link rel="canonical" href="https://aggregator.example.com/copy/">'
+    fallback = "https://example.dk/en/section/1/"
+    assert canonical_url(_canonical_soup(html), fallback) == fallback
+
+
+def test_canonical_url_ignores_non_http_scheme():
+    html = '<link rel="canonical" href="javascript:alert(1)">'
+    fallback = "https://example.dk/en/section/1/"
+    assert canonical_url(_canonical_soup(html), fallback) == fallback
+
+
+def test_canonical_url_treats_www_as_same_host():
+    html = '<link rel="canonical" href="https://www.example.dk/en/real/">'
+    assert (
+        canonical_url(_canonical_soup(html), "https://example.dk/en/section/1/")
+        == "https://www.example.dk/en/real/"
+    )
+
+
+def test_canonical_url_without_candidates_returns_fallback():
+    fallback = "https://example.dk/en/section/1/"
+    assert canonical_url(_canonical_soup("<html></html>"), fallback) == fallback
