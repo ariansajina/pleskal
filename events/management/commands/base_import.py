@@ -259,6 +259,23 @@ class BaseEventImportCommand(BaseCommand):
             for e in existing_qs
         }
 
+        # Secondary index used when a source changes an event's URL (e.g. a CMS
+        # moving off a section-scoped route). It lets the upsert below
+        # recognise the incoming record as the same event and rewrite its
+        # source_url, rather than read it as "old event deleted, new event
+        # created" — which, given the unique_event_title_start_datetime
+        # constraint, can't even happen in one pass: the create collides with
+        # the row that stale deletion is about to remove, so the event drops
+        # off the site until the next run. Title + start is the constraint's
+        # own key, so it identifies at most one existing event.
+        moved_index: dict[tuple[str, datetime.datetime], Event] = {
+            (str(event.title), start_key): event
+            for (_src, start_key), event in existing.items()
+        }
+        # Keys of existing events re-matched this way; excluded from stale
+        # deletion so the event isn't deleted right after being updated.
+        rematched: set[tuple[str, datetime.datetime]] = set()
+
         created = updated = deleted = skipped = 0
 
         # ── Resolve images up front, outside any DB transaction ─────────────
@@ -269,7 +286,9 @@ class BaseEventImportCommand(BaseCommand):
         image_names: dict[tuple[str, datetime.datetime], str | None] = {}
         if not dry_run:
             for key, rec in incoming.items():
-                existing_event = existing.get(key)
+                existing_event = existing.get(key) or self._moved_event(
+                    rec.get("title", ""), key[1], moved_index, incoming, rematched
+                )
                 has_existing_image = bool(existing_event and existing_event.image.name)
                 image_names[key] = self._resolve_image_storage_name(
                     rec, has_existing_image, skip_images
@@ -286,7 +305,9 @@ class BaseEventImportCommand(BaseCommand):
         if not dry_run and getattr(settings, "GEOCODING_ENABLED", True):
             geocode_queries: set[str] = set()
             for key, rec in incoming.items():
-                existing_event = existing.get(key)
+                existing_event = existing.get(key) or self._moved_event(
+                    rec.get("title", ""), key[1], moved_index, incoming, rematched
+                )
                 venue_name = rec.get("venue_name", self.default_venue_name)
                 venue_address = rec.get("venue_address", "")
                 needs_geocode = existing_event is None or (
@@ -348,8 +369,10 @@ class BaseEventImportCommand(BaseCommand):
                     "submitted_by": system_user,
                 }
 
-                if key in existing:
-                    event = existing[key]
+                event = existing.get(key) or self._claim_moved_event(
+                    rec["title"], start_dt_utc, moved_index, incoming, rematched
+                )
+                if event is not None:
                     changed = any(getattr(event, k) != v for k, v in fields.items())
                     # An unchanged event that's still missing an image (backfill
                     # case) needs to attach image_name too — otherwise the image
@@ -408,7 +431,7 @@ class BaseEventImportCommand(BaseCommand):
             if not no_delete and self._stale_deletion_is_safe(
                 existing, incoming, force_delete
             ):
-                stale_keys = set(existing.keys()) - set(incoming.keys())
+                stale_keys = set(existing.keys()) - set(incoming.keys()) - rematched
                 for key in stale_keys:
                     event = existing[key]
                     title_str = str(event.title)
@@ -435,6 +458,46 @@ class BaseEventImportCommand(BaseCommand):
             )
         else:
             self.stdout.write(self.style.SUCCESS(f"Done.  {summary}"))
+
+    def _moved_event(
+        self,
+        title: str,
+        start_dt_utc: datetime.datetime,
+        moved_index: dict[tuple[str, datetime.datetime], "Event"],
+        incoming: dict[tuple[str, datetime.datetime], dict],
+        rematched: set[tuple[str, datetime.datetime]],
+    ) -> "Event | None":
+        """Return the existing event this record describes under a new URL.
+
+        Only an event the incoming set no longer accounts for under its own
+        source_url can have moved, so an existing event that still has a record
+        of its own is never a candidate.
+        """
+        event = moved_index.get((title, start_dt_utc))
+        if event is None:
+            return None
+        old_key = (str(event.source_url), start_dt_utc)
+        if old_key in incoming or old_key in rematched:
+            return None
+        return event
+
+    def _claim_moved_event(
+        self,
+        title: str,
+        start_dt_utc: datetime.datetime,
+        moved_index: dict[tuple[str, datetime.datetime], "Event"],
+        incoming: dict[tuple[str, datetime.datetime], dict],
+        rematched: set[tuple[str, datetime.datetime]],
+    ) -> "Event | None":
+        """Like ``_moved_event``, but marks the match as taken.
+
+        Claiming keeps the event out of stale deletion and stops a second
+        record with the same title and start from adopting it too.
+        """
+        event = self._moved_event(title, start_dt_utc, moved_index, incoming, rematched)
+        if event is not None:
+            rematched.add((str(event.source_url), start_dt_utc))
+        return event
 
     def _stale_deletion_is_safe(
         self,

@@ -24,6 +24,7 @@ import requests
 
 from scrapers.base import (
     build_arg_parser,
+    canonical_url,
     get_crawl_delay,
     get_soup,
     make_session,
@@ -55,7 +56,9 @@ def collect_workshop_urls(session: requests.Session) -> list[str]:
 
     for a in soup.find_all("a", href=True):
         href = str(a.get("href", ""))
-        url = urljoin(BASE_URL, href)
+        # Resolve against the listing page, not the bare domain, so a
+        # document-relative href ("workshop/101/") keeps its directory.
+        url = urljoin(WORKSHOPS_URL, href)
         # Only accept paths like /en/professionals/<type>/<id>/
         if url not in seen and re.search(r"/en/professionals/[^/]+/\d+/?$", url):
             seen.add(url)
@@ -87,6 +90,10 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
     if not meta:
         log.warning("No meta table found at %s", url)
         return []
+
+    # Same as the public programme scraper: prefer the permalink the page
+    # declares for itself over the section-scoped ID route we followed.
+    event_url = canonical_url(soup, url)
 
     description = parse_description(soup)
     image_url = parse_image_url(soup)
@@ -167,7 +174,7 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
                 "is_free": is_free,
                 "is_wheelchair_accessible": True,
                 "price_note": price_note,
-                "source_url": url,
+                "source_url": event_url,
                 "external_source": "dansehallerne",
                 "image_url": image_url,
             }

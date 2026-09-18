@@ -11,6 +11,7 @@ import logging
 import time
 import urllib.robotparser
 from collections.abc import Callable
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -58,6 +59,43 @@ def get_soup(url: str, session: requests.Session) -> BeautifulSoup:
     resp = session.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
     return BeautifulSoup(resp.text, "lxml")
+
+
+def canonical_url(soup: BeautifulSoup, fallback: str) -> str:
+    """Return the permalink *soup* declares for itself, or *fallback*.
+
+    Listing pages often link to a detail page through a section-scoped,
+    ID-based rewrite (e.g. ``/en/public-program/performance/23486/``) rather
+    than through the page's own permalink. Those routes are an artefact of the
+    listing the link was found on, not a stable address for the event: the CMS
+    is free to stop resolving them, and a visitor following one later can land
+    on an unrelated section page. The permalink a page advertises for itself —
+    ``<link rel="canonical">``, or ``og:url`` — is the address to keep.
+
+    Candidates pointing at another site are ignored, so a page that names
+    someone else's URL as canonical can't redirect a stored source link off the
+    site we scraped it from.
+    """
+    fallback_host = (urlparse(fallback).hostname or "").removeprefix("www.")
+
+    candidates: list[str] = []
+    for link in soup.find_all("link", href=True):
+        rels = [str(r).lower() for r in (link.get("rel") or [])]
+        if "canonical" in rels:
+            candidates.append(str(link["href"]))
+    for meta in soup.find_all("meta", attrs={"property": "og:url"}):
+        content = meta.get("content")
+        if content:
+            candidates.append(str(content))
+
+    for candidate in candidates:
+        absolute = urljoin(fallback, candidate.strip())
+        parsed = urlparse(absolute)
+        host = (parsed.hostname or "").removeprefix("www.")
+        if parsed.scheme in {"http", "https"} and host and host == fallback_host:
+            return absolute
+
+    return fallback
 
 
 def build_arg_parser(

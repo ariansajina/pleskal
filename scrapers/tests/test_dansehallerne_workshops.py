@@ -271,3 +271,37 @@ def test_scrape_detail_source_url_preserved():
     url = "https://dansehallerne.dk/en/professionals/workshop/42/"
     results = scrape_detail(url, session)
     assert results[0]["source_url"] == url
+
+
+# ── source_url ────────────────────────────────────────────────────────────────
+
+
+def test_scrape_detail_source_url_is_the_workshops_own_permalink():
+    html = _MINIMAL_META_HTML.replace(
+        "<html><body>",
+        '<html><head><link rel="canonical" '
+        'href="https://dansehallerne.dk/en/2026/05/02/body-awareness/">'
+        "</head><body>",
+    )
+    session = _mock_session(html)
+    results = scrape_detail(
+        "https://dansehallerne.dk/en/professionals/workshop/101/", session
+    )
+    assert (
+        results[0]["source_url"]
+        == "https://dansehallerne.dk/en/2026/05/02/body-awareness/"
+    )
+
+
+def test_scrape_detail_source_url_falls_back_to_fetched_url():
+    session = _mock_session(_MINIMAL_META_HTML)
+    url = "https://dansehallerne.dk/en/professionals/workshop/101/"
+    assert scrape_detail(url, session)[0]["source_url"] == url
+
+
+def test_collect_workshop_urls_resolves_document_relative_hrefs():
+    html = '<html><body><a href="workshop/101/">Workshop</a></body></html>'
+    session = _mock_session(html)
+    assert collect_workshop_urls(session) == [
+        "https://dansehallerne.dk/en/professionals/workshop/101/"
+    ]

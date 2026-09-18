@@ -27,6 +27,7 @@ from bs4 import BeautifulSoup
 
 from scrapers.base import (
     build_arg_parser,
+    canonical_url,
     get_crawl_delay,
     get_soup,
     make_session,
@@ -65,7 +66,9 @@ def collect_event_urls(session: requests.Session) -> list[str]:
 
     for a in soup.find_all("a", href=True):
         href = str(a.get("href", ""))
-        url = urljoin(BASE_URL, href)
+        # Resolve against the listing page, not the bare domain, so a
+        # document-relative href ("performance/23486/") keeps its directory.
+        url = urljoin(PROGRAM_URL, href)
         # Only accept paths like /en/public-program/<type>/<id>/
         if url not in seen and re.search(r"/en/public-program/[^/]+/\d+/?$", url):
             seen.add(url)
@@ -259,6 +262,12 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
         log.warning("No meta table found at %s", url)
         return []
 
+    # The listing links to each event through a section-scoped ID route
+    # (/en/public-program/<type>/<id>/) that the site doesn't keep resolving to
+    # the event — following a stored one later can land on an unrelated section
+    # page. Store the permalink the event page declares for itself instead.
+    event_url = canonical_url(soup, url)
+
     description = parse_description(soup)
     image_url = parse_image_url(soup)
     raw_type = meta.get("type", "")
@@ -349,7 +358,7 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
                 "is_free": is_free,
                 "is_wheelchair_accessible": True,
                 "price_note": price_note,
-                "source_url": url,
+                "source_url": event_url,
                 "external_source": "dansehallerne",
                 "image_url": image_url,
             }
