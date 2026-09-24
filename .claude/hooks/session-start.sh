@@ -10,6 +10,10 @@ fi
 
 cd "$CLAUDE_PROJECT_DIR"
 
+# The container ships no Python 3.14 and its uv predates the current 3.14
+# patch releases (it would fetch a 3.14 release candidate), so install the
+# interpreter from .python-version with an up-to-date uv first.
+uvx uv@latest python install
 uv sync --dev
 npm install
 uv run pre-commit install --install-hooks

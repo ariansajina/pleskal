@@ -290,7 +290,7 @@ def _parse_date_safe(value):
     """Parse a date string, returning None on failure."""
     try:
         return parse_date(value)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
