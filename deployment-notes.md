@@ -182,7 +182,7 @@ stored hash. Nothing is ever "decrypted".
 The derivation pipeline is:
 
 ```
-raw_password → HMAC-SHA256(PASSWORD_PEPPER, raw_password) → PBKDF2-SHA256 → stored hash
+raw_password → HMAC-SHA256(PASSWORD_PEPPER, raw_password) → Argon2id → stored hash
 ```
 
 ### What to back up

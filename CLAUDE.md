@@ -217,8 +217,8 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 - CSRF protection via Django middleware; HTMX includes token via `hx-headers` on `<body>`
 - XSS: Markdown sanitized via nh3 (allowlist of tags/attributes in `markdown_filters.py`)
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
-- Image uploads: Pillow-validated (not Content-Type), EXIF stripped, resized to 1200px, converted to WebP
-- Brute-force: django-axes (5 failures = 30 min IP lockout)
+- Image uploads: Pillow-validated (not Content-Type), capped at `MAX_IMAGE_PIXELS` (50 MP, checked from the header before decoding; JPEGs measured after draft downscaling), EXIF stripped, resized to 1200px, converted to WebP
+- Brute-force: django-axes (5 failures = 30 min lockout of the (email, client IP) pair; client IP resolved via `config.ratelimit.get_client_ip`, since `REMOTE_ADDR` is Railway's proxy)
 - Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's `incr()` TTL behavior; limits per endpoint listed below
 - CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
@@ -231,8 +231,8 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 | Login | POST | 20 req/hr | per IP |
 | Password reset | POST | 5 req/hr | per IP |
 | Claim code | POST | 5 req/hr | per IP |
-| Event list/search | GET | 20 req/min | per IP |
-| Event map | GET | 20 req/min | per IP |
+| Event list/search | GET | 120 req/min | per IP |
+| Event map | GET | 120 req/min | per IP |
 | Event create | POST | 20 req/hr | per user |
 | Event update | POST | 20 req/min | per user |
 | Event duplicate | POST | 20 req/min | per user |
@@ -240,7 +240,8 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 
 - `EventDeleteView` is **not** rate-limited (owner-only + confirmation step).
 - Event toggle draft shares the `event_update` cache key, so it draws from the same per-user counter as Event update.
-- Default `rate_limit_methods` is `["POST"]`; the list/map views override it to `["GET"]`.
+- Default `rate_limit_methods` is `["POST"]`; the list/map views override it to `["GET"]` (limit `PUBLIC_BROWSE_RATE_LIMIT` in `events/views.py`).
+- HTMX doesn't swap 4xx/5xx responses; `static/js/htmx-errors.js` shows a banner (`#htmx-error` in `base.html`) on 429s and other failed partial requests.
 
 ## Models
 
@@ -304,6 +305,8 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `submitted_by` | FK -> User, nullable (SET_NULL on delete) |
 | `is_draft` | Boolean, default False; drafts are only visible to the owner |
 | `created_at`, `updated_at` | Auto timestamps |
+
+Constraint: `(title, start_datetime, venue_name)` is unique — dedupes the same event arriving from two scrapers (or a scraper and a manual submission) while letting generic titles recur at the same time in different venues. `EventForm.clean()` mirrors it with a friendly error.
 
 Method: `get_display_description()` prepends scraped event disclaimer if `external_source` is set.
 
