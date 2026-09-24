@@ -149,7 +149,9 @@ class TestWeeklyDigestTraffic:
         assert "Visitors:      2.0/day avg" in output
         assert "Searches:      3" in output
         assert "Top pages:\n     15  About" in output
-        assert "instagram.com" in output
+        lines = output.splitlines()
+        referrers = lines[lines.index("Top referrers:") + 1]
+        assert referrers == "      2  instagram.com"
         assert "butoh" in output
         assert "Full stats: https://pleskal.dk/stats/" in output
 

@@ -85,7 +85,7 @@ class TestDashboard:
         assert ctx["totals"]["feeds"] == 9
         assert ctx["avg_visitors"] == pytest.approx(6 / 30)
         assert [row.label for row in ctx["top_pages"]] == ["Butoh Night", "About"]
-        assert "instagram.com" in content
+        assert [row.label for row in ctx["top_referrers"]] == ["instagram.com"]
         assert "contact improv" in content
         assert "Category: Workshop" in content
         assert ctx["peak"]["views"] == 15
