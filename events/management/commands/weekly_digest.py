@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Sum
 from django.utils import timezone
 
+from config.cron_monitoring import cron_monitor
 from events.models import Event, EventCategory, FeedHit
 
 User = get_user_model()
@@ -21,6 +22,14 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if options["dry_run"]:
+            self._run(options)
+            return
+        # Schedule matches the digest-cron service (deployment-notes.md).
+        with cron_monitor("weekly-digest", "0 8 * * 1", max_runtime_minutes=10):
+            self._run(options)
+
+    def _run(self, options):
         now = timezone.now()
         week_ago = now - timezone.timedelta(days=7)
 

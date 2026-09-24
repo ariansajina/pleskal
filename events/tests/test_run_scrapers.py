@@ -9,7 +9,7 @@ scrape function).
 
 import datetime
 from dataclasses import replace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from django.core.management import call_command
@@ -332,3 +332,50 @@ class TestImportEventsSourceArg:
         f.write_text("[]", encoding="utf-8")
         with pytest.raises(CommandError):
             call_command("import_events", "not_a_source", str(f))
+
+
+@pytest.fixture
+def checkins(monkeypatch):
+    """Record the statuses of Sentry Crons check-ins instead of sending them."""
+    statuses = []
+    monkeypatch.setattr(
+        "sentry_sdk.crons.decorator.capture_checkin",
+        lambda **kwargs: statuses.append(kwargs["status"]),
+    )
+    return statuses
+
+
+@pytest.mark.django_db
+class TestRunScrapersCronMonitor:
+    def test_full_run_checks_in_ok(self, monkeypatch, checkins):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+
+        call_command("run_scrapers")
+
+        assert checkins == ["in_progress", "ok"]
+
+    def test_failed_scraper_checks_in_error(self, monkeypatch, checkins):
+        def failing_scrape(**kwargs):
+            raise RuntimeError("site layout changed")
+
+        _patched_sources(monkeypatch, failing_scrape)
+        monkeypatch.setattr(run_scrapers.sentry_sdk, "capture_exception", Mock())
+
+        with pytest.raises(SystemExit):
+            call_command("run_scrapers")
+
+        assert checkins == ["in_progress", "error"]
+
+    def test_dry_run_does_not_check_in(self, monkeypatch, checkins):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+
+        call_command("run_scrapers", dry_run=True)
+
+        assert checkins == []
+
+    def test_subset_run_does_not_check_in(self, monkeypatch, checkins):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+
+        call_command("run_scrapers", only=["hautscene"])
+
+        assert checkins == []

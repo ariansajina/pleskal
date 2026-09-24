@@ -114,3 +114,44 @@ class TestWeeklyDigestEmail:
         FeedHit.objects.create(feed_type=FeedHit.RSS, date=old_date, count=99)
         call_command("weekly_digest", stdout=StringIO())
         assert "RSS feed hits: 0 (0.0/day avg)" in _digest_email().body
+
+
+@pytest.fixture
+def checkins(monkeypatch):
+    """Record the statuses of Sentry Crons check-ins instead of sending them."""
+    statuses = []
+    monkeypatch.setattr(
+        "sentry_sdk.crons.decorator.capture_checkin",
+        lambda **kwargs: statuses.append(kwargs["status"]),
+    )
+    return statuses
+
+
+@pytest.mark.django_db
+class TestWeeklyDigestCronMonitor:
+    def test_send_checks_in_ok(self, settings, checkins):
+        settings.ADMINS = ["admin@example.com"]
+
+        call_command("weekly_digest", stderr=StringIO())
+
+        assert checkins == ["in_progress", "ok"]
+
+    def test_send_failure_checks_in_error(self, settings, checkins, monkeypatch):
+        settings.ADMINS = ["admin@example.com"]
+
+        def failing_send_mail(**kwargs):
+            raise ConnectionError("email provider down")
+
+        monkeypatch.setattr(
+            "events.management.commands.weekly_digest.send_mail", failing_send_mail
+        )
+
+        with pytest.raises(ConnectionError):
+            call_command("weekly_digest", stderr=StringIO())
+
+        assert checkins == ["in_progress", "error"]
+
+    def test_dry_run_does_not_check_in(self, checkins):
+        call_command("weekly_digest", dry_run=True, stdout=StringIO())
+
+        assert checkins == []
