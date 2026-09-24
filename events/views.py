@@ -25,6 +25,12 @@ EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
 MAX_UPCOMING_EVENTS_PER_USER = settings.MAX_UPCOMING_EVENTS_PER_USER
 SEARCH_QUERY_MAX_LENGTH = 200
+# GET limit for the public list and map pages. Every filter change, debounced
+# search keystroke and page click is a request, and visitors behind a shared
+# address (mobile carrier NAT, a studio's wifi) share one counter, so this has
+# to sit well above what a single person clicking around produces; it is only
+# meant to stop runaway scripted crawling.
+PUBLIC_BROWSE_RATE_LIMIT = 120
 
 
 # ---------------------------------------------------------------------------
@@ -426,8 +432,8 @@ def _filter_panel_context(request, filter_state):
 
 class EventListView(RateLimitMixin, View):
     rate_limit_key = "event_list"
-    rate_limit_limit = 20
-    rate_limit_window = 60  # 20 requests per minute per IP
+    rate_limit_limit = PUBLIC_BROWSE_RATE_LIMIT
+    rate_limit_window = 60  # per minute per IP
     rate_limit_methods = ["GET"]
 
     template_name = "events/event_list.html"
@@ -486,8 +492,8 @@ class EventListView(RateLimitMixin, View):
 
 class EventMapView(RateLimitMixin, View):
     rate_limit_key = "event_map"
-    rate_limit_limit = 20
-    rate_limit_window = 60  # 20 requests per minute per IP
+    rate_limit_limit = PUBLIC_BROWSE_RATE_LIMIT
+    rate_limit_window = 60  # per minute per IP
     rate_limit_methods = ["GET"]
 
     template_name = "events/event_map.html"

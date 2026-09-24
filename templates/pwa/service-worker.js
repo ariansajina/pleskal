@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   "{% static 'css/output.css' %}",
   "{% static 'js/htmx.min.js' %}",
   "{% static 'js/nav.js' %}",
+  "{% static 'js/htmx-errors.js' %}",
   "{% static 'js/quick-date-filters.js' %}",
   "{% static 'js/filter-panel.js' %}",
   "{% static 'js/calendar-dropdown.js' %}",
