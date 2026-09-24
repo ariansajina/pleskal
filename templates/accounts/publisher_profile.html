@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% load markdown_filters %}
 
-{% block title %}{{ publisher.public_name }} – pleskal{% endblock %}
+{% block title %}{{ publisher.public_name }} – events in Copenhagen – pleskal{% endblock %}
 
 {% block meta_description %}{% if publisher.bio %}{{ publisher.bio|plain_excerpt:160 }}{% else %}Dance and performance art events in Copenhagen from {{ publisher.public_name }}.{% endif %}{% endblock %}
+
+{% block extra_head %}<script type="application/ld+json">{{ publisher_jsonld }}</script>{% endblock %}
 
 {% block content %}
 <div class="page-hero">

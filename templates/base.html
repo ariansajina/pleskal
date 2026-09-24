@@ -677,7 +677,7 @@
 
   {# ── SITE FOOTER ─────────────────────────────────────── #}
   <footer class="site-footer">
-    {% now "Y" as current_year %}© {{ current_year }} pleskal · <a href="{% url 'about' %}">About</a>
+    {% now "Y" as current_year %}© {{ current_year }} pleskal · <a href="{% url 'publisher_list' %}">Publishers</a> · <a href="{% url 'about' %}">About</a>
   </footer>
 
   {# ── MODALS (direct children of <body>, outside <main>, so page-level #}

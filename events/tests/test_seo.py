@@ -37,11 +37,28 @@ class TestSitemap:
         assert reverse("subscribe") in body
 
     def test_sitemap_includes_publisher_with_events(self, client):
-        user = UserFactory.create()
+        user = UserFactory.create(display_name="Studio X")
         EventFactory.create(submitted_by=user)
         resp = client.get("/sitemap.xml")
         url = reverse("publisher_profile", kwargs={"slug": user.display_name_slug})
         assert url in resp.content.decode()
+
+    def test_sitemap_includes_source_account_without_events(self, client):
+        user = UserFactory.create(display_name="Dansehallerne", is_system_account=True)
+        resp = client.get("/sitemap.xml")
+        url = reverse("publisher_profile", kwargs={"slug": user.display_name_slug})
+        assert url in resp.content.decode()
+
+    def test_sitemap_excludes_publisher_without_display_name(self, client):
+        user = UserFactory.create(display_name="")
+        EventFactory.create(submitted_by=user)
+        resp = client.get("/sitemap.xml")
+        url = reverse("publisher_profile", kwargs={"slug": user.display_name_slug})
+        assert url not in resp.content.decode()
+
+    def test_sitemap_includes_publisher_directory(self, client):
+        resp = client.get("/sitemap.xml")
+        assert reverse("publisher_list") in resp.content.decode()
 
     def test_sitemap_excludes_publisher_without_events(self, client):
         user = UserFactory.create()
@@ -234,6 +251,24 @@ class TestMetaDescriptions:
         url = reverse("publisher_profile", kwargs={"slug": user.display_name_slug})
         description = self._description(client.get(url).content.decode())
         assert description == "We make dance in Copenhagen."
+
+    def test_publisher_page_title_and_jsonld(self, client, settings):
+        settings.SITE_DOMAIN = "pleskal.example"
+        user = UserFactory.create(
+            display_name="Dansehallerne",
+            website="https://dansehallerne.dk",
+            bio="Dance & <choreography>.",
+        )
+        url = reverse("publisher_profile", kwargs={"slug": user.display_name_slug})
+        html = client.get(url).content.decode()
+        assert "<title>Dansehallerne – events in Copenhagen – pleskal</title>" in html
+        marker = '<script type="application/ld+json">'
+        start = html.index(marker) + len(marker)
+        data = json.loads(html[start : html.index("</script>", start)])
+        assert data["@type"] == "ProfilePage"
+        assert data["url"] == f"https://pleskal.example{url}"
+        assert data["mainEntity"]["name"] == "Dansehallerne"
+        assert data["mainEntity"]["sameAs"] == ["https://dansehallerne.dk"]
 
     def test_publisher_description_without_bio(self, client):
         user = UserFactory.create(bio="", display_name="Studio X")

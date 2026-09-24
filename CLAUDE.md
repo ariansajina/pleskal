@@ -69,7 +69,7 @@ events/
 
 accounts/
   models.py          # Custom User (UUID PK, display_name, display_name_slug) + ClaimCode
-  managers.py        # UserManager (custom user manager)
+  managers.py        # UserManager; `publishers()` = named, active source accounts or users with published events (directory + sitemap)
   views.py           # Login, password reset, profile, account deletion, claim flow, invite management
   forms.py           # CustomAuthenticationForm, ProfileForm, ClaimCodeForm, ClaimRegisterForm
   hashers.py         # HmacPepperedArgon2PasswordHasher
@@ -397,6 +397,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `AccountDeleteView` | `/accounts/delete/` | Login required |
 | `EditProfileView` | `/accounts/profile/edit/` | Login required |
 | `ChangePasswordView` | `/accounts/change-password/` | Login required |
+| `PublisherListView` | `/accounts/publishers/` | Public (directory of `User.objects.publishers()`, linked from the footer) |
 | `PublisherProfileView` | `/accounts/publishers/<slug>/` | Public |
 | `AccountProfileView` | `/accounts/profile/` | Login required (redirects to own publisher profile) |
 | `ClaimCodeView` | `/claim/` | Public |

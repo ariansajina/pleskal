@@ -8,6 +8,7 @@ from .views import (
     EditProfileView,
     EmailVerifiedView,
     MyInvitesView,
+    PublisherListView,
     PublisherProfileView,
     RateLimitedLoginView,
     RateLimitedPasswordResetView,
@@ -80,6 +81,11 @@ urlpatterns = [
         "invites/",
         MyInvitesView.as_view(),
         name="my_invites",
+    ),
+    path(
+        "publishers/",
+        PublisherListView.as_view(),
+        name="publisher_list",
     ),
     path(
         "publishers/<slug:slug>/",

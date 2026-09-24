@@ -22,7 +22,7 @@ class StaticViewSitemap(Sitemap):
     priority = 0.5
 
     def items(self):
-        names = ["event_list", "subscribe", "about", "guide"]
+        names = ["event_list", "publisher_list", "subscribe", "about", "guide"]
         if getattr(settings, "MAP_VIEW_ENABLED", False):
             names.append("event_map")
         return names
@@ -36,12 +36,7 @@ class PublisherSitemap(Sitemap):
     priority = 0.4
 
     def items(self):
-        user_model = get_user_model()
-        return (
-            user_model.objects.filter(display_name_slug__gt="", events__is_draft=False)
-            .distinct()
-            .order_by("display_name_slug")
-        )
+        return get_user_model().objects.publishers()
 
     def location(self, item):
         return reverse("publisher_profile", kwargs={"slug": item.display_name_slug})

@@ -21,6 +21,13 @@ _ESCAPES = {"<": "\\u003c", ">": "\\u003e", "&": "\\u0026"}
 _TYPE = "@type"
 
 
+def _script_json(data: dict) -> str:
+    serialized = json.dumps(data, ensure_ascii=False)
+    for char, replacement in _ESCAPES.items():
+        serialized = serialized.replace(char, replacement)
+    return mark_safe(serialized)  # noqa: S308 - escaped above for safe <script> embedding
+
+
 def event_meta_description(event: Event) -> str:
     """What/where/when first, so search snippets answer the searcher at a glance."""
     start = date_format(timezone.localtime(event.start_datetime), "l j F Y, H:i")
@@ -95,7 +102,26 @@ def event_jsonld(event: Event, request) -> str:
             ),
         }
 
-    serialized = json.dumps(data, ensure_ascii=False)
-    for char, replacement in _ESCAPES.items():
-        serialized = serialized.replace(char, replacement)
-    return mark_safe(serialized)  # noqa: S308 - escaped above for safe <script> embedding
+    return _script_json(data)
+
+
+def publisher_jsonld(publisher) -> str:
+    """schema.org/ProfilePage for a publisher, tying the page to their website."""
+    origin = f"https://{settings.SITE_DOMAIN}"
+    entity: dict = {_TYPE: "Organization", "name": publisher.public_name}
+    if publisher.website:
+        entity["sameAs"] = [publisher.website]
+    bio = plain_excerpt(publisher.bio, 300)
+    if bio:
+        entity["description"] = bio
+    return _script_json(
+        {
+            "@context": "https://schema.org",
+            _TYPE: "ProfilePage",
+            "url": origin
+            + reverse(
+                "publisher_profile", kwargs={"slug": publisher.display_name_slug}
+            ),
+            "mainEntity": entity,
+        }
+    )
