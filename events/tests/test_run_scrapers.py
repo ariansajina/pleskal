@@ -1,7 +1,7 @@
 """Tests for the run_scrapers management command's retired-source cleanup.
 
 A source listed in ``SCRAPER_DISABLED_AFTER`` past its cutoff date is not only
-skipped — its previously imported events are purged and its system account is
+skipped — its upcoming events are purged and its system account is
 deactivated, so neither lingers in the database / UI.  These tests cover that
 cleanup path without hitting the network (disabled sources never invoke their
 scrape function).
@@ -264,7 +264,59 @@ class TestRunScrapersGeocodingBackfill:
         boom = RuntimeError("backfill boom")
 
         with patch(
-            "events.management.commands.run_scrapers.call_command", side_effect=boom
+            "events.management.commands.run_scrapers.call_command",
+            side_effect=_failing_call_command("backfill_geocoding", boom),
+        ):
+            call_command("run_scrapers", only=["hautscene"])  # must not raise
+
+        assert captured == [boom]
+
+
+def _failing_call_command(failing_name, exc):
+    """A call_command stand-in that raises *exc* for one command only."""
+
+    def fake(name, *args, **kwargs):
+        if name == failing_name:
+            raise exc
+        return call_command(name, *args, **kwargs)
+
+    return fake
+
+
+@pytest.mark.django_db
+class TestRunScrapersRetentionPurge:
+    """run_scrapers is the only daily job, so it also enforces retention."""
+
+    def _long_past(self):
+        return timezone.now() - datetime.timedelta(days=3 * 365)
+
+    def test_purge_runs_after_scrapers(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        expired = EventFactory.create(
+            external_source="hautscene", start_datetime=self._long_past()
+        )
+        call_command("run_scrapers", only=["hautscene"])
+        assert not Event.objects.filter(pk=expired.pk).exists()
+
+    def test_dry_run_passed_through_to_purge(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        expired = EventFactory.create(
+            external_source="hautscene", start_datetime=self._long_past()
+        )
+        call_command("run_scrapers", only=["hautscene"], dry_run=True)
+        assert Event.objects.filter(pk=expired.pk).exists()
+
+    def test_purge_failure_is_captured_and_does_not_abort_run(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = []
+        monkeypatch.setattr(
+            run_scrapers.sentry_sdk, "capture_exception", captured.append
+        )
+        boom = RuntimeError("purge boom")
+
+        with patch(
+            "events.management.commands.run_scrapers.call_command",
+            side_effect=_failing_call_command("purge_expired_events", boom),
         ):
             call_command("run_scrapers", only=["hautscene"])  # must not raise
 

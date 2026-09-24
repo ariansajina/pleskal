@@ -18,7 +18,7 @@ from config.ratelimit import RateLimitMixin
 
 from .forms import EventForm
 from .images import validate_and_process
-from .models import Event, EventCategory
+from .models import Event, EventCategory, expired_events_q
 from .sharing import apple_calendar_url, google_calendar_url, outlook_calendar_url
 
 EVENTS_PER_PAGE = 30
@@ -299,17 +299,20 @@ def _filtered_event_queryset(request):
 
     Applies the same filters as the event list view (category, publisher,
     date range, is_free, is_wheelchair_accessible, search) to a base
-    queryset that excludes drafts and events older than two years. Callers
-    are responsible for any upcoming/past toggle and ordering.
+    queryset that excludes drafts and events past their retention period
+    (normally already deleted by purge_expired_events; excluded here too so
+    they never show in the window before the daily purge runs). Callers are
+    responsible for any upcoming/past toggle and ordering.
     """
     from django.contrib.auth import get_user_model
     from django.db.models import Q
 
     User = get_user_model()
-    expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
-    qs = Event.objects.filter(
-        start_datetime__gte=expiry_cutoff, is_draft=False
-    ).select_related("submitted_by")
+    qs = (
+        Event.objects.filter(is_draft=False)
+        .exclude(expired_events_q())
+        .select_related("submitted_by")
+    )
 
     # --- Filter: category (multi-value) ---
     categories = request.GET.getlist("category")

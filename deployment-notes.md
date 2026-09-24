@@ -110,7 +110,12 @@ scheduled Cron Job service in the **production** environment only.
 
    `run_scrapers` already calls all `import_*` commands internally: it scrapes
    each source, writes a temp JSON file, and invokes the corresponding
-   importer.
+   importer. It then backfills missing geocoding and runs
+   `purge_expired_events`, which deletes past events older than their
+   retention period (`SCRAPED_EVENT_RETENTION_DAYS`, default 90;
+   `USER_EVENT_RETENTION_DAYS`, default 730). This cron is the only thing
+   enforcing retention, so set those variables on this service if you
+   override them.
 
 4. Under **Variables**, reference the same environment variables as the web
    service. Required: `DATABASE_URL`, `SECRET_KEY`, `PASSWORD_PEPPER`.

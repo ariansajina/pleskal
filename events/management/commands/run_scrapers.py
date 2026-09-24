@@ -31,8 +31,9 @@ from scrapers.registry import SOURCES, ScraperSource
 log = logging.getLogger(__name__)
 
 # Per-scraper auto-disable dates (inclusive cutoff). Past this date the
-# scraper stops running, any events it previously imported are purged (via the
-# importer's stale-deletion path), and its system account is deactivated
+# scraper stops running, its upcoming events are purged (via the importer's
+# stale-deletion path; past ones age out through purge_expired_events like any
+# other scraped event), and its system account is deactivated
 # (is_active=False) so it drops off the subscribe page. Use this to retire
 # one-off / festival sources that go stale after their run.
 #
@@ -208,6 +209,23 @@ class Command(BaseCommand):
                 )
             )
 
+        # ── Retention ─────────────────────────────────────────────────────
+        # Delete past events older than their retention period (scraped and
+        # user-published events have separate windows). Piggybacks on this
+        # daily cron rather than needing a Railway service of its own; like
+        # the backfill, failures are reported but never fail the run.
+        self.stdout.write("")
+        self.stdout.write(self.style.HTTP_INFO("Purging expired events..."))
+        try:
+            call_command("purge_expired_events", dry_run=dry_run)
+        except Exception as exc:
+            self._report_to_sentry(exc, "purge_expired_events")
+            self.stderr.write(
+                self.style.ERROR(
+                    f"purge_expired_events FAILED:\n{traceback.format_exc()}"
+                )
+            )
+
         # ── Summary ────────────────────────────────────────────────────
         self.stdout.write("")
         self.stdout.write(self.style.HTTP_INFO("Summary:"))
@@ -289,8 +307,9 @@ class Command(BaseCommand):
         """Retire a source: purge its events and deactivate its publisher account.
 
         Purging invokes ``import_events`` with an empty event list, triggering
-        the importer's stale-deletion path (every event for that
-        ``external_source`` is absent from the empty input and thus deleted).
+        the importer's stale-deletion path (every upcoming event for that
+        ``external_source`` is absent from the empty input and thus deleted;
+        its past events are left to the retention purge).
         Deactivating sets the source's system account ``is_active=False`` so it
         drops off the subscribe page's publisher list while its past events keep
         their attribution. Both steps are idempotent, and failures are logged

@@ -397,6 +397,35 @@ class TestEventListView:
         resp = client.get(reverse("event_list") + "?past=1")
         assert b"Old Dance Night" in resp.content
 
+    def test_past_toggle_hides_events_past_retention(self, client, settings):
+        """Events past their retention period stay hidden even before the
+        daily purge has deleted them; scraped and user events differ."""
+        settings.SCRAPED_EVENT_RETENTION_DAYS = 90
+        settings.USER_EVENT_RETENTION_DAYS = 730
+
+        def days_ago(days):
+            return timezone.now() - timezone.timedelta(days=days)
+
+        EventFactory.create(
+            title="Recent Scraped Show",
+            external_source="hautscene",
+            start_datetime=days_ago(30),
+        )
+        EventFactory.create(
+            title="Expired Scraped Show",
+            external_source="hautscene",
+            start_datetime=days_ago(120),
+        )
+        EventFactory.create(title="Year Old Jam", start_datetime=days_ago(365))
+        EventFactory.create(title="Ancient Jam", start_datetime=days_ago(800))
+
+        resp = client.get(reverse("event_list") + "?past=1")
+
+        assert b"Recent Scraped Show" in resp.content
+        assert b"Year Old Jam" in resp.content
+        assert b"Expired Scraped Show" not in resp.content
+        assert b"Ancient Jam" not in resp.content
+
     def test_htmx_request_returns_partial(self, client):
         EventFactory.create()
         resp = client.get(reverse("event_list"), HTTP_HX_REQUEST="true")

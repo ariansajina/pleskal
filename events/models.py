@@ -36,6 +36,29 @@ DEFAULT_PUBLISHER_IMAGES = {
 DEFAULT_EVENT_IMAGE = "images/logo.png"
 
 
+def expired_events_q(now=None) -> models.Q:
+    """Match events past their retention period.
+
+    Scraped events (non-blank external_source) expire
+    SCRAPED_EVENT_RETENTION_DAYS after they end; user-published events,
+    drafts included, expire USER_EVENT_RETENTION_DAYS after they end. An event
+    with no end time counts as ending when it starts, so a long-running event
+    is never cut off while it is still on.
+    """
+    now = now or timezone.now()
+
+    def ended_before(days):
+        cutoff = now - timezone.timedelta(days=days)
+        return models.Q(end_datetime__lt=cutoff) | models.Q(
+            end_datetime__isnull=True, start_datetime__lt=cutoff
+        )
+
+    scraped = ~models.Q(external_source="")
+    return (scraped & ended_before(settings.SCRAPED_EVENT_RETENTION_DAYS)) | (
+        ~scraped & ended_before(settings.USER_EVENT_RETENTION_DAYS)
+    )
+
+
 class EventCategory(models.TextChoices):
     PERFORMANCE = "performance", "Performance"
     WORKSHARING = "worksharing", "Worksharing"
