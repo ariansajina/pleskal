@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Stats – pleskal{% endblock %}
+
+{% block extra_head %}
+<meta name="robots" content="noindex, nofollow">
+<style>
+  .stats-periods { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center; margin-bottom: var(--space-6); }
+  .stats-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-8); }
+  .stats-tile { border: 1.5px solid var(--border-light); background: var(--surface); padding: var(--space-4); }
+  .stats-tile__value { font-size: 1.75rem; font-weight: 700; color: var(--ink); line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stats-tile__label { font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted); margin-top: var(--space-1); }
+  .stats-tile__note { font-size: var(--text-xs); color: var(--ink-muted); margin-top: var(--space-1); }
+
+  .stats-section { margin-bottom: var(--space-8); }
+  .stats-section h2 { font-size: var(--text-base); font-weight: 700; color: var(--ink); margin-bottom: var(--space-3); }
+
+  .stats-chart { position: relative; height: 180px; padding-top: var(--space-4); border-bottom: 1px solid var(--border-strong); }
+  .stats-chart__grid { position: absolute; left: 0; right: 0; top: var(--space-4); border-top: 1px dashed var(--border-light); }
+  .stats-chart__peak { position: absolute; right: 0; top: 0; font-size: var(--text-xs); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  .stats-chart__bars { position: relative; display: flex; align-items: flex-end; height: 100%; }
+  .stats-chart__bar { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; cursor: default; }
+  .stats-chart__bar span { display: block; width: 100%; background: var(--blue); border-radius: 4px 4px 0 0; min-height: 1px; }
+  .stats-chart__bar:hover span { background: var(--blue-deep); }
+  .stats-chart__bar--empty span { background: transparent; }
+  .stats-chart__axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--ink-muted); margin-top: var(--space-1); }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-6); }
+  .stats-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+  .stats-table th, .stats-table td { padding: var(--space-2) 0; border-bottom: 1px solid var(--border-light); text-align: left; vertical-align: top; }
+  .stats-table th { font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; }
+  .stats-table .num { text-align: right; padding-left: var(--space-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stats-table td:first-child { overflow-wrap: anywhere; }
+  .stats-empty { font-size: var(--text-sm); color: var(--ink-muted); }
+  .stats-details summary { cursor: pointer; font-size: var(--text-sm); color: var(--blue); margin-top: var(--space-3); }
+  .stats-footnote { font-size: var(--text-xs); color: var(--ink-muted); line-height: 1.6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-hero">
+    <div class="page-hero__ornrow" aria-hidden="true">✦</div>
+    <h1 class="page-hero__title page-hero__title--sm">Site stats</h1>
+    <p class="page-hero__sub">
+        {{ start|date:"j M Y" }} – {{ end|date:"j M Y" }}
+    </p>
+</div>
+
+<div class="content-wrap" style="max-width:960px;">
+
+    <nav class="stats-periods" aria-label="Period">
+        {% for period in periods %}
+            <a href="?days={{ period }}"
+               class="btn btn--sm {% if period == days %}btn--primary{% else %}btn--ghost{% endif %}"
+               {% if period == days %}aria-current="page"{% endif %}>
+                {% if period == 365 %}1 year{% else %}{{ period }} days{% endif %}
+            </a>
+        {% endfor %}
+    </nav>
+
+    <div class="stats-tiles">
+        <div class="stats-tile">
+            <div class="stats-tile__value">{{ totals.page }}</div>
+            <div class="stats-tile__label">Page views</div>
+        </div>
+        <div class="stats-tile">
+            <div class="stats-tile__value">{{ avg_visitors|floatformat:"-1" }}</div>
+            <div class="stats-tile__label">Visitors / day</div>
+            <div class="stats-tile__note">{{ totals.visitors }} visitor-days in total</div>
+        </div>
+        <div class="stats-tile">
+            <div class="stats-tile__value">{{ totals.search }}</div>
+            <div class="stats-tile__label">Searches</div>
+        </div>
+        <div class="stats-tile">
+            <div class="stats-tile__value">{{ totals.feeds }}</div>
+            <div class="stats-tile__label">Feed fetches</div>
+            <div class="stats-tile__note">RSS + iCal subscriptions</div>
+        </div>
+        <div class="stats-tile">
+            <div class="stats-tile__value">{{ totals.calendar }}</div>
+            <div class="stats-tile__label">Added to calendar</div>
+        </div>
+    </div>
+
+    <section class="stats-section" aria-labelledby="stats-views-heading">
+        <h2 id="stats-views-heading">Page views per {% if weekly_bars %}week{% else %}day{% endif %}</h2>
+        <div class="stats-chart" role="img"
+             aria-label="Bar chart of page views per {% if weekly_bars %}week{% else %}day{% endif %}{% if peak %}, peaking at {{ peak.views }} on {{ peak.label }}{% endif %}. The table below has the exact numbers.">
+            {% if peak %}
+                <div class="stats-chart__grid" aria-hidden="true"></div>
+                <div class="stats-chart__peak" aria-hidden="true">{{ peak.views }}</div>
+            {% endif %}
+            <div class="stats-chart__bars" style="gap:{{ bar_gap }}px;">
+                {% for bar in bars %}
+                    <div class="stats-chart__bar{% if not bar.views %} stats-chart__bar--empty{% endif %}"
+                         title="{{ bar.label }}: {{ bar.views }} view{{ bar.views|pluralize }}, {{ bar.visitors }} visitor{{ bar.visitors|pluralize }}">
+                        <span style="height:{{ bar.height|stringformat:'s' }}%;"></span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="stats-chart__axis" aria-hidden="true">
+            <span>{{ start|date:"j M" }}</span>
+            <span>{{ end|date:"j M" }}</span>
+        </div>
+
+        <details class="stats-details">
+            <summary>Show daily numbers</summary>
+            <table class="stats-table">
+                <thead>
+                    <tr><th scope="col">Day</th><th scope="col" class="num">Page views</th><th scope="col" class="num">Visitors</th></tr>
+                </thead>
+                <tbody>
+                    {% for day in series %}
+                        <tr>
+                            <td>{{ day.date|date:"D j M Y" }}</td>
+                            <td class="num">{{ day.views }}</td>
+                            <td class="num">{{ day.visitors }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </details>
+    </section>
+
+    <div class="stats-grid">
+        {% include "analytics/partials/stats_table.html" with title="Top pages" rows=top_pages column="Page" empty="No page views yet." %}
+        {% include "analytics/partials/stats_table.html" with title="Referring sites" rows=top_referrers column="Site" empty="No visits from other sites yet." %}
+        {% include "analytics/partials/stats_table.html" with title="Searches" rows=top_searches column="Search term" empty="No searches yet." %}
+        {% include "analytics/partials/stats_table.html" with title="Filters used" rows=top_filters column="Filter" empty="No filters used yet." %}
+        {% include "analytics/partials/stats_table.html" with title="Added to calendar" rows=top_calendar column="Event" empty="No calendar downloads yet." %}
+    </div>
+
+    <p class="stats-footnote" style="margin-top:var(--space-8);">
+        Collected on the server without cookies or scripts. Only daily totals are
+        stored. Visitors are counted once per day using a salted hash of IP address
+        and browser that is deleted at midnight, so the same person on two days
+        counts twice, and visitors sending Global Privacy Control or Do Not Track
+        aren't counted as visitors (their page views still are). Staff, bots and
+        prefetches are excluded.
+    </p>
+</div>
+{% endblock %}

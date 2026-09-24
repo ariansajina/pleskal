@@ -628,6 +628,12 @@
              class="nav-link {% if request.resolver_match.url_name == 'my_invites' %}nav-link--active{% endif %}">
             Invites
           </a>
+          {% if user.is_staff %}
+            <a href="{% url 'stats_dashboard' %}"
+               class="nav-link {% if request.resolver_match.url_name == 'stats_dashboard' %}nav-link--active{% endif %}">
+              Stats
+            </a>
+          {% endif %}
         {% endif %}
 
         <span class="nav-divider"></span>

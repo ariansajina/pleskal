@@ -1,0 +1,20 @@
+<section class="stats-section">
+    <h2>{{ title }}</h2>
+    {% if rows %}
+        <table class="stats-table">
+            <thead>
+                <tr><th scope="col">{{ column }}</th><th scope="col" class="num">Count</th></tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td>{% if row.path %}<a href="{{ row.path }}">{{ row.label }}</a>{% else %}{{ row.label }}{% endif %}</td>
+                        <td class="num">{{ row.count }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="stats-empty">{{ empty }}</p>
+    {% endif %}
+</section>
