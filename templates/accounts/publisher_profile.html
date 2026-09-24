@@ -3,6 +3,8 @@
 
 {% block title %}{{ publisher.public_name }} – pleskal{% endblock %}
 
+{% block meta_description %}{% if publisher.bio %}{{ publisher.bio|plain_excerpt:160 }}{% else %}Dance and performance art events in Copenhagen from {{ publisher.public_name }}.{% endif %}{% endblock %}
+
 {% block content %}
 <div class="page-hero">
     <div class="page-hero__ornrow" aria-hidden="true">✦</div>

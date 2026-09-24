@@ -52,7 +52,9 @@ events/
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
   sharing.py           # Apple/Google calendar URL builders used by detail page
   signals.py           # Event-related signal handlers
-  context_processors.py  # Template context (e.g. MAP_VIEW_ENABLED for nav)
+  context_processors.py  # Template context (MAP_VIEW_ENABLED for nav; site_origin = https://SITE_DOMAIN for canonical/og:url)
+  structured_data.py   # SEO: schema.org Event JSON-LD + meta description for event detail pages
+  sitemaps.py          # /sitemap.xml (events, publishers, static pages)
   validators.py        # URL scheme validator (image format/size validation lives in images.py)
   urls.py              # Event URL patterns
   templatetags/

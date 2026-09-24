@@ -1,7 +1,14 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}pleskal{% endblock %}
+{% block title %}pleskal – dance & performance art events in Copenhagen{% endblock %}
+
+{% block meta_description %}Upcoming dance and performance art events in Copenhagen: performances, workshops, open practice, talks and more, in one community-driven calendar.{% endblock %}
+
+{% block extra_head %}
+{# schema.org/WebSite gives Google the site name to show in results. #}
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "name": "pleskal", "url": "{{ site_origin }}/"}</script>
+{% endblock %}
 
 {% block content %}
 <div class="page-hero">

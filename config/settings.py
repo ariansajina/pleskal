@@ -105,6 +105,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "django.template.context_processors.csp",
                 "events.context_processors.feature_flags",
+                "events.context_processors.site_origin",
             ],
         },
     },
