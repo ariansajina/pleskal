@@ -114,3 +114,50 @@ class TestWeeklyDigestEmail:
         FeedHit.objects.create(feed_type=FeedHit.RSS, date=old_date, count=99)
         call_command("weekly_digest", stdout=StringIO())
         assert "RSS feed hits: 0 (0.0/day avg)" in _digest_email().body
+
+
+@pytest.mark.django_db
+class TestWeeklyDigestTraffic:
+    def _add(self, kind, key="", count=1, days_ago=1):
+        from analytics.models import DailyCount
+
+        DailyCount.objects.create(
+            date=timezone.localdate() - timezone.timedelta(days=days_ago),
+            kind=kind,
+            key=key,
+            count=count,
+        )
+
+    def test_includes_last_seven_full_days(self):
+        from analytics.models import DailyCount
+
+        self._add(DailyCount.PAGE, "/about/", 10, days_ago=1)
+        self._add(DailyCount.PAGE, "/about/", 5, days_ago=7)
+        # Today (partial) and 8 days ago are outside the window.
+        self._add(DailyCount.PAGE, "/about/", 100, days_ago=0)
+        self._add(DailyCount.PAGE, "/about/", 100, days_ago=8)
+        self._add(DailyCount.VISITORS, "", 14)
+        self._add(DailyCount.SEARCH, "butoh", 3)
+        self._add(DailyCount.REFERRER, "instagram.com", 2)
+
+        stdout = StringIO()
+        call_command("weekly_digest", dry_run=True, stdout=stdout)
+        output = stdout.getvalue()
+
+        assert "=== Traffic" in output
+        assert "Page views:    15" in output
+        assert "Visitors:      2.0/day avg" in output
+        assert "Searches:      3" in output
+        assert "Top pages:\n     15  About" in output
+        lines = output.splitlines()
+        referrers = lines[lines.index("Top referrers:") + 1]
+        assert referrers == "      2  instagram.com"
+        assert "butoh" in output
+        assert "Full stats: https://pleskal.dk/stats/" in output
+
+    def test_omits_empty_top_lists(self):
+        stdout = StringIO()
+        call_command("weekly_digest", dry_run=True, stdout=stdout)
+        output = stdout.getvalue()
+        assert "Page views:    0" in output
+        assert "Top pages:" not in output

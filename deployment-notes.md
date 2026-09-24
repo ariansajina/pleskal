@@ -149,8 +149,9 @@ If `railway run` fails to resolve `postgres.railway.internal`, use
 
 ## Weekly digest cron job (Railway, production only)
 
-The `weekly_digest` management command emails growth and activity stats to
-`ADMINS`. Schedule it in Railway as a Cron Job service in the production
+The `weekly_digest` management command emails growth and activity stats,
+including the last 7 full days of cookieless site traffic (see `analytics/`;
+the full dashboard is at `/stats/` for staff users), to `ADMINS`. Schedule it in Railway as a Cron Job service in the production
 environment (separate from the web process), the same way as the scrape and
 backup crons:
 

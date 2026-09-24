@@ -39,6 +39,7 @@ const NETWORK_ONLY_PREFIXES = [
   "/admin/",
   "/markdownx/",
   "/health/",
+  "/stats/",
 ];
 
 self.addEventListener("install", (event) => {

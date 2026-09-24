@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     # Local
     "accounts",
     "events",
+    "analytics",
 ]
 
 SITE_ID = 1
@@ -85,6 +86,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # Cookieless, aggregate-only page-view counting (see analytics/).
+    "analytics.middleware.AnalyticsMiddleware",
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
 ]
 
@@ -225,6 +228,10 @@ GEOCODING_USER_AGENT = env.str(
 # Map discovery view (/map/). Off by default; enable via env once the feature
 # is ready to surface.
 MAP_VIEW_ENABLED = env.bool("MAP_VIEW_ENABLED", default=False)
+
+# Server-side, cookieless analytics (analytics/middleware.py). Staff can view
+# the numbers at /stats/; the weekly digest emails a summary to ADMINS.
+ANALYTICS_ENABLED = env.bool("ANALYTICS_ENABLED", default=True)
 
 # Cloudflare R2 storage (production)
 if env("R2_BUCKET_NAME", default=None):
