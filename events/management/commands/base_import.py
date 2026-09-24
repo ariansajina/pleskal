@@ -263,13 +263,13 @@ class BaseEventImportCommand(BaseCommand):
         # moving off a section-scoped route). It lets the upsert below
         # recognise the incoming record as the same event and rewrite its
         # source_url, rather than read it as "old event deleted, new event
-        # created" — which, given the unique_event_title_start_datetime
+        # created" — which, given the unique_event_title_start_datetime_venue
         # constraint, can't even happen in one pass: the create collides with
         # the row that stale deletion is about to remove, so the event drops
-        # off the site until the next run. Title + start is the constraint's
-        # own key, so it identifies at most one existing event.
-        moved_index: dict[tuple[str, datetime.datetime], Event] = {
-            (str(event.title), start_key): event
+        # off the site until the next run. Title + start + venue is the
+        # constraint's own key, so it identifies at most one existing event.
+        moved_index: dict[tuple[str, datetime.datetime, str], Event] = {
+            (str(event.title), start_key, str(event.venue_name)): event
             for (_src, start_key), event in existing.items()
         }
         # Keys of existing events re-matched this way; excluded from stale
@@ -287,7 +287,7 @@ class BaseEventImportCommand(BaseCommand):
         if not dry_run:
             for key, rec in incoming.items():
                 existing_event = existing.get(key) or self._moved_event(
-                    rec.get("title", ""), key[1], moved_index, incoming, rematched
+                    rec, key[1], moved_index, incoming, rematched
                 )
                 has_existing_image = bool(existing_event and existing_event.image.name)
                 image_names[key] = self._resolve_image_storage_name(
@@ -306,7 +306,7 @@ class BaseEventImportCommand(BaseCommand):
             geocode_queries: set[str] = set()
             for key, rec in incoming.items():
                 existing_event = existing.get(key) or self._moved_event(
-                    rec.get("title", ""), key[1], moved_index, incoming, rematched
+                    rec, key[1], moved_index, incoming, rematched
                 )
                 venue_name = rec.get("venue_name", self.default_venue_name)
                 venue_address = rec.get("venue_address", "")
@@ -370,7 +370,7 @@ class BaseEventImportCommand(BaseCommand):
                 }
 
                 event = existing.get(key) or self._claim_moved_event(
-                    rec["title"], start_dt_utc, moved_index, incoming, rematched
+                    rec, start_dt_utc, moved_index, incoming, rematched
                 )
                 if event is not None:
                     changed = any(getattr(event, k) != v for k, v in fields.items())
@@ -461,9 +461,9 @@ class BaseEventImportCommand(BaseCommand):
 
     def _moved_event(
         self,
-        title: str,
+        rec: dict,
         start_dt_utc: datetime.datetime,
-        moved_index: dict[tuple[str, datetime.datetime], "Event"],
+        moved_index: dict[tuple[str, datetime.datetime, str], "Event"],
         incoming: dict[tuple[str, datetime.datetime], dict],
         rematched: set[tuple[str, datetime.datetime]],
     ) -> "Event | None":
@@ -473,7 +473,13 @@ class BaseEventImportCommand(BaseCommand):
         source_url can have moved, so an existing event that still has a record
         of its own is never a candidate.
         """
-        event = moved_index.get((title, start_dt_utc))
+        event = moved_index.get(
+            (
+                rec.get("title", ""),
+                start_dt_utc,
+                rec.get("venue_name", self.default_venue_name),
+            )
+        )
         if event is None:
             return None
         old_key = (str(event.source_url), start_dt_utc)
@@ -483,18 +489,18 @@ class BaseEventImportCommand(BaseCommand):
 
     def _claim_moved_event(
         self,
-        title: str,
+        rec: dict,
         start_dt_utc: datetime.datetime,
-        moved_index: dict[tuple[str, datetime.datetime], "Event"],
+        moved_index: dict[tuple[str, datetime.datetime, str], "Event"],
         incoming: dict[tuple[str, datetime.datetime], dict],
         rematched: set[tuple[str, datetime.datetime]],
     ) -> "Event | None":
         """Like ``_moved_event``, but marks the match as taken.
 
         Claiming keeps the event out of stale deletion and stops a second
-        record with the same title and start from adopting it too.
+        record with the same title, start and venue from adopting it too.
         """
-        event = self._moved_event(title, start_dt_utc, moved_index, incoming, rematched)
+        event = self._moved_event(rec, start_dt_utc, moved_index, incoming, rematched)
         if event is not None:
             rematched.add((str(event.source_url), start_dt_utc))
         return event

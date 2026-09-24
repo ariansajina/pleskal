@@ -93,9 +93,13 @@ class Event(models.Model):
     class Meta:
         ordering = ["start_datetime", "id"]
         constraints = [
+            # Dedupes the same event arriving twice (two scrapers, or a
+            # scraper and a manual submission). The venue is part of the key
+            # so that generic titles ("Open Practice") at the same time in
+            # different venues don't collide.
             models.UniqueConstraint(
-                fields=["title", "start_datetime"],
-                name="unique_event_title_start_datetime",
+                fields=["title", "start_datetime", "venue_name"],
+                name="unique_event_title_start_datetime_venue",
             )
         ]
         indexes = [

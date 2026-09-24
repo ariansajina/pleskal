@@ -36,10 +36,7 @@ class TestEventFormUniqueness:
             data=make_form_data("Salsa Night", date, start_time), creation=True
         )
         assert not form.is_valid()
-        assert any(
-            "already exists at the same date and time" in e
-            for e in form.non_field_errors()
-        )
+        assert any("already exists at this venue" in e for e in form.non_field_errors())
 
     def test_same_title_different_time_is_valid(self):
         date, start_time = self._future_date_and_time()
@@ -61,6 +58,21 @@ class TestEventFormUniqueness:
 
         form = EventForm(
             data=make_form_data("Bachata Night", date, start_time), creation=True
+        )
+        assert form.is_valid(), form.errors
+
+    def test_same_title_and_time_at_another_venue_is_valid(self):
+        date, start_time = self._future_date_and_time()
+        start_dt = timezone.make_aware(datetime.datetime.combine(date, start_time))
+        EventFactory.create(
+            title="Open Practice", start_datetime=start_dt, venue_name="Studio A"
+        )
+
+        form = EventForm(
+            data=make_form_data(
+                "Open Practice", date, start_time, venue_name="Studio B"
+            ),
+            creation=True,
         )
         assert form.is_valid(), form.errors
 
