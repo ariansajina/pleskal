@@ -192,6 +192,9 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 MAX_IMAGE_DIMENSION = 1200  # px, applied to both axes
+# Upper bound on decoded pixels (JPEGs are measured after draft downscaling),
+# which caps processing memory per upload. 50 MP admits 48 MP phone photos.
+MAX_IMAGE_PIXELS = 50_000_000
 IMAGE_WEBP_QUALITY = 70
 
 # Event settings
