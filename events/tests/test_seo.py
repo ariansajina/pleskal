@@ -228,10 +228,11 @@ class TestMetaDescriptions:
     def test_homepage_title_and_description_name_the_topic(self, client):
         html = client.get(reverse("event_list")).content.decode()
         assert (
-            "<title>pleskal – dance & performance art events in Copenhagen</title>"
-            in html
+            "<title>pleskal – dance & performance art events in Copenhagen"
+            " | independent community calendar</title>" in html
         )
-        assert "performance art events in Copenhagen" in self._description(html)
+        assert "independent community event calendar" in self._description(html)
+        assert "independent, hyperlocal community event calendar" in html
 
     def test_homepage_has_website_jsonld(self, client, settings):
         settings.SITE_DOMAIN = "pleskal.example"
