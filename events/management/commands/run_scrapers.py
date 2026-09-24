@@ -210,12 +210,12 @@ class Command(BaseCommand):
             )
 
         # ── Retention ─────────────────────────────────────────────────────
-        # Delete past events older than their retention period (scraped and
-        # user-published events have separate windows). Piggybacks on this
-        # daily cron rather than needing a Railway service of its own; like
-        # the backfill, failures are reported but never fail the run.
+        # Delete past scraped events older than SCRAPED_EVENT_RETENTION_DAYS
+        # (user-published events are never deleted). Piggybacks on this daily
+        # cron rather than needing a Railway service of its own; like the
+        # backfill, failures are reported but never fail the run.
         self.stdout.write("")
-        self.stdout.write(self.style.HTTP_INFO("Purging expired events..."))
+        self.stdout.write(self.style.HTTP_INFO("Purging expired scraped events..."))
         try:
             call_command("purge_expired_events", dry_run=dry_run)
         except Exception as exc:

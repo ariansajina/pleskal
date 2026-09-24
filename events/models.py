@@ -36,26 +36,40 @@ DEFAULT_PUBLISHER_IMAGES = {
 DEFAULT_EVENT_IMAGE = "images/logo.png"
 
 
-def expired_events_q(now=None) -> models.Q:
-    """Match events past their retention period.
+def _ended_before(now, days) -> models.Q:
+    """Events that ended more than *days* before *now*.
 
-    Scraped events (non-blank external_source) expire
-    SCRAPED_EVENT_RETENTION_DAYS after they end; user-published events,
-    drafts included, expire USER_EVENT_RETENTION_DAYS after they end. An event
-    with no end time counts as ending when it starts, so a long-running event
-    is never cut off while it is still on.
+    An event with no end time counts as ending when it starts, so a
+    long-running event is never treated as over while it is still on.
+    """
+    cutoff = now - timezone.timedelta(days=days)
+    return models.Q(end_datetime__lt=cutoff) | models.Q(
+        end_datetime__isnull=True, start_datetime__lt=cutoff
+    )
+
+
+_SCRAPED = ~models.Q(external_source="")
+
+
+def expired_events_q(now=None) -> models.Q:
+    """Scraped events past SCRAPED_EVENT_RETENTION_DAYS, due for deletion.
+
+    Only scraped events (non-blank external_source) ever expire;
+    user-published events are never deleted.
     """
     now = now or timezone.now()
+    return _SCRAPED & _ended_before(now, settings.SCRAPED_EVENT_RETENTION_DAYS)
 
-    def ended_before(days):
-        cutoff = now - timezone.timedelta(days=days)
-        return models.Q(end_datetime__lt=cutoff) | models.Q(
-            end_datetime__isnull=True, start_datetime__lt=cutoff
-        )
 
-    scraped = ~models.Q(external_source="")
-    return (scraped & ended_before(settings.SCRAPED_EVENT_RETENTION_DAYS)) | (
-        ~scraped & ended_before(settings.USER_EVENT_RETENTION_DAYS)
+def hidden_events_q(now=None) -> models.Q:
+    """Past events too old to show in the event list and map.
+
+    Expired scraped events (hidden before the daily purge gets to them) and
+    user-published events that ended more than USER_EVENT_HIDE_AFTER_DAYS ago.
+    """
+    now = now or timezone.now()
+    return expired_events_q(now) | (
+        ~_SCRAPED & _ended_before(now, settings.USER_EVENT_HIDE_AFTER_DAYS)
     )
 
 

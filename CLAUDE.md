@@ -61,7 +61,7 @@ events/
     import_events.py            # Generic importer: import_events <source> (config from scrapers/registry.py)
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
-    purge_expired_events.py     # Delete past events older than their retention period (run by run_scrapers)
+    purge_expired_events.py     # Delete past scraped events older than their retention period (run by run_scrapers)
     weekly_digest.py            # Weekly digest email (feed analytics)
 
 accounts/
@@ -169,7 +169,7 @@ uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # su
 uv run python manage.py weekly_digest
 
 # Event retention (also runs daily as the last step of run_scrapers)
-uv run python manage.py purge_expired_events              # delete expired events
+uv run python manage.py purge_expired_events              # delete expired scraped events
 uv run python manage.py purge_expired_events --dry-run    # report counts only
 
 # Geocoding backfill for events that predate the OSM integration
@@ -315,7 +315,7 @@ Constraint: `(title, start_datetime, venue_name)` is unique — dedupes the same
 
 Method: `get_display_description()` prepends scraped event disclaimer if `external_source` is set.
 
-Retention: `expired_events_q()` (module-level in `events/models.py`) matches events past their retention period, counted from `end_datetime` (or `start_datetime` when there is no end): scraped events (non-blank `external_source`) after `SCRAPED_EVENT_RETENTION_DAYS` (default 90), user-published events, drafts included, after `USER_EVENT_RETENTION_DAYS` (default 730). `purge_expired_events` deletes them daily (as a step of `run_scrapers`); the list/map queryset also excludes them so they never show before the purge runs. The importer's stale deletion only touches **upcoming** events, since scrapers list only what's coming up and past events would otherwise vanish on every run.
+Retention: past events are counted from `end_datetime` (or `start_datetime` when there is no end). **Scraped** events (non-blank `external_source`) are deleted `SCRAPED_EVENT_RETENTION_DAYS` (default 90) after they end: `expired_events_q()` in `events/models.py` matches them and `purge_expired_events` deletes them daily (as a step of `run_scrapers`). **User-published** events, drafts included, are **never deleted**; `hidden_events_q()` drops them from the event list/map `USER_EVENT_HIDE_AFTER_DAYS` (default 730) after they end, and also hides expired scraped events before the purge runs. Detail pages stay reachable. The importer's stale deletion only touches **upcoming** events, since scrapers list only what's coming up and past events would otherwise vanish on every run.
 
 Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`. Results (including definitive "no result" answers) are cached in the shared Django cache, so repeat venues skip the network call.
 
@@ -449,7 +449,7 @@ See `.env.example` for the full list. Key variables:
 | `DB_BACKUP_RETENTION_DAYS` | Retention for `scripts/backup_db.py` uploads to R2 (default: 30) |
 | `SCRAPER_<NAME>_ENABLED` | Per-scraper kill switch consulted by `run_scrapers` |
 | `SCRAPED_EVENT_RETENTION_DAYS` | Days after a scraped event ends before `purge_expired_events` deletes it (default: 90) |
-| `USER_EVENT_RETENTION_DAYS` | Days after a user-published event ends before it is deleted (default: 730) |
+| `USER_EVENT_HIDE_AFTER_DAYS` | Days after a user-published event ends before it drops out of the event list/map; user events are never deleted (default: 730) |
 
 ## Deployment
 

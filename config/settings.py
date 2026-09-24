@@ -199,12 +199,14 @@ IMAGE_WEBP_QUALITY = 70
 
 # Event settings
 
-# Retention: an event is deleted this many days after it ends (or starts, when
-# it has no end time). Scraped events are only a copy of the source's own
-# listing, so they go sooner; user-published events are pleskal's own archive.
-# Enforced daily by `purge_expired_events` (run at the end of run_scrapers).
+# Past events, counted from when they end (or start, when there is no end time).
+# Scraped events are only a copy of the source's own listing, so they are
+# deleted after SCRAPED_EVENT_RETENTION_DAYS by `purge_expired_events` (run at
+# the end of run_scrapers). User-published events are pleskal's own archive and
+# are never deleted; they only drop out of the event list/map after
+# USER_EVENT_HIDE_AFTER_DAYS (their detail pages stay reachable).
 SCRAPED_EVENT_RETENTION_DAYS = env.int("SCRAPED_EVENT_RETENTION_DAYS", default=90)
-USER_EVENT_RETENTION_DAYS = env.int("USER_EVENT_RETENTION_DAYS", default=730)
+USER_EVENT_HIDE_AFTER_DAYS = env.int("USER_EVENT_HIDE_AFTER_DAYS", default=730)
 
 SCRAPED_EVENT_DISCLAIMER = (
     "> This event was scraped and may be partly inaccurate. "

@@ -1,10 +1,11 @@
-"""Delete events that are past their retention period.
+"""Delete scraped events that are past their retention period.
 
-Scraped events are kept SCRAPED_EVENT_RETENTION_DAYS after they end and
-user-published events USER_EVENT_RETENTION_DAYS (see events.models
-.expired_events_q). Runs daily as a step of run_scrapers. Deleting through the
-ORM fires the post_delete signal, so each event's image is removed from
-storage too unless another event still uses it.
+Scraped events are kept SCRAPED_EVENT_RETENTION_DAYS after they end (see
+events.models.expired_events_q). User-published events are never deleted;
+they are only hidden from the event list after USER_EVENT_HIDE_AFTER_DAYS.
+Runs daily as a step of run_scrapers. Deleting through the ORM fires the
+post_delete signal, so each event's image is removed from storage too unless
+another event still uses it.
 """
 
 from django.conf import settings
@@ -14,7 +15,7 @@ from events.models import Event, expired_events_q
 
 
 class Command(BaseCommand):
-    help = "Delete past events older than their retention period."
+    help = "Delete past scraped events older than their retention period."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -27,19 +28,15 @@ class Command(BaseCommand):
         dry_run = options.get("dry_run", False)
 
         expired = Event.objects.filter(expired_events_q())
-        scraped = expired.exclude(external_source="").count()
-        user_published = expired.filter(external_source="").count()
-
+        count = expired.count()
         summary = (
-            f"{scraped} scraped event(s) older than "
-            f"{settings.SCRAPED_EVENT_RETENTION_DAYS} days, "
-            f"{user_published} user-published event(s) older than "
-            f"{settings.USER_EVENT_RETENTION_DAYS} days"
+            f"{count} scraped event(s) older than "
+            f"{settings.SCRAPED_EVENT_RETENTION_DAYS} days"
         )
         if dry_run:
             self.stdout.write(self.style.WARNING(f"Dry run — would delete {summary}."))
             return
 
-        if scraped or user_published:
+        if count:
             expired.delete()
         self.stdout.write(self.style.SUCCESS(f"Deleted {summary}."))

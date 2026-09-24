@@ -397,11 +397,12 @@ class TestEventListView:
         resp = client.get(reverse("event_list") + "?past=1")
         assert b"Old Dance Night" in resp.content
 
-    def test_past_toggle_hides_events_past_retention(self, client, settings):
-        """Events past their retention period stay hidden even before the
-        daily purge has deleted them; scraped and user events differ."""
+    def test_past_toggle_hides_old_events(self, client, settings):
+        """Scraped events past retention are hidden even before the daily
+        purge deletes them; user events (never deleted) are hidden after
+        USER_EVENT_HIDE_AFTER_DAYS."""
         settings.SCRAPED_EVENT_RETENTION_DAYS = 90
-        settings.USER_EVENT_RETENTION_DAYS = 730
+        settings.USER_EVENT_HIDE_AFTER_DAYS = 730
 
         def days_ago(days):
             return timezone.now() - timezone.timedelta(days=days)
