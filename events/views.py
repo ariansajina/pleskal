@@ -18,13 +18,19 @@ from config.ratelimit import RateLimitMixin
 
 from .forms import EventForm
 from .images import validate_and_process
-from .models import Event, EventCategory
+from .models import Event, EventCategory, hidden_events_q
 from .sharing import apple_calendar_url, google_calendar_url, outlook_calendar_url
 
 EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
 MAX_UPCOMING_EVENTS_PER_USER = settings.MAX_UPCOMING_EVENTS_PER_USER
 SEARCH_QUERY_MAX_LENGTH = 200
+# GET limit for the public list and map pages. Every filter change, debounced
+# search keystroke and page click is a request, and visitors behind a shared
+# address (mobile carrier NAT, a studio's wifi) share one counter, so this has
+# to sit well above what a single person clicking around produces; it is only
+# meant to stop runaway scripted crawling.
+PUBLIC_BROWSE_RATE_LIMIT = 120
 
 
 # ---------------------------------------------------------------------------
@@ -293,17 +299,20 @@ def _filtered_event_queryset(request):
 
     Applies the same filters as the event list view (category, publisher,
     date range, is_free, is_wheelchair_accessible, search) to a base
-    queryset that excludes drafts and events older than two years. Callers
-    are responsible for any upcoming/past toggle and ordering.
+    queryset that excludes drafts and past events too old to list (see
+    hidden_events_q: scraped events past retention, user events past
+    USER_EVENT_HIDE_AFTER_DAYS). Callers are responsible for any
+    upcoming/past toggle and ordering.
     """
     from django.contrib.auth import get_user_model
     from django.db.models import Q
 
     User = get_user_model()
-    expiry_cutoff = timezone.now() - timezone.timedelta(days=2 * 365)
-    qs = Event.objects.filter(
-        start_datetime__gte=expiry_cutoff, is_draft=False
-    ).select_related("submitted_by")
+    qs = (
+        Event.objects.filter(is_draft=False)
+        .exclude(hidden_events_q())
+        .select_related("submitted_by")
+    )
 
     # --- Filter: category (multi-value) ---
     categories = request.GET.getlist("category")
@@ -426,8 +435,8 @@ def _filter_panel_context(request, filter_state):
 
 class EventListView(RateLimitMixin, View):
     rate_limit_key = "event_list"
-    rate_limit_limit = 20
-    rate_limit_window = 60  # 20 requests per minute per IP
+    rate_limit_limit = PUBLIC_BROWSE_RATE_LIMIT
+    rate_limit_window = 60  # per minute per IP
     rate_limit_methods = ["GET"]
 
     template_name = "events/event_list.html"
@@ -486,8 +495,8 @@ class EventListView(RateLimitMixin, View):
 
 class EventMapView(RateLimitMixin, View):
     rate_limit_key = "event_map"
-    rate_limit_limit = 20
-    rate_limit_window = 60  # 20 requests per minute per IP
+    rate_limit_limit = PUBLIC_BROWSE_RATE_LIMIT
+    rate_limit_window = 60  # per minute per IP
     rate_limit_methods = ["GET"]
 
     template_name = "events/event_map.html"

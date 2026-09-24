@@ -110,7 +110,12 @@ scheduled Cron Job service in the **production** environment only.
 
    `run_scrapers` already calls all `import_*` commands internally: it scrapes
    each source, writes a temp JSON file, and invokes the corresponding
-   importer.
+   importer. It then backfills missing geocoding and runs
+   `purge_expired_events`, which deletes past **scraped** events older than
+   `SCRAPED_EVENT_RETENTION_DAYS` (default 90). This cron is the only thing
+   enforcing that, so set the variable on this service if you override it.
+   User-published events are never deleted; the web service hides them from
+   the event list/map after `USER_EVENT_HIDE_AFTER_DAYS` (default 730).
 
 4. Under **Variables**, reference the same environment variables as the web
    service. Required: `DATABASE_URL`, `SECRET_KEY`, `PASSWORD_PEPPER`.
@@ -182,7 +187,7 @@ stored hash. Nothing is ever "decrypted".
 The derivation pipeline is:
 
 ```
-raw_password → HMAC-SHA256(PASSWORD_PEPPER, raw_password) → PBKDF2-SHA256 → stored hash
+raw_password → HMAC-SHA256(PASSWORD_PEPPER, raw_password) → Argon2id → stored hash
 ```
 
 ### What to back up

@@ -192,9 +192,21 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 MAX_IMAGE_DIMENSION = 1200  # px, applied to both axes
+# Upper bound on decoded pixels (JPEGs are measured after draft downscaling),
+# which caps processing memory per upload. 50 MP admits 48 MP phone photos.
+MAX_IMAGE_PIXELS = 50_000_000
 IMAGE_WEBP_QUALITY = 70
 
 # Event settings
+
+# Past events, counted from when they end (or start, when there is no end time).
+# Scraped events are only a copy of the source's own listing, so they are
+# deleted after SCRAPED_EVENT_RETENTION_DAYS by `purge_expired_events` (run at
+# the end of run_scrapers). User-published events are pleskal's own archive and
+# are never deleted; they only drop out of the event list/map after
+# USER_EVENT_HIDE_AFTER_DAYS (their detail pages stay reachable).
+SCRAPED_EVENT_RETENTION_DAYS = env.int("SCRAPED_EVENT_RETENTION_DAYS", default=90)
+USER_EVENT_HIDE_AFTER_DAYS = env.int("USER_EVENT_HIDE_AFTER_DAYS", default=730)
 
 SCRAPED_EVENT_DISCLAIMER = (
     "> This event was scraped and may be partly inaccurate. "
@@ -317,7 +329,17 @@ ACCOUNT_CHANGE_EMAIL = True
 
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 0.5  # 30 minutes in hours
-AXES_LOCK_OUT_BY = ["ip_address"]
+# Lock out the (username, IP) pair rather than the IP alone, so failed logins
+# against one account can't lock every other user on a shared network out of
+# theirs. Password spraying across many accounts from one IP is still capped by
+# the per-IP login rate limit (RateLimitedLoginView).
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+# The login form posts the email as "username" (Django's AuthenticationForm);
+# axes would otherwise look for USERNAME_FIELD ("email") and see no username.
+AXES_USERNAME_CALLABLE = "config.ratelimit.get_login_username"
+# Behind Railway's proxy REMOTE_ADDR is the proxy's address, shared by every
+# visitor; resolve the client IP the same way the rate limiter does.
+AXES_CLIENT_IP_CALLABLE = "config.ratelimit.get_client_ip"
 AXES_RESET_ON_SUCCESS = True
 
 # Cache

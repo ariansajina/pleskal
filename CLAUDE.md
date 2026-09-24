@@ -61,6 +61,7 @@ events/
     import_events.py            # Generic importer: import_events <source> (config from scrapers/registry.py)
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
+    purge_expired_events.py     # Delete past scraped events older than their retention period (run by run_scrapers)
     weekly_digest.py            # Weekly digest email (feed analytics)
 
 accounts/
@@ -167,6 +168,10 @@ uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # su
 # Weekly digest email
 uv run python manage.py weekly_digest
 
+# Event retention (also runs daily as the last step of run_scrapers)
+uv run python manage.py purge_expired_events              # delete expired scraped events
+uv run python manage.py purge_expired_events --dry-run    # report counts only
+
 # Geocoding backfill for events that predate the OSM integration
 uv run python manage.py backfill_geocoding                  # all events without coords
 uv run python manage.py backfill_geocoding --dry-run        # print resolutions only
@@ -217,8 +222,8 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 - CSRF protection via Django middleware; HTMX includes token via `hx-headers` on `<body>`
 - XSS: Markdown sanitized via nh3 (allowlist of tags/attributes in `markdown_filters.py`)
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
-- Image uploads: Pillow-validated (not Content-Type), EXIF stripped, resized to 1200px, converted to WebP
-- Brute-force: django-axes (5 failures = 30 min IP lockout)
+- Image uploads: Pillow-validated (not Content-Type), capped at `MAX_IMAGE_PIXELS` (50 MP, checked from the header before decoding; JPEGs measured after draft downscaling), EXIF stripped, resized to 1200px, converted to WebP
+- Brute-force: django-axes (5 failures = 30 min lockout of the (email, client IP) pair; client IP resolved via `config.ratelimit.get_client_ip`, since `REMOTE_ADDR` is Railway's proxy)
 - Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's `incr()` TTL behavior; limits per endpoint listed below
 - CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
@@ -231,8 +236,8 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 | Login | POST | 20 req/hr | per IP |
 | Password reset | POST | 5 req/hr | per IP |
 | Claim code | POST | 5 req/hr | per IP |
-| Event list/search | GET | 20 req/min | per IP |
-| Event map | GET | 20 req/min | per IP |
+| Event list/search | GET | 120 req/min | per IP |
+| Event map | GET | 120 req/min | per IP |
 | Event create | POST | 20 req/hr | per user |
 | Event update | POST | 20 req/min | per user |
 | Event duplicate | POST | 20 req/min | per user |
@@ -240,7 +245,8 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 
 - `EventDeleteView` is **not** rate-limited (owner-only + confirmation step).
 - Event toggle draft shares the `event_update` cache key, so it draws from the same per-user counter as Event update.
-- Default `rate_limit_methods` is `["POST"]`; the list/map views override it to `["GET"]`.
+- Default `rate_limit_methods` is `["POST"]`; the list/map views override it to `["GET"]` (limit `PUBLIC_BROWSE_RATE_LIMIT` in `events/views.py`).
+- HTMX doesn't swap 4xx/5xx responses; `static/js/htmx-errors.js` shows a banner (`#htmx-error` in `base.html`) on 429s and other failed partial requests.
 
 ## Models
 
@@ -305,7 +311,11 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `is_draft` | Boolean, default False; drafts are only visible to the owner |
 | `created_at`, `updated_at` | Auto timestamps |
 
+Constraint: `(title, start_datetime, venue_name)` is unique — dedupes the same event arriving from two scrapers (or a scraper and a manual submission) while letting generic titles recur at the same time in different venues. `EventForm.clean()` mirrors it with a friendly error.
+
 Method: `get_display_description()` prepends scraped event disclaimer if `external_source` is set.
+
+Retention: past events are counted from `end_datetime` (or `start_datetime` when there is no end). **Scraped** events (non-blank `external_source`) are deleted `SCRAPED_EVENT_RETENTION_DAYS` (default 90) after they end: `expired_events_q()` in `events/models.py` matches them and `purge_expired_events` deletes them daily (as a step of `run_scrapers`). **User-published** events, drafts included, are **never deleted**; `hidden_events_q()` drops them from the event list/map `USER_EVENT_HIDE_AFTER_DAYS` (default 730) after they end, and also hides expired scraped events before the purge runs. Detail pages stay reachable. The importer's stale deletion only touches **upcoming** events, since scrapers list only what's coming up and past events would otherwise vanish on every run.
 
 Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`. Results (including definitive "no result" answers) are cached in the shared Django cache, so repeat venues skip the network call.
 
@@ -438,12 +448,14 @@ See `.env.example` for the full list. Key variables:
 | `CLAIM_CODE_EXPIRY_DAYS` | Expiry for user-minted claim codes (default: 30) |
 | `DB_BACKUP_RETENTION_DAYS` | Retention for `scripts/backup_db.py` uploads to R2 (default: 30) |
 | `SCRAPER_<NAME>_ENABLED` | Per-scraper kill switch consulted by `run_scrapers` |
+| `SCRAPED_EVENT_RETENTION_DAYS` | Days after a scraped event ends before `purge_expired_events` deletes it (default: 90) |
+| `USER_EVENT_HIDE_AFTER_DAYS` | Days after a user-published event ends before it drops out of the event list/map; user events are never deleted (default: 730) |
 
 ## Deployment
 
 - **Platform:** Railway. The production environment runs app services (deployed from this repo) plus a managed database:
   - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
-  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers`, `restartPolicyType = NEVER`
+  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers` (scrape + import, geocoding backfill, retention purge), `restartPolicyType = NEVER`
   - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
   - **digest-cron** (`railway.digest-cron.toml`): scheduled cron running `python manage.py weekly_digest`, `restartPolicyType = NEVER`. Set up manually per `deployment-notes.md` (not wired into `deploy-production.yml`, unlike the other two crons, since that requires a Railway service ID secret to be provisioned first)
   - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`

@@ -141,3 +141,46 @@ class TestValidateAndProcess:
         result = validate_and_process(upload)
         out = Image.open(io.BytesIO(result.read())).convert("RGB")
         assert out.getpixel((5, 5)) == (255, 255, 255)
+
+    def test_image_over_pixel_cap_rejected_before_decoding(self, settings):
+        """A tiny, highly compressible file can still decode to a huge bitmap;
+        the pixel cap must reject it from the header alone."""
+        settings.MAX_IMAGE_DIMENSION = 1200
+        settings.MAX_IMAGE_PIXELS = 4_000_000
+        with pytest.raises(ValidationError, match="megapixels"):
+            validate_and_process(
+                _make_upload(width=4000, height=3000, fmt="PNG", name="big.png")
+            )
+
+    def test_large_jpeg_accepted_when_draft_decode_fits_pixel_cap(self, settings):
+        """JPEGs decode at reduced scale, so a 12 MP photo only costs ~3 MP."""
+        settings.MAX_IMAGE_DIMENSION = 1200
+        settings.MAX_IMAGE_PIXELS = 4_000_000
+        settings.IMAGE_WEBP_QUALITY = 70
+        result = validate_and_process(_make_upload(width=4000, height=3000))
+        out = Image.open(io.BytesIO(result.read()))
+        assert out.size == (1200, 900)
+
+    def test_large_transparent_png_resized_and_composited(self, settings):
+        settings.MAX_IMAGE_DIMENSION = 100
+        settings.IMAGE_WEBP_QUALITY = 70
+        buf = io.BytesIO()
+        Image.new("RGBA", (1000, 500), color=(255, 0, 0, 0)).save(buf, format="PNG")
+        upload = SimpleUploadedFile("t.png", buf.getvalue(), content_type="image/png")
+        result = validate_and_process(upload)
+        out = Image.open(io.BytesIO(result.read())).convert("RGB")
+        assert out.size == (100, 50)
+        assert out.getpixel((50, 25)) == (255, 255, 255)
+
+    def test_truncated_image_raises_validation_error(self, settings):
+        settings.MAX_IMAGE_DIMENSION = 1200
+        buf = io.BytesIO()
+        Image.effect_noise((400, 400), 64).convert("RGB").save(buf, format="PNG")
+        data = buf.getvalue()
+        # Keep the header (so open/verify of the chunk structure can pass
+        # or fail) but cut the pixel data short.
+        upload = SimpleUploadedFile(
+            "cut.png", data[: len(data) // 2], content_type="image/png"
+        )
+        with pytest.raises(ValidationError):
+            validate_and_process(upload)

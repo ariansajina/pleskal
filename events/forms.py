@@ -163,13 +163,17 @@ class EventForm(forms.ModelForm):
                     cleaned["end_datetime"] = end_dt
 
             title = cleaned.get("title")
-            if title:
-                qs = Event.objects.filter(title=title, start_datetime=start_dt)
+            venue_name = cleaned.get("venue_name")
+            if title and venue_name:
+                qs = Event.objects.filter(
+                    title=title, start_datetime=start_dt, venue_name=venue_name
+                )
                 if self.instance and self.instance.pk:
                     qs = qs.exclude(pk=self.instance.pk)
                 if qs.exists():
                     raise forms.ValidationError(
-                        "An event with this title already exists at the same date and time."
+                        "An event with this title already exists at this venue "
+                        "at the same date and time."
                     )
 
         return cleaned

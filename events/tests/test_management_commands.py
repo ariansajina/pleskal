@@ -1,5 +1,6 @@
 """Tests for the import_dansehallerne, import_hautscene, and import_sydhavnteater management commands."""
 
+import datetime
 import io
 import json
 import urllib.request
@@ -10,10 +11,12 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.utils import timezone
 from PIL import Image
 
 from events.management.commands.base_import import _download_image, _parse_dt
 from events.models import Event
+from events.tests.factories import EventFactory
 
 UserModel = get_user_model()
 
@@ -188,6 +191,21 @@ class TestImportDansehallerneCRUD:
         call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 0
 
+    def test_past_events_are_not_deleted_as_stale(self, tmp_path):
+        # Scrapers only list upcoming events, so an event that has already
+        # happened drops out of every scrape; that's not a cancellation.
+        # Past events are left to the retention purge.
+        past = EventFactory.create(
+            external_source="dansehallerne",
+            source_url="https://dansehallerne.dk/event/past",
+            start_datetime=timezone.now() - datetime.timedelta(days=3),
+        )
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        assert Event.objects.filter(pk=past.pk).exists()
+
     def test_no_delete_preserves_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
         _write_json([SAMPLE_EVENT], f)
@@ -231,6 +249,51 @@ class TestImportDansehallerneCRUD:
         event = Event.objects.get(external_source="dansehallerne")
         assert event.pk == original.pk
         assert event.source_url == SAMPLE_EVENT["source_url"]
+
+    def test_same_title_and_start_at_another_venue_is_a_separate_event(self, tmp_path):
+        # Generic titles ("Open Practice") recur at the same time in different
+        # venues; they must not collide with each other.
+        f = tmp_path / "events.json"
+        elsewhere = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/2",
+            "venue_name": "Other Venue",
+        }
+        _write_json([SAMPLE_EVENT, elsewhere], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        venues = set(
+            Event.objects.filter(external_source="dansehallerne").values_list(
+                "venue_name", flat=True
+            )
+        )
+        assert venues == {"Test Venue", "Other Venue"}
+
+    def test_moved_url_matches_the_event_at_the_same_venue(self, tmp_path):
+        # With two same-title, same-start events at different venues, a URL
+        # change must re-match the one at the record's own venue.
+        f = tmp_path / "events.json"
+        elsewhere = {
+            **SAMPLE_EVENT,
+            "source_url": "https://dansehallerne.dk/event/2",
+            "venue_name": "Other Venue",
+        }
+        _write_json([SAMPLE_EVENT, elsewhere], f)
+        call_command("import_events", "dansehallerne", str(f))
+        original = Event.objects.get(venue_name="Other Venue")
+
+        moved = {**elsewhere, "source_url": "https://dansehallerne.dk/event/3"}
+        _write_json([SAMPLE_EVENT, moved], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        assert Event.objects.filter(external_source="dansehallerne").count() == 2
+        event = Event.objects.get(venue_name="Other Venue")
+        assert event.pk == original.pk
+        assert event.source_url == "https://dansehallerne.dk/event/3"
+        assert (
+            Event.objects.get(venue_name="Test Venue").source_url
+            == SAMPLE_EVENT["source_url"]
+        )
 
     def test_different_title_at_new_url_is_a_new_event(self, tmp_path):
         f = tmp_path / "events.json"

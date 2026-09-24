@@ -39,6 +39,9 @@
   {# Nav toggle #}
   <script src="{% static 'js/nav.js' %}" defer></script>
 
+  {# Show a message when an HTMX request fails (e.g. 429 rate limit) #}
+  <script src="{% static 'js/htmx-errors.js' %}" defer></script>
+
   {# PWA service worker registration (CSP-safe: same-origin, no inline JS) #}
   <script src="{% static 'js/pwa.js' %}" defer></script>
 
@@ -653,6 +656,13 @@
       {% endfor %}
     </div>
   {% endif %}
+
+  {# Filled in by htmx-errors.js when a partial-page request fails #}
+  <div id="htmx-error" class="content-wrap" style="padding-top:1rem;padding-bottom:0;" role="alert" hidden>
+    <div class="alert alert--error">
+      <span aria-hidden="true">✦</span> <span data-htmx-error-text></span>
+    </div>
+  </div>
 
   {# ── MAIN CONTENT ─────────────────────────────────────── #}
   <main id="main-content" style="flex:1;">

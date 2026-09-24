@@ -79,6 +79,70 @@ class TestAxesLockout:
         assert resp.status_code == 302  # still logs in fine
 
 
+@pytest.mark.django_db
+class TestAxesLockoutScope:
+    """Behind Railway's proxy every request shares REMOTE_ADDR, so the lockout
+    must key on the forwarded client IP and the attacked username — never on
+    the proxy address alone, which would lock every user out at once."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_axes(self, settings):
+        from axes.models import AccessAttempt
+
+        AccessAttempt.objects.all().delete()  # type: ignore
+        settings.AXES_FAILURE_LIMIT = 5
+
+    def _login(self, client, email, password, client_ip):
+        return client.post(
+            reverse("login"),
+            {"username": email, "password": password},
+            REMOTE_ADDR="10.0.0.1",  # the proxy, identical for everyone
+            HTTP_X_FORWARDED_FOR=client_ip,
+        )
+
+    def _fail_five_times(self, client, email, client_ip):
+        for _ in range(5):
+            self._login(client, email, "wrongpassword", client_ip)
+
+    def test_locked_pair_cannot_log_in_even_with_correct_password(self, client):
+        UserFactory.create(email="victim@example.com")
+        self._fail_five_times(client, "victim@example.com", "203.0.113.1")
+
+        resp = self._login(client, "victim@example.com", "testpass123", "203.0.113.1")
+        assert resp.status_code != 302
+
+    def test_other_user_behind_same_proxy_is_not_locked_out(self, client):
+        UserFactory.create(email="victim@example.com")
+        UserFactory.create(email="bystander@example.com")
+        self._fail_five_times(client, "victim@example.com", "203.0.113.1")
+
+        resp = self._login(
+            client, "bystander@example.com", "testpass123", "198.51.100.7"
+        )
+        assert resp.status_code == 302
+
+    def test_email_case_variations_share_one_failure_counter(self, client):
+        UserFactory.create(email="victim@example.com")
+        for email in (
+            "Victim@example.com",
+            "VICTIM@example.com",
+            "victim@Example.com",
+            "vIctim@example.com",
+            "viCtim@example.com",
+        ):
+            self._login(client, email, "wrongpassword", "203.0.113.1")
+
+        resp = self._login(client, "victim@example.com", "testpass123", "203.0.113.1")
+        assert resp.status_code != 302
+
+    def test_same_user_from_another_client_ip_is_not_locked_out(self, client):
+        UserFactory.create(email="victim@example.com")
+        self._fail_five_times(client, "victim@example.com", "203.0.113.1")
+
+        resp = self._login(client, "victim@example.com", "testpass123", "198.51.100.7")
+        assert resp.status_code == 302
+
+
 TILE_HOST = "https://tile.openstreetmap.org"
 
 
