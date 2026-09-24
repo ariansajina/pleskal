@@ -113,7 +113,7 @@ def _geocode_remote(query: str) -> tuple[tuple[float, float] | None, bool]:
         )
         response.raise_for_status()
         payload = response.json()
-    except (requests.RequestException, ValueError):
+    except requests.RequestException, ValueError:
         logger.warning("Nominatim geocoding failed for query %r", query, exc_info=True)
         return None, False
 
@@ -123,6 +123,6 @@ def _geocode_remote(query: str) -> tuple[tuple[float, float] | None, bool]:
     first = payload[0]
     try:
         return (float(first["lat"]), float(first["lon"])), True
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         logger.warning("Nominatim returned unexpected payload for %r: %r", query, first)
         return None, True

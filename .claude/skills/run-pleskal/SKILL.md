@@ -84,15 +84,13 @@ are all optional and unset here).
   directly). `uv sync --dev` is the supported path and does not try to
   build the project itself.
 - **`requires-python` decides which interpreter `uv sync` needs.** It
-  is `>=3.13` and the container's system Python satisfies it, so the
-  sync resolves locally. If it is ever raised above the interpreters
-  available here, `uv sync`/`uv python install` will try to fetch a
-  standalone CPython from a GitHub release URL
-  (`github.com/astral-sh/python-build-standalone/...`) and 403 — this
-  environment's proxy only allowlists `pypi.org` /
-  `files.pythonhosted.org` (see `/root/.ccr/README.md`). The fix is to
-  make a satisfying interpreter available, not to re-pin dependencies
-  here.
+  is `>=3.14`, which the container's system Python (3.13) does not
+  satisfy, so the SessionStart hook runs `uvx uv@latest python install`
+  to fetch a standalone CPython 3.14 (the container's own uv is too old
+  to know current 3.14 patch releases). If that download is blocked
+  (`github.com/astral-sh/python-build-standalone/...` 403, see
+  `/root/.ccr/README.md`), the fix is to make a satisfying interpreter
+  available, not to re-pin dependencies here.
 - **No `PASSWORD_PEPPER` / `SECRET_KEY` in `.env` locally** → Django
   raises on startup. The driver generates a throwaway pepper and uses
   a fixed dev secret key; don't reuse these for anything real.

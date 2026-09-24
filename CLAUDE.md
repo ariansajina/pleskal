@@ -8,7 +8,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 
 ## Tech Stack
 
-- **Framework:** Django 6.0.3+ (Python 3.13+)
+- **Framework:** Django 6.0.3+ (Python 3.14+)
 - **Database:** PostgreSQL (production), SQLite (dev default)
 - **Frontend:** Django templates + HTMX (no JS framework)
 - **Styling:** Tailwind CSS 4.0 (built via CLI)
@@ -183,7 +183,7 @@ uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 ### Style & Linting
 
 - **Line length:** 88 (ruff default)
-- **Python target:** 3.13 (ruff target; matches `requires-python`)
+- **Python target:** 3.14 (ruff target; matches `requires-python`)
 - **Ruff rules:** E, F, I (isort), UP (pyupgrade), B (bugbear), SIM (simplify), S (security); E501 ignored
 - **Per-file ignores:** tests allow S101 (assert), S106 (hardcoded password), S314
 - **Migrations excluded** from linting
@@ -402,7 +402,7 @@ Because of this hook, **do not manually run `ruff format`, `ruff check`, `ty che
 `.github/workflows/ci.yml` runs on push/PR to `main`:
 
 1. Checkout (full history)
-2. Install uv + Python 3.13
+2. Install uv + Python 3.14
 3. `uv sync --dev`
 4. `npm ci` + `npm run css:build`
 5. `collectstatic --noinput`

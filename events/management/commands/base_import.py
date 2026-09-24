@@ -473,10 +473,10 @@ class BaseEventImportCommand(BaseCommand):
         self,
         rec: dict,
         start_dt_utc: datetime.datetime,
-        moved_index: dict[tuple[str, datetime.datetime, str], "Event"],
+        moved_index: dict[tuple[str, datetime.datetime, str], Event],
         incoming: dict[tuple[str, datetime.datetime], dict],
         rematched: set[tuple[str, datetime.datetime]],
-    ) -> "Event | None":
+    ) -> Event | None:
         """Return the existing event this record describes under a new URL.
 
         Only an event the incoming set no longer accounts for under its own
@@ -501,10 +501,10 @@ class BaseEventImportCommand(BaseCommand):
         self,
         rec: dict,
         start_dt_utc: datetime.datetime,
-        moved_index: dict[tuple[str, datetime.datetime, str], "Event"],
+        moved_index: dict[tuple[str, datetime.datetime, str], Event],
         incoming: dict[tuple[str, datetime.datetime], dict],
         rematched: set[tuple[str, datetime.datetime]],
-    ) -> "Event | None":
+    ) -> Event | None:
         """Like ``_moved_event``, but marks the match as taken.
 
         Claiming keeps the event out of stale deletion and stops a second
