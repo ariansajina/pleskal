@@ -20,6 +20,19 @@ def get_client_ip(request):
     return request.META.get("REMOTE_ADDR", "127.0.0.1")
 
 
+def get_login_username(request, credentials):
+    """Return the attempted login email for django-axes, lower-cased.
+
+    Lower-casing keeps "Victim@x.dk" and "victim@x.dk" on one failure counter,
+    so case variations can't be used to multiply the attempts allowed.
+    """
+    credentials = credentials or {}
+    username = credentials.get("username") or credentials.get("email")
+    if username is None:
+        username = request.POST.get("username", "")
+    return str(username).strip().lower()
+
+
 def check_rate_limit(key, limit, window):
     """
     Check and increment a fixed-window rate limit counter.

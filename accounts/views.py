@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 
-from config.ratelimit import RateLimitMixin
+from config.ratelimit import RateLimitMixin, get_client_ip
 
 from .forms import (
     ClaimCodeForm,
@@ -227,7 +227,7 @@ class ClaimCodeView(RateLimitMixin, View):
             logger.warning(
                 "Invalid claim code attempt: %s from %s",
                 code_value,
-                request.META.get("REMOTE_ADDR"),
+                get_client_ip(request),
             )
             form.add_error("code", invalid_msg)
             return render(request, "accounts/claim.html", {"form": form})

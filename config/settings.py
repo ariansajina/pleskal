@@ -317,7 +317,17 @@ ACCOUNT_CHANGE_EMAIL = True
 
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 0.5  # 30 minutes in hours
-AXES_LOCK_OUT_BY = ["ip_address"]
+# Lock out the (username, IP) pair rather than the IP alone, so failed logins
+# against one account can't lock every other user on a shared network out of
+# theirs. Password spraying across many accounts from one IP is still capped by
+# the per-IP login rate limit (RateLimitedLoginView).
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+# The login form posts the email as "username" (Django's AuthenticationForm);
+# axes would otherwise look for USERNAME_FIELD ("email") and see no username.
+AXES_USERNAME_CALLABLE = "config.ratelimit.get_login_username"
+# Behind Railway's proxy REMOTE_ADDR is the proxy's address, shared by every
+# visitor; resolve the client IP the same way the rate limiter does.
+AXES_CLIENT_IP_CALLABLE = "config.ratelimit.get_client_ip"
 AXES_RESET_ON_SUCCESS = True
 
 # Cache
