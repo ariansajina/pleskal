@@ -431,7 +431,17 @@ class BaseEventImportCommand(BaseCommand):
             if not no_delete and self._stale_deletion_is_safe(
                 existing, incoming, force_delete
             ):
-                stale_keys = set(existing.keys()) - set(incoming.keys()) - rematched
+                # Only upcoming events can be stale. Scrapers list what's
+                # coming up, so an event that has already started drops out of
+                # the incoming set by itself; that's no sign it was cancelled,
+                # and past events are left to the retention purge
+                # (purge_expired_events) instead.
+                now = timezone.now()
+                stale_keys = {
+                    key
+                    for key in set(existing) - set(incoming) - rematched
+                    if key[1] >= now  # key[1] is start_dt_utc
+                }
                 for key in stale_keys:
                     event = existing[key]
                     title_str = str(event.title)

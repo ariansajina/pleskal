@@ -1,5 +1,6 @@
 """Tests for the import_dansehallerne, import_hautscene, and import_sydhavnteater management commands."""
 
+import datetime
 import io
 import json
 import urllib.request
@@ -10,10 +11,12 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.utils import timezone
 from PIL import Image
 
 from events.management.commands.base_import import _download_image, _parse_dt
 from events.models import Event
+from events.tests.factories import EventFactory
 
 UserModel = get_user_model()
 
@@ -187,6 +190,21 @@ class TestImportDansehallerneCRUD:
         _write_json([], f)
         call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 0
+
+    def test_past_events_are_not_deleted_as_stale(self, tmp_path):
+        # Scrapers only list upcoming events, so an event that has already
+        # happened drops out of every scrape; that's not a cancellation.
+        # Past events are left to the retention purge.
+        past = EventFactory.create(
+            external_source="dansehallerne",
+            source_url="https://dansehallerne.dk/event/past",
+            start_datetime=timezone.now() - datetime.timedelta(days=3),
+        )
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        assert Event.objects.filter(pk=past.pk).exists()
 
     def test_no_delete_preserves_stale_events(self, tmp_path):
         f = tmp_path / "events.json"
