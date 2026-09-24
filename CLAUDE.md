@@ -30,11 +30,12 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 config/          # Django project settings (incl. SECURE_CSP), URLs, rate limiting, PWA endpoints
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
 events/          # Dance events app (CRUD, feeds, image processing, geocoding, map view, sharing)
+analytics/       # Cookieless server-side analytics (daily counters, staff /stats/ dashboard)
 scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9)
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX + Leaflet, PWA icons, JS shims)
 scripts/         # Standalone runtime scripts (e.g. backup_db.py for the backup cron)
-conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, MAP_VIEW_ENABLED on)
+conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, MAP_VIEW_ENABLED on, ANALYTICS_ENABLED off)
 deployment-notes.md  # Production deployment guidance
 docker-compose.yml   # Local PostgreSQL for development
 ```
@@ -62,7 +63,7 @@ events/
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
     purge_expired_events.py     # Delete past scraped events older than their retention period (run by run_scrapers)
-    weekly_digest.py            # Weekly digest email (feed analytics)
+    weekly_digest.py            # Weekly digest email (growth, feed hits, last 7 days of site traffic)
 
 accounts/
   models.py          # Custom User (UUID PK, display_name, display_name_slug) + ClaimCode
@@ -76,6 +77,12 @@ accounts/
   management/commands/
     generate_claim_codes.py     # Generate invite codes (--count, --expires, --created-by)
     create_source_accounts.py   # Create system accounts from scrapers/sources.json
+
+analytics/
+  models.py          # DailyCount (per-day counters), DailySalt + VisitorHash (today's unique-visitor dedupe, deleted at rollover)
+  middleware.py      # AnalyticsMiddleware: records page views, referrers, searches, filters, calendar downloads
+  stats.py           # Read-side aggregation shared by the dashboard and weekly_digest
+  views.py           # StatsDashboardView (/stats/, staff only)
 
 config/
   settings.py        # Django settings
@@ -334,6 +341,13 @@ Unique together: `(feed_type, date)`.
 
 Classmethod: `record(feed_type)` atomically increments the daily counter via `update_or_create`.
 
+### Analytics (`analytics/models.py`)
+
+Cookieless, server-side analytics: nothing is stored on or read from the visitor's device, so no consent banner is needed. `AnalyticsMiddleware` counts successful GET HTML responses after the view runs; it skips bots (User-Agent regex), prefetches, staff users, infrastructure URLs (`/health/`, PWA, robots, sitemap, `/stats/`), the admin, and non-200s. HTMX partials are not page views, but on `event_list`/`event_map` they feed search and filter counts, diffed against `HX-Current-URL` so each newly applied filter counts once and incremental typing counts only the final search term. Recording failures are logged and never break the response.
+
+- `DailyCount(date, kind, key, count)`: kinds `page` (key = path), `visitors` (key blank), `referrer` (external host), `search` (normalized term), `filter` (e.g. `category:workshop`, `is_free`), `calendar` (single-event `.ics` path). Unique `(date, kind, key)`; `increment()`/`decrement()` use `F()` updates.
+- `DailySalt` / `VisitorHash`: unique visitors per day = SHA-256 of today's random salt + client IP + User-Agent. The first request of a new day creates a new salt and deletes older salts and hashes, so no IP is stored and days can't be linked. Skipped when the browser sends `Sec-GPC: 1` or `DNT: 1`.
+
 ## Views Summary
 
 ### events/
@@ -371,6 +385,7 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 | `/manifest.webmanifest` | PWA manifest (`config.pwa.manifest_view`) |
 | `/service-worker.js` | PWA service worker (`config.pwa.service_worker_view`); served at root so SW scope covers the whole site |
 | `/offline/` | Offline fallback rendered when SW intercepts a navigation with no network |
+| `/stats/` | `analytics.views.StatsDashboardView`: staff-only analytics dashboard (anonymous → login, non-staff → 403); linked in the nav for staff, network-only in the service worker, disallowed in robots.txt |
 
 ### accounts/
 
@@ -443,6 +458,7 @@ See `.env.example` for the full list. Key variables:
 | `SITE_DOMAIN` | Site domain for allauth |
 | `SITE_NAME` | Site name for allauth |
 | `RAILWAY_PUBLIC_DOMAIN` | Auto-set by Railway |
+| `ANALYTICS_ENABLED` | Toggle cookieless page-view counting (default: `true`; `conftest.py` disables it, `analytics/tests/` re-enable it) |
 | `MAP_VIEW_ENABLED` | Toggle the `/map/` route and nav entry (default: `false`; `conftest.py` enables it for tests) |
 | `GEOCODING_ENABLED` | Toggle Nominatim calls in `Event.save()` (default: `false` in DEBUG, `true` otherwise) |
 | `GEOCODING_USER_AGENT` | User-Agent string sent to Nominatim (required by their policy) |

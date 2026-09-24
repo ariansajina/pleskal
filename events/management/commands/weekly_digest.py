@@ -5,6 +5,8 @@ from django.core.management.base import BaseCommand
 from django.db.models import Sum
 from django.utils import timezone
 
+from analytics import stats
+from analytics.models import DailyCount
 from config.cron_monitoring import cron_monitor
 from events.models import Event, EventCategory, FeedHit
 
@@ -79,6 +81,8 @@ class Command(BaseCommand):
             f"RSS feed hits: {rss_hits} ({rss_hits / 7:.1f}/day avg)",
             f"iCal hits:     {ical_hits} ({ical_hits / 7:.1f}/day avg)",
             "",
+            *self._traffic_lines(),
+            "",
             "=== All time ===",
             f"Total users:   {total_users}",
             f"Total events:  {total_events}",
@@ -108,3 +112,28 @@ class Command(BaseCommand):
         self.stderr.write(
             self.style.SUCCESS(f"Digest sent to {len(admin_emails)} admin(s).")
         )
+
+    def _traffic_lines(self):
+        """Cookieless analytics for the last 7 full days (see analytics/)."""
+        end = timezone.localdate() - timezone.timedelta(days=1)
+        start, end = stats.date_range(7, end)
+        totals = stats.totals(start, end)
+        visitors = totals[DailyCount.VISITORS]
+
+        lines = [
+            f"=== Traffic ({start:%d %b} – {end:%d %b}) ===",
+            f"Page views:    {totals[DailyCount.PAGE]}",
+            f"Visitors:      {visitors / 7:.1f}/day avg",
+            f"Searches:      {totals[DailyCount.SEARCH]}",
+            f"Added to cal.: {totals[DailyCount.CALENDAR]}",
+        ]
+        for title, rows in (
+            ("Top pages", stats.top_pages(start, end, limit=5)),
+            ("Top referrers", stats.top_referrers(start, end, limit=5)),
+            ("Top searches", stats.top_searches(start, end, limit=5)),
+        ):
+            if rows:
+                lines.append(f"{title}:")
+                lines.extend(f"  {row.count:>5}  {row.label}" for row in rows)
+        lines.append(f"Full stats: https://{settings.SITE_DOMAIN}/stats/")
+        return lines

@@ -13,6 +13,9 @@ def test_settings(settings):
     settings.GEOCODING_ENABLED = False
     # Map discovery view is off in production by default; tests assume on.
     settings.MAP_VIEW_ENABLED = True
+    # Analytics writes counters on every page view; tests that exercise it
+    # enable it explicitly (see analytics/tests/).
+    settings.ANALYTICS_ENABLED = False
     # Use simple static storage so tests don't require a collected manifest.
     settings.STORAGES = {
         "default": {

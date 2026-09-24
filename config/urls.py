@@ -56,6 +56,7 @@ def robots_txt(request):
         "Disallow: /claim/",
         "Disallow: /markdownx/",
         "Disallow: /events/submit/",
+        "Disallow: /stats/",
         "",
         f"Sitemap: {sitemap_url}",
     ]
@@ -99,6 +100,7 @@ urlpatterns = [
         login_required(MarkdownifyView.as_view()),
         name="markdownx_markdownify",
     ),
+    path("", include("analytics.urls")),
     path("", include("events.urls")),
 ]
 
