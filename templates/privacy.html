@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy — pleskal{% endblock %}
+
+{% block meta_description %}What personal data pleskal handles, and why.{% endblock %}
+
+{% block extra_head %}
+<style>
+  .privacy h2 { font-size: var(--text-base); font-weight: 700; color: var(--ink); margin: var(--space-8) 0 var(--space-3); }
+  .privacy p, .privacy li { font-size: var(--text-base); color: var(--ink-muted); line-height: 1.8; }
+  .privacy p { margin-bottom: var(--space-4); }
+  .privacy ul { padding-left: var(--space-6); list-style: disc; margin-bottom: var(--space-4); }
+  .privacy a { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="page-hero__ornrow" aria-hidden="true">✦ · · ✦ · · ✦</div>
+  <h1 class="page-hero__title">Privacy</h1>
+</div>
+
+<div class="content-wrap privacy">
+  <p>
+    pleskal is a small, non-commercial project. This page explains what personal data it handles and why.
+    Questions or requests: <a href="mailto:hello.pleskal@proton.me">hello.pleskal@proton.me</a>.
+  </p>
+
+  <h2>Cookies</h2>
+  <p>
+    pleskal uses no tracking or advertising cookies. It sets only the cookies it needs to work: a security
+    token (<code>csrftoken</code>) and, when you log in, a session cookie (<code>sessionid</code>). Your browser
+    also keeps a short history of the pages you filter so the back button works; it never leaves your device.
+  </p>
+
+  <h2>Visitor statistics</h2>
+  <p>
+    To understand how the site is used, the server counts page views, the website you came from, and the
+    searches and filters used, as daily totals. To count unique visitors per day, your IP address and browser
+    are combined with a random value that is deleted every night and turned into a code that can't be reversed.
+    Your IP address is never stored, and visits on different days can't be linked. If your browser sends a
+    Global Privacy Control or Do Not Track signal, you aren't counted as a visitor.
+  </p>
+
+  <h2>Accounts</h2>
+  <p>
+    If you have an account, pleskal stores your email address, the profile details you add (display name,
+    bio, website), the events you publish, and who invited you. Your email address is never shown publicly;
+    your profile and published events are. Login attempts are logged with IP address and browser to protect
+    accounts from break-ins.
+  </p>
+  <p>
+    Emails (address verification, password resets) are sent through Resend. Once you verify your email
+    address, it and your display name are added to pleskal's contact list at Resend.
+  </p>
+  <p>
+    You can delete your account at any time from your account settings, with or without the events you
+    published. To be removed from the Resend contact list as well, send an email.
+  </p>
+
+  <h2>Services pleskal relies on</h2>
+  <ul>
+    <li><strong>Railway</strong>: hosting and database.</li>
+    <li><strong>Cloudflare R2</strong>: event images and database backups.</li>
+    <li><strong>Resend</strong>: sending email.</li>
+    <li><strong>Sentry</strong>: error reports, set up not to include personal data.</li>
+    <li><strong>OpenStreetMap</strong>: maps load from openstreetmap.org, which receives your IP address.</li>
+    <li><strong>Ko-fi</strong>: the donation button loads from ko-fi.com, which receives your IP address and applies its own privacy policy.</li>
+  </ul>
+
+  <h2>Your rights</h2>
+  <p>
+    You can ask to see, correct or delete your personal data, or object to how it's used, by emailing
+    <a href="mailto:hello.pleskal@proton.me">hello.pleskal@proton.me</a>. You can also complain to the Danish
+    Data Protection Agency, <a href="https://www.datatilsynet.dk">Datatilsynet</a>.
+  </p>
+
+  <p class="text-sm" style="margin-top:var(--space-8);">Last updated: September 2026</p>
+</div>
+{% endblock %}
