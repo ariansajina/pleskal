@@ -20,6 +20,7 @@ from .forms import EventForm
 from .images import validate_and_process
 from .models import Event, EventCategory, hidden_events_q
 from .sharing import apple_calendar_url, google_calendar_url, outlook_calendar_url
+from .structured_data import event_jsonld, event_meta_description
 
 EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
@@ -611,9 +612,8 @@ class EventDetailView(DetailView):
         context["og_image_url"] = self.request.build_absolute_uri(
             event.display_image_url
         )
+        context["meta_description"] = event_meta_description(event)
         if not event.is_draft:
-            from .structured_data import event_jsonld
-
             context["event_jsonld"] = event_jsonld(event, self.request)
         return context
 

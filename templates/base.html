@@ -6,13 +6,13 @@
   <title>{% block title %}pleskal{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}Copenhagen's dance and performance art agenda.{% endblock %}">
   {% load static %}
-  {% block canonical %}<link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">{% endblock %}
+  {% block canonical %}<link rel="canonical" href="{{ site_origin }}{{ request.path }}">{% endblock %}
   {% block og_tags %}
   <meta property="og:site_name" content="pleskal">
   <meta property="og:type" content="website">
   <meta property="og:title" content="pleskal">
   <meta property="og:description" content="Copenhagen's dance and performance art agenda.">
-  <meta property="og:url" content="{{ request.build_absolute_uri }}">
+  <meta property="og:url" content="{{ site_origin }}{{ request.path }}">
   <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'images/logo-white-bg.PNG' %}">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'images/logo-white-bg.PNG' %}">
@@ -677,7 +677,7 @@
 
   {# ── SITE FOOTER ─────────────────────────────────────── #}
   <footer class="site-footer">
-    {% now "Y" as current_year %}© {{ current_year }} pleskal · <a href="{% url 'about' %}">About</a>
+    {% now "Y" as current_year %}© {{ current_year }} pleskal · <a href="{% url 'publisher_list' %}">Publishers</a> · <a href="{% url 'about' %}">About</a>
   </footer>
 
   {# ── MODALS (direct children of <body>, outside <main>, so page-level #}

@@ -8,11 +8,13 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 
 from config.ratelimit import RateLimitMixin, get_client_ip
+from events.structured_data import publisher_jsonld
 
 from .forms import (
     ClaimCodeForm,
@@ -162,6 +164,17 @@ class RateLimitedPasswordResetView(RateLimitMixin, auth_views.PasswordResetView)
     success_url = "/accounts/password-reset/done/"
 
 
+class PublisherListView(View):
+    def get(self, request):
+        upcoming = Q(events__is_draft=False, events__start_datetime__gte=timezone.now())
+        publishers = User.objects.publishers().annotate(
+            upcoming_count=Count("events", filter=upcoming)
+        )
+        return render(
+            request, "accounts/publisher_list.html", {"publishers": publishers}
+        )
+
+
 class PublisherProfileView(View):
     def get(self, request, slug):
         from events.models import Event
@@ -194,6 +207,7 @@ class PublisherProfileView(View):
             "accounts/publisher_profile.html",
             {
                 "publisher": publisher,
+                "publisher_jsonld": publisher_jsonld(publisher),
                 "events": qs,
                 "show_past": show_past,
                 "is_own_profile": is_own_profile,

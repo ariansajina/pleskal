@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Publishers – dance & performance art in Copenhagen – pleskal{% endblock %}
+
+{% block meta_description %}Venues, companies, collectives and artists publishing dance and performance art events in Copenhagen on pleskal{% if publishers %}, including {% for publisher in publishers|slice:":5" %}{{ publisher.public_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}.{% endblock %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="page-hero__ornrow" aria-hidden="true">✦ · · ✦ · · ✦</div>
+  <h1 class="page-hero__title">Publishers</h1>
+  <p class="page-hero__sub">Venues, companies, collectives and artists publishing dance and performance art events in Copenhagen.</p>
+</div>
+
+<div class="content-wrap">
+  {% if publishers %}
+    <div class="event-list">
+      {% for publisher in publishers %}
+        <a href="{% url 'publisher_profile' publisher.display_name_slug %}" class="card">
+          <div class="event-row">
+            <div class="event-row__body">
+              <div class="event-row__content">
+                <h2 class="event-title">{{ publisher.public_name }}</h2>
+                <div class="event-meta">
+                  <span>{{ publisher.upcoming_count }} upcoming event{{ publisher.upcoming_count|pluralize }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-base text-muted text-center" style="padding:var(--space-8) 0;">No publishers yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -126,6 +126,48 @@ class TestAccountProfileView:
 
 
 @pytest.mark.django_db
+class TestPublisherListView:
+    def test_lists_named_publishers_with_upcoming_counts(self, client):
+        studio = UserFactory.create(display_name="Studio X")
+        EventFactory.create_batch(2, submitted_by=studio)
+        source = UserFactory.create(
+            display_name="Dansehallerne", is_system_account=True
+        )
+        response = client.get("/accounts/publishers/")
+        assert response.status_code == 200
+        counts = {
+            p.public_name: p.upcoming_count for p in response.context["publishers"]
+        }
+        assert counts == {"Dansehallerne": 0, "Studio X": 2}
+        html = response.content.decode()
+        assert f"/accounts/publishers/{studio.display_name_slug}/" in html
+        assert f"/accounts/publishers/{source.display_name_slug}/" in html
+
+    def test_excludes_unlisted_accounts(self, client):
+        EventFactory.create(submitted_by=UserFactory.create(display_name=""))
+        UserFactory.create(display_name="No Events Yet")
+        EventFactory.create(
+            submitted_by=UserFactory.create(display_name="Only Drafts"), is_draft=True
+        )
+        EventFactory.create(
+            submitted_by=UserFactory.create(display_name="Gone", is_active=False)
+        )
+        response = client.get("/accounts/publishers/")
+        assert list(response.context["publishers"]) == []
+
+    def test_ordered_case_insensitively(self, client):
+        for name in ["beta", "Alpha", "Gamma"]:
+            UserFactory.create(display_name=name, is_system_account=True)
+        response = client.get("/accounts/publishers/")
+        names = [p.public_name for p in response.context["publishers"]]
+        assert names == ["Alpha", "beta", "Gamma"]
+
+    def test_linked_from_footer(self, client):
+        response = client.get("/about/")
+        assert b'href="/accounts/publishers/"' in response.content
+
+
+@pytest.mark.django_db
 class TestPublisherProfileView:
     def test_show_upcoming_events(self):
         user = UserFactory.create(display_name="Profile User")
