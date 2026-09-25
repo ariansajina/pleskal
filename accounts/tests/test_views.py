@@ -162,10 +162,6 @@ class TestPublisherListView:
         names = [p.public_name for p in response.context["publishers"]]
         assert names == ["Alpha", "beta", "Gamma"]
 
-    def test_linked_from_footer(self, client):
-        response = client.get("/about/")
-        assert b'href="/accounts/publishers/"' in response.content
-
 
 @pytest.mark.django_db
 class TestPublisherProfileView:

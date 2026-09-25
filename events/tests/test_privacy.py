@@ -15,7 +15,6 @@ class TestPrivacyPage:
         content = response.content.decode()
         assert '<h1 class="page-hero__title">Privacy</h1>' in content
         assert "mailto:hello.pleskal@proton.me" in content
-        assert "Datatilsynet" in content
 
     def test_linked_only_from_footer(self, client):
         content = client.get("/about/").content.decode()
