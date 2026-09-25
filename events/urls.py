@@ -51,6 +51,10 @@ urlpatterns = [
     path("subscribe/", SubscribeView.as_view(), name="subscribe"),
     # About page
     path("about/", TemplateView.as_view(template_name="about.html"), name="about"),
+    # Privacy notice
+    path(
+        "privacy/", TemplateView.as_view(template_name="privacy.html"), name="privacy"
+    ),
     # Guide page
     path("guide/", GuideView.as_view(), name="guide"),
 ]
