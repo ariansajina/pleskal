@@ -92,6 +92,7 @@ class TestPageViews:
 
     def test_ignores_infrastructure_urls(self, browser):
         browser.get("/health/")
+        browser.get("/health/db/")
         browser.get("/robots.txt")
         browser.get("/manifest.webmanifest")
         assert not DailyCount.objects.exists()

@@ -26,6 +26,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from config.cron_monitoring import cron_monitor
 from scrapers.registry import SOURCES, ScraperSource
 
 log = logging.getLogger(__name__)
@@ -72,6 +73,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Only a full, real run is the scheduled job: a manual preview or
+        # subset run shouldn't stand in for (or fail) its daily check-in.
+        if options["dry_run"] or options["only"]:
+            self._run(options)
+            return
+        # Schedule matches the scrape-cron service (deployment-notes.md).
+        with cron_monitor("run-scrapers", "0 6 * * *", max_runtime_minutes=60):
+            self._run(options)
+
+    def _run(self, options):
         logging.basicConfig(
             level=logging.INFO,
             format="%(levelname)s %(name)s %(message)s",

@@ -1,18 +1,39 @@
+import logging
+
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.decorators import login_required
 from django.contrib.sitemaps.views import sitemap
+from django.db import DatabaseError, connection
 from django.http import HttpResponse
 from django.urls import include, path
-from django.views.decorators.cache import cache_control
+from django.views.decorators.cache import cache_control, never_cache
 from markdownx.views import ImageUploadView, MarkdownifyView
 
 from accounts.views import ClaimCodeView, ClaimRegisterView
 from config.pwa import manifest_view, offline_view, service_worker_view
 from events.sitemaps import sitemaps
 
+logger = logging.getLogger(__name__)
+
 
 def health(request):
+    return HttpResponse("ok")
+
+
+@never_cache
+def health_db(request):
+    """Deep health check for the external uptime monitor: also queries the DB.
+
+    Railway's deploy healthcheck stays on the shallow /health/, so a database
+    blip can't block deploying a fix.
+    """
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except DatabaseError:
+        logger.exception("Database health check failed")
+        return HttpResponse("database unavailable", status=503)
     return HttpResponse("ok")
 
 
@@ -44,6 +65,7 @@ def robots_txt(request):
 
 urlpatterns = [
     path("health/", health, name="health"),
+    path("health/db/", health_db, name="health_db"),
     # PWA: manifest + service worker must be served from the origin root so
     # the SW scope covers the whole site.
     path("manifest.webmanifest", manifest_view, name="pwa_manifest"),

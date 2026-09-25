@@ -86,6 +86,50 @@ successful build directly from the Railway dashboard (Deployments → Redeploy).
 
 ---
 
+## Monitoring
+
+| What | How | Where it alerts |
+|---|---|---|
+| Uncaught errors, slow requests | Sentry (`SENTRY_DSN`), release-tagged via `APP_VERSION` | Sentry alert rules |
+| Site and database reachable | UptimeRobot polling `https://pleskal.dk/health/db/` | UptimeRobot |
+| Cron jobs ran, finished, and succeeded | Sentry Crons check-ins | Sentry alert rules |
+| CPU / memory / logs | Railway service **Metrics** and **Logs** tabs | — |
+
+### Health endpoints
+
+- `/health/` — shallow, always `200 ok`. Used by Railway's deploy
+  healthcheck (`railway.toml`), so a database blip can't block a deploy.
+- `/health/db/` — also runs `SELECT 1`; returns `503` when the database is
+  unreachable. Point the UptimeRobot monitor here.
+
+### Cron monitors
+
+Railway doesn't alert when a cron job fails, and a job that never starts sends
+no errors at all. Each cron job therefore checks in with Sentry Crons at start
+and finish; Sentry opens an issue when a run fails, runs past its max runtime,
+or doesn't check in within 30 minutes of its schedule:
+
+| Monitor slug | Job | Default schedule (UTC) | Max runtime |
+|---|---|---|---|
+| `run-scrapers` | `manage.py run_scrapers` | `0 6 * * *` | 60 min |
+| `weekly-digest` | `manage.py weekly_digest` | `0 8 * * 1` | 10 min |
+| `backup-db` | `scripts/backup_db.py` | `0 3 * * *` | 30 min |
+
+- Monitors are created in Sentry automatically on the first check-in; no setup
+  is needed there beyond making sure alerts for cron issues reach you.
+- Each cron service needs `SENTRY_DSN` and `SENTRY_ENVIRONMENT` set, or it
+  never checks in.
+- The schedule Sentry expects must match the service's Railway cron schedule.
+  If a Railway schedule differs from the default above, set
+  `SENTRY_CRON_SCHEDULE` on that service to the same cron expression.
+- Only full, real runs check in: `run_scrapers --dry-run` / `--only` and
+  `weekly_digest --dry-run` don't, so manual previews never count as, or fail,
+  the scheduled run.
+- A `run_scrapers` run where any source fails exits non-zero and so checks in
+  as failed, in addition to the per-source Sentry issue.
+
+---
+
 ## Event scrapers cron job (Railway, production only)
 
 The `run_scrapers` management command scrapes all external sources
@@ -123,7 +167,8 @@ scheduled Cron Job service in the **production** environment only.
    Strongly recommended: `SENTRY_DSN` and `SENTRY_ENVIRONMENT` — Railway env
    vars are per-service, and Railway does not alert on a cron exiting non-zero,
    so Sentry is the only channel that surfaces a scraper failure (`run_scrapers`
-   captures per-source exceptions tagged with the scraper name).
+   captures per-source exceptions tagged with the scraper name, and checks in
+   with Sentry Crons — see [Cron monitors](#cron-monitors)).
 
 The staging environment has no scraper cron service. Test scraper changes
 manually against staging via the web service:
@@ -141,7 +186,7 @@ If `railway run` fails to resolve `postgres.railway.internal`, use
 
 - Each source runs independently; a failure in one does not block the others.
 - The command exits with code 1 if any source fails, which Railway will flag as
-  a failed run.
+  a failed run (without alerting) and Sentry Crons records as a failed check-in.
 - Logs appear in the Railway service's **Logs** tab.
 - To run twice daily instead, change the schedule to `0 6,18 * * *`.
 
@@ -169,7 +214,9 @@ backup crons:
 
 4. Under **Variables**, reference the same environment variables as the web
    service. Required: `DATABASE_URL`, `SECRET_KEY`, `PASSWORD_PEPPER`,
-   `ADMINS`, `RESEND_API_KEY`.
+   `ADMINS`, `RESEND_API_KEY`. Recommended: `SENTRY_DSN` and
+   `SENTRY_ENVIRONMENT`, so the job checks in with Sentry Crons (see
+   [Cron monitors](#cron-monitors)).
 
 The command requires `ADMINS` and `RESEND_API_KEY` to be set. Run a one-off
 test before scheduling:

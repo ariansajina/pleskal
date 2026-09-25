@@ -88,9 +88,10 @@ analytics/
 
 config/
   settings.py        # Django settings
-  urls.py            # Root URL conf (includes /health/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's upload/markdownify views with login_required (its default urls.py mounts them unauthenticated)
+  urls.py            # Root URL conf (includes /health/, /health/db/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's upload/markdownify views with login_required (its default urls.py mounts them unauthenticated)
   ratelimit.py       # Cache-based RateLimitMixin
   pwa.py             # PWA endpoints: manifest, service worker, offline fallback page
+  cron_monitoring.py # cron_monitor(): Sentry Crons check-ins for run_scrapers + weekly_digest
 
 scrapers/
   base.py                      # Shared utilities (get_soup, canonical_url, scrape_url_list, etc.)
@@ -382,6 +383,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | URL | Purpose |
 |---|---|
 | `/health/` | Plain `200 OK` health check (Railway `healthcheckPath`) |
+| `/health/db/` | Deep health check (`SELECT 1`, `503` on DB failure); polled by UptimeRobot |
 | `/manifest.webmanifest` | PWA manifest (`config.pwa.manifest_view`) |
 | `/service-worker.js` | PWA service worker (`config.pwa.service_worker_view`); served at root so SW scope covers the whole site |
 | `/offline/` | Offline fallback rendered when SW intercepts a navigation with no network |
@@ -453,6 +455,7 @@ See `.env.example` for the full list. Key variables:
 | `SENTRY_DSN` | Enables Sentry error tracking |
 | `SENTRY_ENVIRONMENT` | Environment tag attached to Sentry events (e.g. `staging`, `production`) |
 | `APP_VERSION` | Application version, used as the Sentry release tag (set automatically by deploy workflow from the git tag) |
+| `SENTRY_CRON_SCHEDULE` | Cron services only: overrides the Sentry Crons schedule in code when the service's Railway cron schedule differs |
 | `ADMINS` | Comma-separated admin emails (notified on new signups) |
 | `CSRF_TRUSTED_ORIGINS` | Required in production |
 | `SITE_DOMAIN` | Site domain for allauth |
@@ -481,6 +484,6 @@ See `.env.example` for the full list. Key variables:
 - **Images / DB backups:** Cloudflare R2 (free tier: 10 GB / 10M reads)
 - **Static files:** WhiteNoise
 - **Email:** Resend via django-anymail
-- **Monitoring:** Sentry (errors, release-tagged via `APP_VERSION`), UptimeRobot (uptime)
+- **Monitoring:** Sentry (errors, release-tagged via `APP_VERSION`), Sentry Crons (check-ins from `run_scrapers`, `weekly_digest`, and `scripts/backup_db.py`; monitors auto-created from code; skipped on `--dry-run`/`--only`), UptimeRobot (uptime, polling `/health/db/`). See `deployment-notes.md` "Monitoring"
 - **Environments:** staging is web-only (no cron services); production is deployed by tagging `v*` (see `deploy-production.yml`)
 - **Estimated cost:** $5-10/month

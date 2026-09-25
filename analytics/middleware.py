@@ -32,6 +32,7 @@ BOT_USER_AGENT_RE = re.compile(
 # URL names that are never counted (infrastructure, not pages people read).
 EXCLUDED_URL_NAMES = {
     "health",
+    "health_db",
     "pwa_manifest",
     "pwa_service_worker",
     "pwa_offline",

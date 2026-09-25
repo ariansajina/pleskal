@@ -12,6 +12,10 @@ Environment variables:
   R2_SECRET_KEY: R2 secret access key
   R2_ENDPOINT_URL: R2 endpoint (https://<account_id>.r2.cloudflarestorage.com)
   DB_BACKUP_RETENTION_DAYS: Days to keep backups (default: 30)
+  SENTRY_DSN: Optional; reports failures and Sentry Crons check-ins
+  SENTRY_ENVIRONMENT, APP_VERSION: Optional Sentry environment / release tags
+  SENTRY_CRON_SCHEDULE: Optional; this service's Railway cron schedule, if it
+    differs from BACKUP_CRON_SCHEDULE below
 """
 
 import gzip
@@ -19,12 +23,51 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
+
+import sentry_sdk
+from sentry_sdk.crons import monitor
+
+if TYPE_CHECKING:
+    from sentry_sdk._types import MonitorConfig
 
 try:
     import boto3
 except ImportError:
     print("Error: boto3 not installed. Install with: pip install boto3")
     sys.exit(1)
+
+
+# Must match the backup-cron service's schedule in the Railway dashboard, or
+# Sentry will flag missed check-ins; override with SENTRY_CRON_SCHEDULE.
+BACKUP_CRON_SCHEDULE = "0 3 * * *"
+
+# Same monitor config as config/cron_monitoring.py, inlined because this script
+# runs outside Django and can't import the config package.
+MONITOR_CONFIG: MonitorConfig = {
+    "schedule": {
+        "type": "crontab",
+        "value": os.environ.get("SENTRY_CRON_SCHEDULE") or BACKUP_CRON_SCHEDULE,
+    },
+    "timezone": "UTC",
+    "checkin_margin": 30,
+    "max_runtime": 30,
+    "failure_issue_threshold": 1,
+    "recovery_threshold": 1,
+}
+
+
+def init_sentry() -> None:
+    """Initialize Sentry when SENTRY_DSN is set; otherwise its calls are no-ops."""
+    dsn = os.environ.get("SENTRY_DSN")
+    if not dsn:
+        return
+    sentry_sdk.init(
+        dsn=dsn,
+        send_default_pii=False,
+        environment=os.environ.get("SENTRY_ENVIRONMENT") or None,
+        release=os.environ.get("APP_VERSION") or None,
+    )
 
 
 def get_db_url() -> str:
@@ -137,11 +180,21 @@ def cleanup_old_backups(
         if deleted_count == 0:
             print("  No old backups to delete")
     except Exception as e:
-        # Log but don't fail the entire backup if cleanup fails
+        # Report but don't fail the entire backup if cleanup fails
+        sentry_sdk.capture_exception(e)
         print(f"  Warning: cleanup failed: {e}")
 
 
 def main() -> None:
+    """Run the backup, reporting the outcome to Sentry Crons."""
+    init_sentry()
+    # sys.exit inside raises SystemExit, which the monitor records as a failed
+    # check-in; Railway itself doesn't alert on a non-zero exit.
+    with monitor(monitor_slug="backup-db", monitor_config=MONITOR_CONFIG):
+        run_backup()
+
+
+def run_backup() -> None:
     """Main backup orchestration."""
     print("=" * 60)
     print("pleskal Database Backup")
@@ -158,7 +211,9 @@ def main() -> None:
     ]
     missing = [var for var in required_vars if not os.environ.get(var)]
     if missing:
-        print(f"Error: Missing environment variables: {', '.join(missing)}")
+        message = f"Missing environment variables: {', '.join(missing)}"
+        print(f"Error: {message}")
+        sentry_sdk.capture_message(f"Database backup failed: {message}", "error")
         sys.exit(1)
 
     db_url = get_db_url()
@@ -186,6 +241,7 @@ def main() -> None:
         print("=" * 60)
 
     except Exception as e:
+        sentry_sdk.capture_exception(e)
         print(f"\nError: {e}", file=sys.stderr)
         sys.exit(1)
 
