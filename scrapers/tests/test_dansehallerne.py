@@ -14,6 +14,7 @@ from scrapers.dansehallerne import (
     map_category,
     parse_date_string,
     parse_description,
+    parse_duration,
     parse_image_url,
     parse_meta_table,
     parse_venue_address,
@@ -85,6 +86,37 @@ def test_segment_missing_month_returns_empty():
 def test_unparseable_day_segment_returns_empty():
     # Day part is neither a single day nor a range
     assert parse_date_string("abc.5.2026, 18:00") == []
+
+
+def test_slot_list_yields_every_performance():
+    # Events with several performances list each one in full, space-separated,
+    # including several slots on the same day.
+    result = parse_date_string(
+        "30.9.2026, 18:00 30.9.2026, 18:30 2.10.2026, 18:00 3.10.2026, 17:00"
+    )
+    assert [start for start, _ in result] == [
+        _dt(2026, 9, 30, 18, 0),
+        _dt(2026, 9, 30, 18, 30),
+        _dt(2026, 10, 2, 18, 0),
+        _dt(2026, 10, 3, 17, 0),
+    ]
+
+
+def test_slot_list_skips_impossible_dates():
+    result = parse_date_string("31.9.2026, 18:00 1.10.2026, 18:00")
+    assert [start for start, _ in result] == [_dt(2026, 10, 1, 18, 0)]
+
+
+# ── parse_duration ────────────────────────────────────────────────────────────
+
+
+def test_parse_duration_formats():
+    assert parse_duration("2 hours") == datetime.timedelta(hours=2)
+    assert parse_duration("45 minutes") == datetime.timedelta(minutes=45)
+    assert parse_duration("1 hour 30 minutes") == datetime.timedelta(minutes=90)
+    assert parse_duration("approx. 70 min") == datetime.timedelta(minutes=70)
+    assert parse_duration("") is None
+    assert parse_duration("varies") is None
 
 
 # ── parse_meta_table ──────────────────────────────────────────────────────────
@@ -449,6 +481,28 @@ def test_scrape_detail_duration_sets_end_time():
     session = _mock_session(html)
     results = scrape_detail("https://dansehallerne.dk/en/public-program/x/1/", session)
     assert results[0]["end_datetime"] is not None
+
+
+def test_scrape_detail_slot_list_without_ics_buttons():
+    # With no ICS buttons every slot comes from the meta Date row, with the end
+    # derived from a minutes-only Duration.
+    html = """
+    <html><body>
+      <section class="event-meta-infos">
+        <div class="meta-info table">
+          <div class="row"><div class="key">Title</div><div class="value">Show</div></div>
+          <div class="row"><div class="key">Date</div><div class="value">30.9.2026, 18:00 30.9.2026, 18:30</div></div>
+          <div class="row"><div class="key">Duration</div><div class="value">30 minutes</div></div>
+        </div>
+      </section>
+    </body></html>
+    """
+    session = _mock_session(html)
+    results = scrape_detail("https://dansehallerne.dk/en/2026/06/24/show/", session)
+    assert [(r["start_datetime"], r["end_datetime"]) for r in results] == [
+        (_dt(2026, 9, 30, 18, 0).isoformat(), _dt(2026, 9, 30, 18, 30).isoformat()),
+        (_dt(2026, 9, 30, 18, 30).isoformat(), _dt(2026, 9, 30, 19, 0).isoformat()),
+    ]
 
 
 # ── collect_event_urls ────────────────────────────────────────────────────────

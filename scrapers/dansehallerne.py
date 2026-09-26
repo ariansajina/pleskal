@@ -49,6 +49,11 @@ HOST = "dansehallerne.dk"
 EVENT_PATH_RE = re.compile(r"/(?:en|da)/\d{4}/\d{2}/\d{2}/[^/]+/?")
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 
+# One fully spelled-out performance in the meta "Date" row: "30.9.2026, 18:00".
+# Events with several performances list them space-separated, one per slot.
+DATE_ENTRY_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{4}),\s*(\d{1,2}):(\d{2})")
+DATE_LIST_RE = re.compile(rf"(?:{DATE_ENTRY_RE.pattern}\s*)+")
+
 # Map dansehallerne type strings → pleskal EventCategory values
 CATEGORY_MAP = {
     "performance": "performance",
@@ -112,12 +117,27 @@ def parse_date_string(
       - Single date:      "1.5.2026, 18:00"
       - Day range:        "1.–3.5.2026, 18:00"        → 1,2,3 May
       - Multiple ranges:  "1.–3.5 + 8.–10.5.2026, 18:00" → 1,2,3,8,9,10 May
+      - Slot list:        "30.9.2026, 18:00 30.9.2026, 18:30 2.10.2026, 18:00"
 
-    The time applies to every generated date.  End time is derived from the
-    Duration meta field (handled by the caller), so end_dt is always None here.
+    In the range forms the time applies to every generated date.  End time is
+    derived from the Duration meta field (handled by the caller), so end_dt is
+    always None here.
     """
     # Normalise unicode dashes and whitespace
     date_str = date_str.replace("\u2013", "-").replace("\u2014", "-").strip()
+    results: list[tuple[datetime.datetime, datetime.datetime | None]] = []
+
+    if DATE_LIST_RE.fullmatch(date_str):
+        for m in DATE_ENTRY_RE.finditer(date_str):
+            day, month, year, hour, minute = (int(g) for g in m.groups())
+            try:
+                dt = datetime.datetime(
+                    year, month, day, hour, minute, tzinfo=CPH_TZ
+                ).astimezone(datetime.UTC)
+            except ValueError:
+                continue
+            results.append((dt, None))
+        return results
 
     # Extract trailing year and time: "..., HH:MM" or "....YYYY, HH:MM"
     time_m = re.search(r",\s*(\d{2}):(\d{2})\s*$", date_str)
@@ -132,8 +152,6 @@ def parse_date_string(
         return []
     year = int(year_m.group(1))
     date_str = date_str[: year_m.start()].strip()
-
-    results: list[tuple[datetime.datetime, datetime.datetime | None]] = []
 
     # Split into range segments on ' + '
     for segment in re.split(r"\s*\+\s*", date_str):
@@ -218,6 +236,20 @@ def parse_image_url(soup: BeautifulSoup) -> str:
         if candidates:
             return max(candidates, key=lambda x: x[0])[1]
     return str(img.get("src", ""))
+
+
+def parse_duration(duration_str: str) -> datetime.timedelta | None:
+    """Parse the Duration meta value ("2 hours", "45 minutes", "1 hour 30 min")."""
+    hours_m = re.search(r"(\d+)\s*(?:hours?|timer?)\b", duration_str, re.IGNORECASE)
+    minutes_m = re.search(
+        r"(\d+)\s*(?:minutes?|mins?|minutter)\b", duration_str, re.IGNORECASE
+    )
+    if not (hours_m or minutes_m):
+        return None
+    return datetime.timedelta(
+        hours=int(hours_m.group(1)) if hours_m else 0,
+        minutes=int(minutes_m.group(1)) if minutes_m else 0,
+    )
 
 
 def map_category(raw_type: str) -> str:
@@ -349,9 +381,7 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
     meta_entries = parse_date_string(date_str)
     if meta_entries:
         # Try to derive end from Duration for meta-derived entries
-        duration_str = meta.get("duration", "")
-        dur_m = re.match(r"(\d+)\s*hour", duration_str, re.IGNORECASE)
-        delta = datetime.timedelta(hours=int(dur_m.group(1))) if dur_m else None
+        delta = parse_duration(meta.get("duration", ""))
 
         ics_dates = {e[0].date() for e in ics_entries}
         for start_dt, _ in meta_entries:
