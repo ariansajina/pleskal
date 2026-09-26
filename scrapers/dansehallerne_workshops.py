@@ -34,6 +34,7 @@ from scrapers.dansehallerne import (
     collect_listing_urls,
     parse_date_string,
     parse_description,
+    parse_duration,
     parse_image_url,
     parse_meta_table,
     parse_venue_address,
@@ -129,9 +130,7 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
     date_str = meta.get("date", "")
     meta_entries = parse_date_string(date_str)
     if meta_entries:
-        duration_str = meta.get("duration", "")
-        dur_m = re.match(r"(\d+)\s*hour", duration_str, re.IGNORECASE)
-        delta = datetime.timedelta(hours=int(dur_m.group(1))) if dur_m else None
+        delta = parse_duration(meta.get("duration", ""))
 
         ics_dates = {e[0].date() for e in ics_entries}
         for start_dt, _ in meta_entries:

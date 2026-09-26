@@ -191,6 +191,23 @@ class TestImportDansehallerneCRUD:
         call_command("import_events", "dansehallerne", str(f))
         assert Event.objects.filter(external_source="dansehallerne").count() == 0
 
+    def test_cancelled_event_is_not_created(self, tmp_path):
+        f = tmp_path / "events.json"
+        _write_json([{**SAMPLE_EVENT, "title": "AFLYST! Test Dance Event"}], f)
+        call_command("import_events", "dansehallerne", str(f))
+        assert not Event.objects.filter(external_source="dansehallerne").exists()
+
+    def test_event_cancelled_after_import_is_removed(self, tmp_path):
+        # The venue keeps the page up and marks the title; the event that was
+        # imported before the cancellation goes the way of a stale event.
+        f = tmp_path / "events.json"
+        _write_json([SAMPLE_EVENT], f)
+        call_command("import_events", "dansehallerne", str(f))
+
+        _write_json([{**SAMPLE_EVENT, "title": "CANCELLED: Test Dance Event"}], f)
+        call_command("import_events", "dansehallerne", str(f))
+        assert not Event.objects.filter(external_source="dansehallerne").exists()
+
     def test_past_events_are_not_deleted_as_stale(self, tmp_path):
         # Scrapers only list upcoming events, so an event that has already
         # happened drops out of every scrape; that's not a cancellation.

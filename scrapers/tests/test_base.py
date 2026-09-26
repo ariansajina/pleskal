@@ -14,6 +14,7 @@ from scrapers.base import (
     canonical_url,
     get_crawl_delay,
     get_soup,
+    is_cancelled_title,
     make_session,
     scrape_url_list,
     write_output,
@@ -306,3 +307,36 @@ def test_canonical_url_treats_www_as_same_host():
 def test_canonical_url_without_candidates_returns_fallback():
     fallback = "https://example.dk/en/section/1/"
     assert canonical_url(_canonical_soup("<html></html>"), fallback) == fallback
+
+
+# ── is_cancelled_title ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "AFLYST! FULL ON",
+        "AFLYST FULL ON",
+        "CANCELLED: Show",
+        "CANCELED Show",
+        "[Aflyst] Show",
+        "Aflyst: Show",
+        "Cancelled – Show",
+    ],
+)
+def test_is_cancelled_title_detects_markers(title):
+    assert is_cancelled_title(title)
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Cancelled Futures",  # a real title, not a marker
+        "Aflysningen",
+        "Show (AFLYST!)",  # only a leading marker counts
+        "Queer Ballet",
+        "",
+    ],
+)
+def test_is_cancelled_title_ignores_ordinary_titles(title):
+    assert not is_cancelled_title(title)

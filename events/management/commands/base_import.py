@@ -32,6 +32,7 @@ from events.models import (
     Event,
     EventCategory,
 )
+from scrapers.base import is_cancelled_title
 
 # If a scraper returns fewer than this fraction of a source's existing future
 # events, stale deletion is skipped — a near-empty result is more likely a
@@ -239,7 +240,16 @@ class BaseEventImportCommand(BaseCommand):
         # Normalize start_datetime to UTC so keys match regardless of the
         # timezone offset in the scraped JSON vs. what Django stores in the DB.
         incoming: dict[tuple[str, datetime.datetime], dict] = {}
+        cancelled = 0
         for rec in records:
+            # A cancelled event stays listed on the venue's site with a marked
+            # title. Leaving it out of the incoming set keeps it off the
+            # calendar, and lets stale deletion remove a copy imported before
+            # the venue called it off.
+            if is_cancelled_title(str(rec.get("title", ""))):
+                self.stdout.write(f"  SKIP (cancelled) {str(rec['title'])[:60]}")
+                cancelled += 1
+                continue
             try:
                 start_dt_utc = _parse_dt(rec["start_datetime"]).astimezone(datetime.UTC)
             except ValueError:
@@ -276,7 +286,8 @@ class BaseEventImportCommand(BaseCommand):
         # deletion so the event isn't deleted right after being updated.
         rematched: set[tuple[str, datetime.datetime]] = set()
 
-        created = updated = deleted = skipped = 0
+        created = updated = deleted = 0
+        skipped = cancelled
 
         # ── Resolve images up front, outside any DB transaction ─────────────
         # Downloading + uploading images is network I/O (up to 20s per image);
