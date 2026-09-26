@@ -315,6 +315,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `title` | Max 250 chars, min 3 chars |
 | `description` | Markdown |
 | `image` | Optional; WebP, max 10 MB, 1200px max dimension, EXIF stripped |
+| `image_source_url` | Scraped events only (not editable): source URL `image` was downloaded from; the importer re-downloads when the scraped `image_url` differs (e.g. a venue replaces an "image coming soon" placeholder) |
 | `start_datetime` | Must be future on creation, max 1 year out |
 | `end_datetime` | Optional, must be after start |
 | `venue_name` | Max 200 chars |

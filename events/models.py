@@ -105,6 +105,10 @@ class Event(models.Model):
         blank=True,
         null=True,
     )
+    # Scraped events only: the source URL `image` was downloaded from, so the
+    # importer can tell when the venue swaps the image (e.g. replaces an
+    # "image coming soon" placeholder) and re-download it.
+    image_source_url = models.URLField(max_length=2000, blank=True, editable=False)
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField(blank=True, null=True)
     venue_name = models.CharField(max_length=MAX_VENUE_LENGTH)

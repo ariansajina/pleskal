@@ -1276,6 +1276,99 @@ class TestImportImageDeduplication:
         stored_files = list((tmp_path / "events").iterdir())
         assert len(stored_files) == 2
 
+    def test_shared_image_url_downloaded_once_per_run(self, settings, tmp_path):
+        settings.MEDIA_ROOT = tmp_path
+        records = [
+            {
+                **SAMPLE_EVENT,
+                "start_datetime": f"2030-06-0{day}T18:00:00+02:00",
+                "image_url": "https://dansehallerne.dk/shared.jpg",
+            }
+            for day in (1, 2, 3)
+        ]
+        f = tmp_path / "events.json"
+        _write_json(records, f)
+
+        with patch(
+            "events.management.commands.base_import._download_image",
+            return_value=("shared.jpg", _make_jpeg_bytes()),
+        ) as mock_download:
+            call_command("import_events", "dansehallerne", str(f))
+
+        assert mock_download.call_count == 1
+        assert Event.objects.exclude(image="").count() == 3
+
+
+@pytest.mark.django_db
+class TestImportImageReplacement:
+    """A source swapping an event's image (e.g. replacing a placeholder) must
+    reach the stored event, without re-downloading unchanged images."""
+
+    def _import(self, tmp_path, image_url, image_bytes):
+        f = tmp_path / "events.json"
+        _write_json([{**SAMPLE_EVENT, "image_url": image_url}], f)
+        with patch(
+            "events.management.commands.base_import._download_image",
+            return_value=("img.jpg", image_bytes),
+        ) as mock_download:
+            call_command("import_events", "dansehallerne", str(f))
+        return mock_download
+
+    def test_changed_image_url_replaces_image(self, settings, tmp_path):
+        settings.MEDIA_ROOT = tmp_path
+        placeholder_url = "https://dansehallerne.dk/image-coming-soon.jpg"
+        real_url = "https://dansehallerne.dk/real.jpg"
+        self._import(tmp_path, placeholder_url, _make_jpeg_bytes((255, 255, 0)))
+        placeholder_name = Event.objects.get().image.name
+
+        self._import(tmp_path, real_url, _make_jpeg_bytes((0, 0, 255)))
+
+        event = Event.objects.get()
+        assert event.image.name
+        assert event.image.name != placeholder_name
+        assert event.image_source_url == real_url
+
+    def test_unchanged_image_url_not_redownloaded(self, settings, tmp_path):
+        settings.MEDIA_ROOT = tmp_path
+        url = "https://dansehallerne.dk/real.jpg"
+        self._import(tmp_path, url, _make_jpeg_bytes())
+
+        mock_download = self._import(tmp_path, url, _make_jpeg_bytes())
+
+        mock_download.assert_not_called()
+
+    def test_image_without_recorded_source_is_refreshed(self, settings, tmp_path):
+        # Events imported before image_source_url existed have an image but no
+        # recorded source; the next import re-resolves and records it.
+        settings.MEDIA_ROOT = tmp_path
+        url = "https://dansehallerne.dk/real.jpg"
+        self._import(tmp_path, url, _make_jpeg_bytes((255, 255, 0)))
+        Event.objects.update(image_source_url="")
+
+        self._import(tmp_path, url, _make_jpeg_bytes((0, 0, 255)))
+
+        assert Event.objects.get().image_source_url == url
+
+    def test_failed_download_keeps_existing_image(self, settings, tmp_path):
+        settings.MEDIA_ROOT = tmp_path
+        old_url = "https://dansehallerne.dk/old.jpg"
+        self._import(tmp_path, old_url, _make_jpeg_bytes())
+        old_name = Event.objects.get().image.name
+
+        f = tmp_path / "events.json"
+        _write_json(
+            [{**SAMPLE_EVENT, "image_url": "https://dansehallerne.dk/new.jpg"}], f
+        )
+        with patch(
+            "events.management.commands.base_import._download_image",
+            return_value=None,
+        ):
+            call_command("import_events", "dansehallerne", str(f))
+
+        event = Event.objects.get()
+        assert event.image.name == old_name
+        assert event.image_source_url == old_url
+
 
 # ---------------------------------------------------------------------------
 # Stale-deletion sanity guard (Q4/2.1)

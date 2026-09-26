@@ -301,16 +301,31 @@ class BaseEventImportCommand(BaseCommand):
         # doing it before the transaction opens (rather than inside the
         # per-event atomic block) means a slow image never holds a Postgres
         # transaction open.
+        #
+        # An event's image is (re)resolved when it has none yet or when the
+        # source now serves a different image URL than the stored one came
+        # from — venues often publish an "image coming soon" placeholder and
+        # swap in the real image later. Resolutions are memoized per URL, as
+        # the performances of one production share an image.
         image_names: dict[tuple[str, datetime.datetime], str | None] = {}
-        if not dry_run:
+        resolved_images: dict[str, str | None] = {}
+        if not dry_run and not skip_images:
             for key, rec in incoming.items():
                 existing_event = existing.get(key) or self._moved_event(
                     rec, key[1], moved_index, incoming, rematched
                 )
-                has_existing_image = bool(existing_event and existing_event.image.name)
-                image_names[key] = self._resolve_image_storage_name(
-                    rec, has_existing_image, skip_images
-                )
+                image_url = rec.get("image_url", "")
+                if not image_url or (
+                    existing_event is not None
+                    and existing_event.image.name
+                    and existing_event.image_source_url == image_url
+                ):
+                    continue
+                if image_url not in resolved_images:
+                    resolved_images[image_url] = self._resolve_image_storage_name(
+                        image_url
+                    )
+                image_names[key] = resolved_images[image_url]
 
         # ── Pre-resolve venue coordinates up front, outside any DB transaction ──
         # Event.save() geocodes synchronously via Nominatim (1.1s+ per call,
@@ -423,7 +438,8 @@ class BaseEventImportCommand(BaseCommand):
                 if event is not None:
                     changed = any(getattr(event, k) != v for k, v in fields.items())
                     # An unchanged event that's still missing an image (backfill
-                    # case) needs to attach image_name too — otherwise the image
+                    # case), or whose source image changed, needs to attach
+                    # image_name too — otherwise the image
                     # resolved in the pre-pass above is downloaded/uploaded to
                     # storage every single import run and never attached to
                     # anything, wasting bandwidth and leaving an orphaned R2
@@ -440,6 +456,7 @@ class BaseEventImportCommand(BaseCommand):
                                         setattr(event, k, v)
                                     if image_name:
                                         event.image.name = image_name
+                                        event.image_source_url = rec["image_url"]
                                     event.save()
                                 self.stdout.write(
                                     self.style.SUCCESS(
@@ -465,6 +482,7 @@ class BaseEventImportCommand(BaseCommand):
                                 image_name = image_names.get(key)
                                 if image_name:
                                     event.image.name = image_name
+                                    event.image_source_url = rec["image_url"]
                                 event.save()
                             self.stdout.write(
                                 self.style.SUCCESS(f"  CREATED  {rec['title'][:60]}")
@@ -623,10 +641,8 @@ class BaseEventImportCommand(BaseCommand):
 
         return True
 
-    def _resolve_image_storage_name(
-        self, rec: dict, has_existing_image: bool, skip_images: bool
-    ) -> str | None:
-        """Download, validate, and upload the record's image; return its storage name.
+    def _resolve_image_storage_name(self, image_url: str) -> str | None:
+        """Download, validate, and upload *image_url*; return its storage name.
 
         Pure I/O — no DB writes here, deliberately: this is called *before* the
         per-event DB transaction opens so a slow/stalled image download (up to
@@ -634,14 +650,8 @@ class BaseEventImportCommand(BaseCommand):
         are stored with content-addressed filenames (events/img_<sha256>.webp)
         so that multiple events importing the same source image share one file
         in storage rather than storing independent copies. Returns None if no
-        new image is available/needed; failures are logged, never raised.
+        image could be obtained; failures are logged, never raised.
         """
-        if skip_images or has_existing_image:
-            return None
-        image_url = rec.get("image_url", "")
-        if not image_url:
-            return None
-
         # SSRF mitigation: only download from explicitly allowed domains.
         if self.allowed_image_domains:
             from urllib.parse import urlparse
