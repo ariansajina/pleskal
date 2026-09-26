@@ -14,6 +14,7 @@ from scrapers.faar302 import (
     fetch_ticket_events,
     parse_date_range,
     parse_description,
+    parse_duration,
     parse_listing,
     price_note,
     scrape,
@@ -297,6 +298,49 @@ class TestBuildRecords:
     def test_fallback_unparseable_dates(self):
         show = {**SHOW, "date_text": "Kommer snart"}
         assert build_records(show, "", None, now=NOW) == []
+
+    def test_api_duration_sets_end_time(self):
+        event = {**TICKET_EVENT, "durationInMinutes": 75}
+        records = build_records(SHOW, "", event, now=NOW)
+        assert records[0]["end_datetime"] == "2026-10-07T19:15:00+02:00"
+
+    def test_page_duration_used_when_api_says_zero(self):
+        # GAZED: the API reports 0 minutes, the page says "ca. 35 min".
+        event = {**TICKET_EVENT, "durationInMinutes": 0}
+        records = build_records(
+            SHOW, "", event, now=NOW, page_duration=datetime.timedelta(minutes=35)
+        )
+        assert records[0]["end_datetime"] == "2026-10-07T18:35:00+02:00"
+
+    def test_date_range_fallback_ignores_duration(self):
+        show = {**SHOW, "date_text": "15. September - 2. Oktober 2026"}
+        (rec,) = build_records(
+            show, "", None, now=NOW, page_duration=datetime.timedelta(minutes=105)
+        )
+        assert rec["end_datetime"] == "2026-10-02T23:59:00+02:00"
+
+
+class TestParseDuration:
+    def test_label_and_value_on_one_line(self):
+        html = "<div><p>Varighed ca. 35 min</p></div>"
+        assert parse_duration(_soup(html)) == datetime.timedelta(minutes=35)
+
+    def test_value_on_next_line(self):
+        html = "<div><strong>Varighed:</strong><br>ca. 1 time og 45 minutter</div>"
+        assert parse_duration(_soup(html)) == datetime.timedelta(minutes=105)
+
+    def test_english_label(self):
+        html = "<p>Duration 75 min.</p>"
+        assert parse_duration(_soup(html)) == datetime.timedelta(minutes=75)
+
+    def test_missing(self):
+        assert parse_duration(_soup("<p>Om forestillingen</p>")) is None
+
+
+def test_parse_listing_cleans_title():
+    html = _card("skaebnen", "Skæbnen  \u200d- en historie", "7.-10. Oktober 2026")
+    (show,) = parse_listing(_soup(html))
+    assert show["title"] == "Skæbnen - en historie"
 
     def test_defaults_now(self):
         show = {**SHOW, "date_text": "1. Januar 2099"}

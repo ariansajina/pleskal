@@ -7,6 +7,7 @@ import sys
 import zoneinfo
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 from bs4 import BeautifulSoup
 
@@ -21,6 +22,8 @@ from scrapers.kbhdanser import (
     main,
     make_dt,
     parse_dates,
+    parse_duration,
+    parse_performance_line,
     scrape,
     scrape_detail,
 )
@@ -977,3 +980,157 @@ def test_main_dry_run_flag(mock_scrape, mock_write):
 
     _, _, dry_run_arg = mock_write.call_args[0]
     assert dry_run_arg is True
+
+
+# ── Performance lines, as the live pages render them ─────────────────────────
+
+
+def test_parse_dates_reads_both_languages():
+    # An English page carrying a stray Danish date (a past premiere in the
+    # credits) must still yield its English performance dates.
+    results = parse_dates("1. december 2023\nSeptember 26, 2026 – 8:00 PM")
+    assert (datetime.date(2026, 9, 26), datetime.time(20, 0)) in results
+
+
+def test_parse_danish_date_time_after_dash():
+    results = _parse_danish_dates("26. september 2026 – kl. 20:00")
+    assert results == [(datetime.date(2026, 9, 26), datetime.time(20, 0))]
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        (
+            "September 26, 2026 – 8:00 PM",
+            [(datetime.date(2026, 9, 26), datetime.time(20, 0))],
+        ),
+        (
+            "November 21, 2026 - 2:00PM",
+            [(datetime.date(2026, 11, 21), datetime.time(14, 0))],
+        ),
+        ("May 28 2025, 7:30 PM", [(datetime.date(2025, 5, 28), datetime.time(19, 30))]),
+        (
+            "21. maj 2026 – kl. 19:30",
+            [(datetime.date(2026, 5, 21), datetime.time(19, 30))],
+        ),
+        (
+            "24. maj 2025.\xa0 kl. 15:00 og 19:30",
+            [
+                (datetime.date(2025, 5, 24), datetime.time(15, 0)),
+                (datetime.date(2025, 5, 24), datetime.time(19, 30)),
+            ],
+        ),
+        (
+            "– January 17, 2026 - 13:00",
+            [(datetime.date(2026, 1, 17), datetime.time(13, 0))],
+        ),
+        ("23. maj 2026", [(datetime.date(2026, 5, 23), None)]),
+    ],
+)
+def test_parse_performance_line(line, expected):
+    assert parse_performance_line(line) == expected
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "21.- 23. maj 2026",  # headline range above the list
+        "15.- 17. januar 2026",
+        "May 21-24, 2026",
+        (
+            "With THIS PIECE she continues a line of inquiry that premieres on "
+            "November 3, 2026 at the Sophiensæle in Berlin."
+        ),
+        "Duration: 1h15m",
+    ],
+)
+def test_parse_performance_line_ignores_non_performances(line):
+    assert parse_performance_line(line) == []
+
+
+def test_parse_duration():
+    assert parse_duration("Duration: 1h15m") == datetime.timedelta(minutes=75)
+    assert parse_duration("Varighed: 1 time og 30 min") == datetime.timedelta(
+        minutes=90
+    )
+    assert parse_duration("x\nDuration: 45 min\n") == datetime.timedelta(minutes=45)
+    assert parse_duration("No running time given") is None
+
+
+@pytest.fixture
+def fixed_today():
+    with patch("scrapers.kbhdanser.datetime") as mock_dt:
+        mock_dt.date.today.return_value = _FIXED_TODAY
+        mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+        mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
+        mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
+        mock_dt.timedelta = datetime.timedelta
+        mock_dt.UTC = datetime.UTC
+        yield
+
+
+def test_extract_performances_live_layout(fixed_today):
+    # Shape of kbhdanser.dk/en/an-accident/: the venue heading is split over
+    # two lines above the list, the list is rendered twice, and a credits
+    # heading ("ARTISTIC TEAM:") sits just before the second copy.
+    html = """
+    <html><body>
+      <h1>an Accident /a Life</h1>
+      <p>Republique /</p><p>Revolver</p>
+      <p>November 18, 2026 - 7:00PM</p>
+      <p>November 21, 2026 - 2:00PM</p>
+      <p>Duration: 1h15m</p>
+      <p>Get your ticket</p>
+      <p>ARTISTIC TEAM:​</p>
+      <p>Designer</p>
+      <p>Republique /</p><p>Revolver</p>
+      <p>November 18, 2026 - 7:00PM</p>
+      <p>November 21, 2026 - 2:00PM</p>
+    </body></html>
+    """
+    perfs = _extract_performances(_soup(html))
+    assert [(p["start_datetime"], p["end_datetime"]) for p in perfs] == [
+        ("2026-11-18T18:00:00+00:00", "2026-11-18T19:15:00+00:00"),
+        ("2026-11-21T13:00:00+00:00", "2026-11-21T14:15:00+00:00"),
+    ]
+    assert {p["venue_name"] for p in perfs} == {"Republique – Revolver"}
+    assert perfs[0]["venue_address"] == "Østerfælled Torv 37, 2100 København Ø"
+
+
+def test_extract_performances_skips_headline_range(fixed_today):
+    html = """
+    <html><body>
+      <p>ØSTRE GASVÆRK THEATRE</p>
+      <p>21.- 23. maj 2026</p>
+      <p>Østre Gasværk Teater</p>
+      <p>21. maj 2026 – kl. 19:30</p>
+      <p>23. maj 2026 – kl. 17:00</p>
+    </body></html>
+    """
+    perfs = _extract_performances(_soup(html))
+    assert [p["start_datetime"] for p in perfs] == [
+        "2026-05-21T17:30:00+00:00",
+        "2026-05-23T15:00:00+00:00",
+    ]
+
+
+def test_extract_performances_venue_per_block(fixed_today):
+    # One production touring two venues; an "EXTRA SHOW" note between lists
+    # isn't a venue, so the extra show stays at the venue above it.
+    html = """
+    <html><body>
+      <p>MUSIKHUSET AARHUS</p>
+      <p>10. januar 2027. – kl. 19:30</p>
+      <p>GET YOUR TICKET - AARHUS</p>
+      <p>Østre Gasværk Teater</p>
+      <p>January 15, 2027 - 19:30</p>
+      <p>EXTRA SHOW</p>
+      <p>– January 17, 2027 - 13:00</p>
+    </body></html>
+    """
+    perfs = _extract_performances(_soup(html))
+    assert [(p["start_datetime"][:10], p["venue_name"]) for p in perfs] == [
+        ("2027-01-10", "Musikhuset Aarhus"),
+        ("2027-01-15", "Østre Gasværk Teater"),
+        ("2027-01-17", "Østre Gasværk Teater"),
+    ]

@@ -4,9 +4,11 @@ Uses the Craft CMS GraphQL API at https://cms.sydhavnteater.dk/api to fetch
 all events, filters to upcoming only, and outputs a JSON array of event dicts
 ready for ingestion into the pleskal database.
 
-Date ranges are expanded into individual daily events.  The "When" field from
+Date ranges are expanded into individual performances.  The "When" field from
 the event's dataTable section is parsed to determine which days in the run
-have performances and at what time.
+have performances and at what time(s); "Duration" gives the end time.  The
+English columns are often left empty, so the Danish ones ("Spilletid",
+"Varighed", "Sted") are the fallback.
 
 Usage:
     uv run python scrapers/sydhavnteater.py
@@ -45,6 +47,7 @@ GRAPHQL_QUERY = """
       dateFrom
       dateTo
       ticketLink
+      text
       textEnglish
       stage { title }
       category { title }
@@ -52,10 +55,13 @@ GRAPHQL_QUERY = """
       sections {
         ... on text_Entry {
           headlineEnglish
+          text
           textEnglish
         }
         ... on dataTable_Entry {
           data {
+            title
+            text
             titleEnglish
             textEnglish
           }
@@ -119,7 +125,25 @@ _WEEKDAY_MAP = {
     "saturday": 5,
     "sun": 6,
     "sunday": 6,
+    # Danish, for the "Spilletid" fallback
+    "man": 0,
+    "mandag": 0,
+    "tir": 1,
+    "tirs": 1,
+    "tirsdag": 1,
+    "ons": 2,
+    "onsdag": 2,
+    "tor": 3,
+    "tors": 3,
+    "torsdag": 3,
+    "fre": 4,
+    "fredag": 4,
+    "lør": 5,
+    "lørdag": 5,
+    "søn": 6,
+    "søndag": 6,
 }
+_WEEKDAY_ALT = "|".join(sorted(_WEEKDAY_MAP, key=len, reverse=True))
 
 log = logging.getLogger(__name__)
 
@@ -166,37 +190,63 @@ def parse_description(event: dict) -> str:
     Extract the English description as markdown.
 
     Prefers the first non-empty textEnglish from sections[], falls back to
-    the top-level textEnglish field.  Skips dataTable sections (no textEnglish
-    on those rows in the text_Entry sense).
+    the top-level textEnglish field, then to the Danish text in the same
+    order (some events are only written up in Danish).  Skips dataTable
+    sections (no textEnglish on those rows in the text_Entry sense).
     """
-    for section in event.get("sections") or []:
-        html = (section or {}).get("textEnglish") or ""
+    for field in ("textEnglish", "text"):
+        for section in event.get("sections") or []:
+            html = (section or {}).get(field) or ""
+            if html.strip():
+                return markdownify.markdownify(html, heading_style="ATX").strip()
+        html = event.get(field) or ""
         if html.strip():
             return markdownify.markdownify(html, heading_style="ATX").strip()
-    html = event.get("textEnglish") or ""
-    if html.strip():
-        return markdownify.markdownify(html, heading_style="ATX").strip()
+    return ""
+
+
+def _extract_row(event: dict, english_title: str, danish_titles: set[str]) -> str:
+    """Return a dataTable row's value: the English text, else the Danish one.
+
+    The CMS keeps both languages on one row; editors often fill in only the
+    Danish column ("Spilletid: kl. 20.00" with an empty English "When").
+    Placeholders like "tba" count as empty.
+    """
+    for section in event.get("sections") or []:
+        for row in (section or {}).get("data") or []:
+            row = row or {}
+            title_en = (row.get("titleEnglish") or "").strip().lower()
+            title_da = (row.get("title") or "").strip().lower()
+            if title_en != english_title and title_da not in danish_titles:
+                continue
+            for field in ("textEnglish", "text"):
+                value = (row.get(field) or "").strip()
+                if value and value.lower() not in {"tba", "tbc", "tba."}:
+                    return value
     return ""
 
 
 def _extract_when(event: dict) -> str:
-    """Return the English 'When' string from the dataTable sections, or ''."""
-    for section in event.get("sections") or []:
-        rows = section.get("data") or []
-        for row in rows:
-            if (row or {}).get("titleEnglish", "").strip().lower() == "when":
-                return (row.get("textEnglish") or "").strip()
-    return ""
+    """Return the 'When' schedule string from the dataTable sections, or ''."""
+    return _extract_row(event, "when", {"spilletid", "hvornår", "tidspunkt"})
 
 
 def _extract_where(event: dict) -> str:
-    """Return the English 'Where' string from the dataTable sections, or ''."""
-    for section in event.get("sections") or []:
-        rows = section.get("data") or []
-        for row in rows:
-            if (row or {}).get("titleEnglish", "").strip().lower() == "where":
-                return (row.get("textEnglish") or "").strip()
-    return ""
+    """Return the 'Where' string from the dataTable sections, or ''."""
+    return _extract_row(event, "where", {"sted", "hvor"})
+
+
+def _extract_duration(event: dict) -> datetime.timedelta | None:
+    """Return the running time from the 'Duration' row ("1 hour and 15 min.")."""
+    value = _extract_row(event, "duration", {"varighed"}).lower()
+    hours = re.search(r"(\d+)\s*(?:hours?|timer?|t)\b", value)
+    minutes = re.search(r"(\d+)\s*(?:minutes?|minutter|min)\b", value)
+    if not (hours or minutes):
+        return None
+    return datetime.timedelta(
+        hours=int(hours.group(1)) if hours else 0,
+        minutes=int(minutes.group(1)) if minutes else 0,
+    )
 
 
 def _parse_time(token: str) -> datetime.time | None:
@@ -206,7 +256,8 @@ def _parse_time(token: str) -> datetime.time | None:
     """
     token = token.strip().lower()
     # Handle "4 pm" / "4:00 pm" / "4.00 pm"
-    am_pm_m = re.match(r"(\d{1,2})(?:[:.:](\d{2}))?\s*(am|pm)$", token)
+    # "4:00 PM — 6:00 PM": the start's am/pm is what counts, not the token end
+    am_pm_m = re.match(r"(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b", token)
     if am_pm_m:
         hour = int(am_pm_m.group(1))
         minute = int(am_pm_m.group(2) or 0)
@@ -246,8 +297,8 @@ def _parse_times_from_clause(clause: str) -> list[datetime.time]:
     # matches when the period is present (no word boundary between '.' and
     # the following space) — leaving a stray '.' that breaks time parsing.
     clause = re.sub(r"\b(?:at|kl)\.?", " ", clause, flags=re.IGNORECASE).strip()
-    # Split on separators: &, ,, +, 'and', whitespace sequences
-    tokens = re.split(r"[&,+]|\band\b", clause, flags=re.IGNORECASE)
+    # Split on separators: &, ,, +, 'and'/'og', whitespace sequences
+    tokens = re.split(r"[&,+]|\b(?:and|og)\b", clause, flags=re.IGNORECASE)
     for tok in tokens:
         t = _parse_time(tok.strip())
         if t is not None:
@@ -275,6 +326,9 @@ def parse_when(
       "Tues-Fri at 18.00"                 → Tue-Fri: [18:00]
       "Every Tuesday at 15.00 — 17.00"   → all Tue: [15:00]  (17.00 is end time)
       "Wed - Thur at 19.30, 20.00 & 20.30" → Wed/Thu: [19:30, 20:00, 20:30]
+      "Thur & Fri at 19.00 and Sat at 15.00" → Thu/Fri: [19:00], Sat: [15:00]
+      "Tors & fre kl. 19.00 og lørdag kl. 15.00" (Danish, same)
+      "Every Tuesday at 4:00 PM — 6:00 PM" → all Tue: [16:00]
     """
     if not when_str:
         return None
@@ -286,9 +340,7 @@ def parse_when(
     s = re.sub(r"\bEvery\b\s*", "", s, flags=re.IGNORECASE).strip()
 
     # If no weekday token found, treat as "all days at <time>"
-    has_weekday = bool(
-        re.search(r"\b(?:mon|tue|wed|thu|fri|sat|sun)", s, re.IGNORECASE)
-    )
+    has_weekday = bool(re.search(rf"\b(?:{_WEEKDAY_ALT})\b", s, re.IGNORECASE))
     if not has_weekday:
         # Extract times
         times = _parse_times_from_clause(s)
@@ -305,7 +357,17 @@ def parse_when(
     # We detect this by checking whether the token after the separator looks like
     # a weekday AND the preceding token also looks like a lone weekday (no time).
     # We therefore split lazily: first re-join any "orphan weekday — weekday" pairs.
-    raw_segments = re.split(r"\s+[—–-]\s+(?=[A-Za-z])", s)
+    #
+    # "Thur & Fri at 19.00 and Sat at 15.00" also starts a new clause at an
+    # "and"/"og" that follows a time; before a time ("Tue and Thu at 19.00")
+    # it just lists days.
+    s = re.sub(
+        rf"(\d)(\s*(?:am|pm)?)\s+(?:and|og)\s+(?=(?:{_WEEKDAY_ALT})\b)",
+        r"\1\2 — ",
+        s,
+        flags=re.IGNORECASE,
+    )
+    raw_segments = re.split(r"\s+[—–-]\s+(?=[A-Za-zæøåÆØÅ])", s)
 
     # Re-join consecutive segments where the first has no time (it's the range start)
     segments: list[str] = []
@@ -334,7 +396,7 @@ def parse_when(
         # Separate the weekday part from the time part.
         # Split on first occurrence of 'at' or 'kl' followed by a time.
         time_split = re.split(
-            r"\s+(?:at|kl\.?)\s+", segment, maxsplit=1, flags=re.IGNORECASE
+            r"\s+(?:at|kl\.?)\s*", segment, maxsplit=1, flags=re.IGNORECASE
         )
         if len(time_split) == 2:
             days_part, times_part = time_split
@@ -374,7 +436,7 @@ def parse_when(
                 continue
 
         # Otherwise parse as list: "Tue, Thu & Fri"
-        day_tokens = re.split(r"[,&+]|\band\b", days_part, flags=re.IGNORECASE)
+        day_tokens = re.split(r"[,&+]|\b(?:and|og)\b", days_part, flags=re.IGNORECASE)
         found_any = False
         for tok in day_tokens:
             tok = tok.strip().lower()
@@ -386,7 +448,7 @@ def parse_when(
         if not found_any:
             log.debug("Could not parse weekday segment %r in %r", days_part, when_str)
 
-    return result if result else None
+    return {wd: sorted(set(times)) for wd, times in result.items()} or None
 
 
 def _normalize_dt(iso_str: str) -> datetime.datetime:
@@ -418,12 +480,14 @@ def build_records(event: dict) -> list[dict]:
     performance day.  Returns an empty list if essential fields are missing.
 
     Date ranges (dateFrom→dateTo) are expanded day by day.  The "When" field
-    determines which weekdays have performances and at what time(s).  When
-    multiple times exist on the same day (e.g. "at 16.00 & 18.00"), a single
-    record is created with start_datetime = first time and a price_note listing
-    all times.
+    determines which weekdays have performances and at what time(s); a day
+    with several shows (e.g. "at 16.00 & 18.00") gets one record per show.
+    The "Duration" row, when present, sets each timed record's end.
     """
-    title = (event.get("title") or "").strip()
+    # CMS titles carry editor artefacts: zero-width joiners and doubled spaces
+    # ("Skæbnen  \u200d- en spøgelseshistorie i VR").
+    title = re.sub(r"[\u200b-\u200d\ufeff]", "", event.get("title") or "")
+    title = re.sub(r"\s+", " ", title).strip()
     if not title:
         log.warning("Skipping event with no title: %s", event.get("slug"))
         return []
@@ -475,6 +539,7 @@ def build_records(event: dict) -> list[dict]:
 
     when_str = _extract_when(event)
     schedule = parse_when(when_str)  # {weekday: [times]} or None
+    duration = _extract_duration(event)
 
     records: list[dict] = []
     current = start_date
@@ -494,10 +559,13 @@ def build_records(event: dict) -> list[dict]:
                 continue
 
         if times:
-            start_dt = _dt_at_time(current, times[0])
+            slots = [
+                (start_dt, start_dt + duration if duration else None)
+                for start_dt in (_dt_at_time(current, t) for t in times)
+            ]
         else:
-            # Midnight fallback
-            start_dt = datetime.datetime(
+            # Midnight fallback: an all-day placeholder, so no end time
+            midnight = datetime.datetime(
                 current.year,
                 current.month,
                 current.day,
@@ -505,24 +573,26 @@ def build_records(event: dict) -> list[dict]:
                 0,
                 tzinfo=CPH_TZ,
             ).astimezone(datetime.UTC)
+            slots = [(midnight, None)]
 
-        records.append(
-            {
-                "title": title,
-                "description": description,
-                "start_datetime": start_dt.isoformat(),
-                "end_datetime": None,
-                "venue_name": venue_name,
-                "venue_address": venue_address,
-                "category": category,
-                "is_free": is_free,
-                "is_wheelchair_accessible": False,
-                "price_note": "",
-                "source_url": source_url,
-                "external_source": EXTERNAL_SOURCE,
-                "image_url": image_url,
-            }
-        )
+        for start_dt, end_dt in slots:
+            records.append(
+                {
+                    "title": title,
+                    "description": description,
+                    "start_datetime": start_dt.isoformat(),
+                    "end_datetime": end_dt.isoformat() if end_dt else None,
+                    "venue_name": venue_name,
+                    "venue_address": venue_address,
+                    "category": category,
+                    "is_free": is_free,
+                    "is_wheelchair_accessible": False,
+                    "price_note": "",
+                    "source_url": source_url,
+                    "external_source": EXTERNAL_SOURCE,
+                    "image_url": image_url,
+                }
+            )
 
         current += datetime.timedelta(days=1)
 

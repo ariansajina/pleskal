@@ -56,6 +56,16 @@ VENUE_ADDRESSES: dict[str, tuple[str, str]] = {
         "Østre Gasværk Teater",
         "Nyborggade 17, 2100 København Ø",
     ),
+    # Republique's stages are listed as "Republique / Revolver" etc.; the more
+    # specific key has to come first for the substring match.
+    "republique / revolver": (
+        "Republique – Revolver",
+        "Østerfælled Torv 37, 2100 København Ø",
+    ),
+    "republique": (
+        "Republique",
+        "Østerfælled Torv 37, 2100 København Ø",
+    ),
     "gamle scene": (
         "Det Kongelige Teater – Gamle Scene",
         "Kongens Nytorv 9, 1017 København K",
@@ -128,11 +138,11 @@ def lookup_venue(raw_name: str) -> tuple[str, str | None]:
 
 # ── Date / time helpers ───────────────────────────────────────────────────────
 
-# Danish: "21. maj 2026. kl. 19:30"
+# Danish: "21. maj 2026. kl. 19:30", "26. september 2026 – kl. 20:00"
 _DANISH_DATE_RE = re.compile(
     r"(\d{1,2})\.\s*"
     r"(januar|februar|marts|april|maj|juni|juli|august|september|oktober|november|december)"
-    r"\s+(\d{4})\.?\s*(?:kl\.\s*(\d{1,2})[.:](\d{2}))?",
+    r"\s+(\d{4})\.?[\s,\-–]*(?:kl\.\s*(\d{1,2})[.:](\d{2}))?",
     re.IGNORECASE,
 )
 
@@ -194,11 +204,103 @@ def _parse_english_dates(
 
 
 def parse_dates(text: str) -> list[tuple[datetime.date, datetime.time | None]]:
-    """Return (date, time_or_None) pairs found in *text* (Danish or English)."""
-    results = _parse_danish_dates(text)
-    if not results:
-        results = _parse_english_dates(text)
-    return results
+    """Return (date, time_or_None) pairs found in *text* (Danish and English).
+
+    Both languages are read: the English pages mix in Danish-formatted dates
+    (a past premiere in a credits block, or a whole performance list), so
+    reading English only when no Danish date exists loses every performance.
+    """
+    return _parse_danish_dates(text) + _parse_english_dates(text)
+
+
+# The headline range above a performance list ("21.- 23. maj 2026",
+# "May 21-24, 2026") restates the listed dates; read as a date it would add a
+# phantom performance on the last day at the default time.
+_DATE_RANGE_RE = re.compile(
+    r"\d{1,2}\.?\s*[-–]\s*\d{1,2}\.\s*(?:"
+    + "|".join(DANISH_MONTHS)
+    + r")\b|(?:"
+    + "|".join(ENGLISH_MONTHS)
+    + r")\s+\d{1,2}\s*[-–]\s*\d{1,2}\b",
+    re.IGNORECASE,
+)
+_DATE_ONLY_RES = (
+    re.compile(
+        r"\d{1,2}\.\s*(?:" + "|".join(DANISH_MONTHS) + r")\s+\d{4}\.?",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:" + "|".join(ENGLISH_MONTHS) + r")\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}",
+        re.IGNORECASE,
+    ),
+)
+_TIME_RE = re.compile(r"(\d{1,2})[.:](\d{2})\s*(AM|PM)?", re.IGNORECASE)
+# What may surround a date on a performance line besides times: "kl.", "og",
+# dashes, and a short note like "EXTRA SHOW" or "Udsolgt". Anything longer is
+# a sentence that happens to mention a date, not a performance.
+_MAX_DATE_LINE_EXTRA = 30
+
+
+def _parse_time_match(m: re.Match[str]) -> datetime.time | None:
+    hour, minute = int(m.group(1)), int(m.group(2))
+    ampm = (m.group(3) or "").upper()
+    if ampm == "PM" and hour < 12:
+        hour += 12
+    elif ampm == "AM" and hour == 12:
+        hour = 0
+    try:
+        return datetime.time(hour, minute)
+    except ValueError:
+        return None
+
+
+def parse_performance_line(
+    line: str,
+) -> list[tuple[datetime.date, datetime.time | None]]:
+    """Return the performances listed on one line of a detail page.
+
+    A performance line is a date plus its time(s): "September 26, 2026 –
+    8:00 PM", "21. maj 2026 – kl. 19:30", "24. maj 2025. kl. 15:00 og 19:30"
+    (two shows). Headline ranges and prose mentioning a date yield nothing.
+    """
+    if _DATE_RANGE_RE.search(line):
+        return []
+    matches = [m for regex in _DATE_ONLY_RES for m in regex.finditer(line)]
+    if len(matches) != 1:
+        return parse_dates(line) if len(matches) > 1 else []
+    date_m = matches[0]
+    dates = parse_dates(date_m.group(0))
+    if not dates:
+        return []
+    date = dates[0][0]
+    rest = line[: date_m.start()] + " " + line[date_m.end() :]
+    times = [t for t in map(_parse_time_match, _TIME_RE.finditer(rest)) if t]
+    leftover = re.sub(r"\b(?:kl|og|and|at)\b", "", _TIME_RE.sub("", rest), flags=re.I)
+    if len(re.sub(r"[\W_]+", "", leftover)) > _MAX_DATE_LINE_EXTRA:
+        return []
+    if not times:
+        return [(date, None)]
+    return [(date, t) for t in times]
+
+
+_DURATION_LINE_RE = re.compile(r"^(?:duration|varighed)\s*:?\s*(.+)$", re.IGNORECASE)
+
+
+def parse_duration(text: str) -> datetime.timedelta | None:
+    """Return the running time from a "Duration: 1h15m" / "Varighed: 75 min" line."""
+    for line in text.split("\n"):
+        m = _DURATION_LINE_RE.match(line.strip())
+        if not m:
+            continue
+        value = m.group(1).lower()
+        hours = re.search(r"(\d+)\s*(?:hours?|timer?|h|t)(?![a-zæøå])", value)
+        minutes = re.search(r"(\d+)\s*(?:minutes?|minutter|min|m)(?![a-zæøå])", value)
+        if hours or minutes:
+            return datetime.timedelta(
+                hours=int(hours.group(1)) if hours else 0,
+                minutes=int(minutes.group(1)) if minutes else 0,
+            )
+    return None
 
 
 def make_dt(d: datetime.date, t: datetime.time | None) -> datetime.datetime:
@@ -340,86 +442,93 @@ def _extract_description(soup: BeautifulSoup) -> str:
     return "\n\n".join(paragraphs)
 
 
+_NOT_A_VENUE_RE = re.compile(
+    r"show|forestilling|premiere|ticket|billet|sold out|udsolgt|ekstra|extra",
+    re.IGNORECASE,
+)
+
+
+def _is_known_venue(line: str) -> bool:
+    lower = line.lower()
+    return any(key in lower for key in VENUE_ADDRESSES)
+
+
+def _block_venue(lines: list[str], i: int, title: str) -> str | None:
+    """Return the venue heading above the performance list starting at line *i*.
+
+    Each list sits under its venue: "GAMLE SCENE", "Østre Gasværk Teater", or a
+    heading split over two lines ("Republique /" + "Revolver"). Returns None
+    when the line above isn't a venue heading (a label such as "ARTISTIC
+    TEAM:", a note such as "EXTRA SHOW", the page title), so the list keeps
+    the venue of the one before it.
+    """
+    j = i - 1
+    while j >= 0 and _DATE_RANGE_RE.search(lines[j]):
+        j -= 1  # skip the headline range between venue and list
+    if j < 0:
+        return None
+    heading = lines[j]
+    if j > 0 and lines[j - 1].endswith("/"):
+        heading = f"{lines[j - 1]} {heading}"
+    if _is_known_venue(heading):
+        return heading
+    if (
+        len(heading) <= 40
+        and not re.search(r"\d", heading)
+        and not heading.endswith((":", ".", "!", "?"))
+        and not _NOT_A_VENUE_RE.search(heading)
+        and heading.casefold() != title.casefold()
+    ):
+        return heading
+    return None
+
+
 def _extract_performances(soup: BeautifulSoup) -> list[dict]:
     """
-    Extract performance blocks from a detail page.
+    Extract upcoming performances from a detail page.
 
-    Each block contains: venue_name, venue_address, dates (list of {date, time}).
-
-    Returns a flat list of performance dicts, one per date/time entry.
+    Returns a flat list of performance dicts (venue_name, venue_address,
+    start_datetime, end_datetime), one per date/time entry. Pages render the
+    performance list twice (desktop and mobile layouts); each start time is
+    returned once, with the venue of its first occurrence.
     """
     full_text = soup.get_text("\n")
-
-    # Parse all dates from the page text
-    date_time_pairs = parse_dates(full_text)
+    lines = [line.strip() for line in full_text.split("\n") if line.strip()]
+    h1 = soup.find("h1")
+    title = h1.get_text(strip=True) if h1 else ""
+    duration = parse_duration(full_text)
     today = datetime.date.today()
-    # Only keep future dates
-    date_time_pairs = [(d, t) for d, t in date_time_pairs if d >= today]
-
-    if not date_time_pairs:
-        return []
 
     performances: list[dict] = []
-
-    # Split text into lines and scan for venue headers + associated dates
-    lines = [line.strip() for line in full_text.split("\n") if line.strip()]
-
-    # Build a structure: list of (venue_raw, [date_time_pairs])
-    # by scanning through lines.
-    venue_blocks: list[dict] = []
+    seen: set[str] = set()
     current_venue: str | None = None
-    current_dates: list[tuple[datetime.date, datetime.time | None]] = []
-
-    def _is_venue_line(line: str) -> bool:
-        """Heuristic: line matches a known venue or is ALL CAPS location."""
-        lower = line.lower()
-        for key in VENUE_ADDRESSES:
-            if key in lower:
-                return True
-        # ALL CAPS lines of 5–60 chars that look like venue names
-        return line.isupper() and 5 <= len(line) <= 60 and not re.search(r"\d", line)
-
-    for line in lines:
-        if _is_venue_line(line):
-            # Save previous block if it has dates
-            if current_venue and current_dates:
-                venue_blocks.append({"venue": current_venue, "dates": current_dates})
-            current_venue = line
-            current_dates = []
+    in_block = False
+    for i, line in enumerate(lines):
+        pairs = parse_performance_line(line)
+        if not pairs:
+            in_block = False
             continue
-
-        # Check if line contains a date
-        pairs = _parse_danish_dates(line) or _parse_english_dates(line)
-        if pairs:
-            for d, t in pairs:
-                if d >= today:
-                    current_dates.append((d, t))
-
-    # Flush last block
-    if current_venue and current_dates:
-        venue_blocks.append({"venue": current_venue, "dates": current_dates})
-
-    # If we found venue blocks, use them; otherwise use all dates under a
-    # single default venue.
-    if venue_blocks:
-        for block in venue_blocks:
-            venue_display, venue_address = lookup_venue(block["venue"])
-            for d, t in block["dates"]:
-                performances.append(
-                    {
-                        "venue_name": venue_display,
-                        "venue_address": venue_address or "",
-                        "start_datetime": make_dt(d, t).isoformat(),
-                    }
-                )
-    else:
-        # Fallback: no venue blocks found — use all dates with no venue
-        for d, t in date_time_pairs:
+        if not in_block:
+            current_venue = _block_venue(lines, i, title) or current_venue
+            in_block = True
+        for d, t in pairs:
+            if d < today:
+                continue
+            start = make_dt(d, t)
+            if start.isoformat() in seen:
+                continue
+            seen.add(start.isoformat())
+            if current_venue:
+                venue_display, venue_address = lookup_venue(current_venue)
+            else:
+                venue_display, venue_address = "", None
+            end = start + duration if duration and t is not None else None
             performances.append(
                 {
-                    "venue_name": "",
-                    "venue_address": "",
-                    "start_datetime": make_dt(d, t).isoformat(),
+                    "venue_name": venue_display,
+                    "venue_address": venue_address or "",
+                    "start_datetime": start.isoformat(),
+                    "end_datetime": end.isoformat() if end else None,
                 }
             )
 
@@ -513,7 +622,7 @@ def scrape_detail(
                 "title": title,
                 "description": description,
                 "start_datetime": perf["start_datetime"],
-                "end_datetime": None,
+                "end_datetime": perf["end_datetime"],
                 "venue_name": perf["venue_name"],
                 "venue_address": perf["venue_address"],
                 "category": "performance",

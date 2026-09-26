@@ -44,6 +44,11 @@ log = logging.getLogger(__name__)
 SCRAPER_DISABLED_AFTER: dict[str, datetime.date] = {
     # Toaster retired 2026-05-03 — scraper off and its events removed.
     "toastercph": datetime.date(2026, 5, 3),
+    # Tårnby Park Studio's 2026 festival ended 2026-08-22. The scraper is
+    # tailored to that edition's hand-formatted page, which is rewritten from
+    # scratch each year; re-check it against the next edition before
+    # re-enabling (and reactivate the taornby account by hand).
+    "taornby": datetime.date(2026, 8, 23),
 }
 
 

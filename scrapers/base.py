@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import time
 import urllib.robotparser
 from collections.abc import Callable
@@ -24,6 +25,20 @@ HEADERS = {
 }
 
 log = logging.getLogger(__name__)
+
+# Venues mark a called-off event by prefixing its title ("AFLYST! FULL ON",
+# "CANCELLED: ...", "[Aflyst] ...") rather than taking the page down. An
+# all-caps marker is unambiguous; a mixed-case one must be followed by
+# punctuation, so a show actually titled "Cancelled Futures" still gets through.
+_CANCELLED_TITLE_RE = re.compile(
+    r"^\W*(?:(?:AFLYST|CANCELL?ED)\b"
+    r"|(?i:aflyst|cancell?ed)\s*[!:\-\u2013\u2014|)\]])"
+)
+
+
+def is_cancelled_title(title: str) -> bool:
+    """Return True if *title* carries a venue's cancellation marker."""
+    return bool(_CANCELLED_TITLE_RE.match(title))
 
 
 def make_session() -> requests.Session:
