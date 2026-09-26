@@ -32,7 +32,7 @@ def event_meta_description(event: Event) -> str:
     """What/where/when first, so search snippets answer the searcher at a glance."""
     start = date_format(timezone.localtime(event.start_datetime), "l j F Y, H:i")
     summary = f"{event.get_category_display()} at {event.venue_name}, {start}."  # ty: ignore[unresolved-attribute]
-    excerpt = plain_excerpt(str(event.description), 160)
+    excerpt = plain_excerpt(str(event.description_for("en")), 160)
     return f"{summary} {excerpt}" if excerpt else summary
 
 
@@ -73,7 +73,7 @@ def event_jsonld(event: Event, request) -> str:
 
     # The scraped-event disclaimer is for readers of the page; leaving it out
     # keeps it from becoming the event summary in search results.
-    description = _plain_text(str(event.description or ""))
+    description = _plain_text(str(event.description_for("en") or ""))
     if description:
         data["description"] = description[:500]
 

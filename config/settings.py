@@ -226,6 +226,17 @@ GEOCODING_USER_AGENT = env.str(
     default="pleskal/1.0 (https://pleskal.dk; hello.pleskal@proton.me)",
 )
 
+# Offline Danish → English translation of scraped event descriptions (see
+# events/translation.py). The model is baked into the Docker image at
+# TRANSLATION_MODEL_DIR; locally, fetch it with `manage.py
+# download_translation_model`. Disabled in DEBUG by default, like geocoding.
+TRANSLATION_ENABLED = env.bool("TRANSLATION_ENABLED", default=not DEBUG)
+TRANSLATION_MODEL_DIR = env.str(
+    "TRANSLATION_MODEL_DIR", default=str(BASE_DIR / "models" / "translate-da_en")
+)
+# Minimum lingua confidence for a paragraph's language to count as detected.
+TRANSLATION_MIN_CONFIDENCE = env.float("TRANSLATION_MIN_CONFIDENCE", default=0.9)
+
 # Map discovery view (/map/). Off by default; enable via env once the feature
 # is ready to surface.
 MAP_VIEW_ENABLED = env.bool("MAP_VIEW_ENABLED", default=False)

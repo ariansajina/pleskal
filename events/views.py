@@ -370,6 +370,7 @@ def _filtered_event_queryset(request):
             Q(title__icontains=term)
             | Q(venue_name__icontains=term)
             | Q(description__icontains=term)
+            | Q(description_en__icontains=term)
             | Q(submitted_by__display_name__icontains=term)
         )
 

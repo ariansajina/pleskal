@@ -27,6 +27,10 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "resend>=2.37.0",
     "pillow-heif>=1.5.0",
+    "ctranslate2>=4.8.2",
+    "sacremoses>=0.2.0",
+    "subword-nmt>=0.3.8",
+    "lingua-language-detector>=2.2.0",
 ]
 
 [dependency-groups]
