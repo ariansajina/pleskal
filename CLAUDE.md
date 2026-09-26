@@ -18,6 +18,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 - **Auth:** django-allauth (email verification) + django-axes (brute-force protection) + zxcvbn password strength + HMAC-peppered Argon2id hasher
 - **Registration:** Invite-only via claim codes (no open self-registration)
 - **Markdown:** django-markdownx + nh3 sanitization
+- **Translation (offline):** lingua (EN/DA language detection) + the Argos Translate da→en model run directly via CTranslate2 (no PyTorch); scraped Danish descriptions are machine-translated to English
 - **Email:** Resend via django-anymail (production), console backend (dev)
 - **Error tracking:** Sentry (optional)
 - **Static files:** WhiteNoise (production)
@@ -34,8 +35,8 @@ analytics/       # Cookieless server-side analytics (daily counters, staff /stat
 scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9)
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX + Leaflet, PWA icons, JS shims)
-scripts/         # Standalone runtime scripts (e.g. backup_db.py for the backup cron)
-conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, MAP_VIEW_ENABLED on, ANALYTICS_ENABLED off)
+scripts/         # Standalone scripts (backup_db.py for the backup cron; download_translation_model.py, run at Docker build time)
+conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, translation off, MAP_VIEW_ENABLED on, ANALYTICS_ENABLED off)
 deployment-notes.md  # Production deployment guidance
 docker-compose.yml   # Local PostgreSQL for development
 ```
@@ -50,6 +51,7 @@ events/
   feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)
   images.py            # WebP conversion, EXIF stripping, resize
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
+  translation.py       # Offline per-paragraph EN/DA detection (lingua) + Markdown-preserving da→en translation (CTranslate2)
   sharing.py           # Apple/Google calendar URL builders used by detail page
   signals.py           # Event-related signal handlers
   context_processors.py  # Template context (MAP_VIEW_ENABLED for nav; site_origin = https://SITE_DOMAIN for canonical/og:url)
@@ -64,6 +66,7 @@ events/
     import_events.py            # Generic importer: import_events <source> (config from scrapers/registry.py)
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
+    backfill_translations.py    # Detect language / translate scraped descriptions not yet processed (run by run_scrapers)
     purge_expired_events.py     # Delete past scraped events older than their retention period (run by run_scrapers)
     weekly_digest.py            # Weekly digest email (growth, feed hits, last 7 days of site traffic)
 
@@ -187,6 +190,11 @@ uv run python manage.py purge_expired_events --dry-run    # report counts only
 uv run python manage.py backfill_geocoding                  # all events without coords
 uv run python manage.py backfill_geocoding --dry-run        # print resolutions only
 uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
+
+# Description translation (also runs daily as a step of run_scrapers)
+uv run python scripts/download_translation_model.py         # one-time local model download (~80 MB, git-ignored models/)
+uv run python manage.py backfill_translations --dry-run     # print detected languages only
+uv run python manage.py import_events faar302 --skip-translation  # import without detection/translation
 ```
 
 ## Code Conventions
@@ -320,11 +328,17 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `longitude` | Optional float; populated alongside `latitude` |
 | `submitted_by` | FK -> User, nullable (SET_NULL on delete) |
 | `is_draft` | Boolean, default False; drafts are only visible to the owner |
+| `description_language` | `da` / `en` / `mixed`, blank = not processed; set for scraped events by the importer / `backfill_translations` |
+| `description_da` | Danish part of a `mixed` description (blank otherwise) |
+| `description_en` | Machine translation of a Danish description, or the English part of a `mixed` one (blank for English originals) |
+| `description_en_is_machine` | Boolean; True when `description_en` is a machine translation |
 | `created_at`, `updated_at` | Auto timestamps |
 
 Constraint: `(title, start_datetime, venue_name)` is unique — dedupes the same event arriving from two scrapers (or a scraper and a manual submission) while letting generic titles recur at the same time in different venues. `EventForm.clean()` mirrors it with a friendly error.
 
-Method: `get_display_description()` prepends scraped event disclaimer if `external_source` is set.
+Method: `get_display_description()` returns the English description (`description_for("en")`) and prepends the scraped event disclaimer if `external_source` is set.
+
+Translation: `description` always keeps the scraped original. `events.translation.process_description` detects each paragraph's language offline (lingua, EN/DA only, capitalized words/names stripped first) and: English → nothing stored; Danish → machine translation in `description_en`; both with a substantial English part (≥300 chars) → split into `description_da`/`description_en`. `description_for(lang)` is the accessor for a future bilingual site; `is_machine_translated` drives the "Automatically translated from Danish" note on the detail page. Feeds, JSON-LD, meta description and search use the English text. Failures leave the event unprocessed (blank `description_language`) so `backfill_translations` retries; the importer resets the fields when a description changes without being re-processed. Scope: scraped descriptions only (not titles or user events).
 
 Retention: past events are counted from `end_datetime` (or `start_datetime` when there is no end). **Scraped** events (non-blank `external_source`) are deleted `SCRAPED_EVENT_RETENTION_DAYS` (default 90) after they end: `expired_events_q()` in `events/models.py` matches them and `purge_expired_events` deletes them daily (as a step of `run_scrapers`). **User-published** events, drafts included, are **never deleted**; `hidden_events_q()` drops them from the event list/map `USER_EVENT_HIDE_AFTER_DAYS` (default 730) after they end, and also hides expired scraped events before the purge runs. Detail pages stay reachable. The importer's stale deletion only touches **upcoming** events, since scrapers list only what's coming up and past events would otherwise vanish on every run.
 
@@ -466,6 +480,9 @@ See `.env.example` for the full list. Key variables:
 | `MAP_VIEW_ENABLED` | Toggle the `/map/` route and nav entry (default: `false`; `conftest.py` enables it for tests) |
 | `GEOCODING_ENABLED` | Toggle Nominatim calls in `Event.save()` (default: `false` in DEBUG, `true` otherwise) |
 | `GEOCODING_USER_AGENT` | User-Agent string sent to Nominatim (required by their policy) |
+| `TRANSLATION_ENABLED` | Toggle language detection + translation of scraped descriptions (default: `false` in DEBUG, `true` otherwise; `conftest.py` disables it) |
+| `TRANSLATION_MODEL_DIR` | Translation model directory (default: `models/translate-da_en`; baked into the Docker image there) |
+| `TRANSLATION_MIN_CONFIDENCE` | Minimum lingua confidence for a paragraph's language to count (default: 0.9) |
 | `MAX_UPCOMING_EVENTS_PER_USER` | Cap on upcoming events per user (default: 100) |
 | `CLAIM_CODES_PER_BATCH` | Max codes a user can mint per month from `MyInvitesView` (default: 3) |
 | `CLAIM_CODE_EXPIRY_DAYS` | Expiry for user-minted claim codes (default: 30) |
@@ -478,7 +495,7 @@ See `.env.example` for the full list. Key variables:
 
 - **Platform:** Railway. The production environment runs app services (deployed from this repo) plus a managed database:
   - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
-  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers` (scrape + import, geocoding backfill, retention purge), `restartPolicyType = NEVER`
+  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers` (scrape + import, geocoding backfill, translation backfill, retention purge), `restartPolicyType = NEVER`
   - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
   - **digest-cron** (`railway.digest-cron.toml`): scheduled cron running `python manage.py weekly_digest`, `restartPolicyType = NEVER`. Set up manually per `deployment-notes.md` (not wired into `deploy-production.yml`, unlike the other two crons, since that requires a Railway service ID secret to be provisioned first)
   - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`

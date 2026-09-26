@@ -62,6 +62,11 @@ class Command(BaseCommand):
             help="Pass --skip-images to import commands.",
         )
         parser.add_argument(
+            "--skip-translation",
+            action="store_true",
+            help="Pass --skip-translation to import commands.",
+        )
+        parser.add_argument(
             "--only",
             action="append",
             dest="only",
@@ -90,6 +95,7 @@ class Command(BaseCommand):
 
         dry_run = options["dry_run"]
         skip_images = options["skip_images"]
+        skip_translation = options.get("skip_translation", False)
         only = set(options["only"]) if options["only"] else None
 
         if only:
@@ -179,6 +185,8 @@ class Command(BaseCommand):
                     import_kwargs["dry_run"] = True
                 if skip_images:
                     import_kwargs["skip_images"] = True
+                if skip_translation:
+                    import_kwargs["skip_translation"] = True
 
                 call_command("import_events", name, **import_kwargs)
 
@@ -219,6 +227,24 @@ class Command(BaseCommand):
                     f"backfill_geocoding FAILED:\n{traceback.format_exc()}"
                 )
             )
+
+        # ── Translation backfill ──────────────────────────────────────────
+        # Picks up scraped descriptions the importer didn't process: events
+        # imported before translation existed, with translation off, or whose
+        # translation failed. Like the geocoding backfill, failures are
+        # reported but never fail the run.
+        if not skip_translation:
+            self.stdout.write("")
+            self.stdout.write(self.style.HTTP_INFO("Backfilling translations..."))
+            try:
+                call_command("backfill_translations", dry_run=dry_run)
+            except Exception as exc:
+                self._report_to_sentry(exc, "backfill_translations")
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"backfill_translations FAILED:\n{traceback.format_exc()}"
+                    )
+                )
 
         # ── Retention ─────────────────────────────────────────────────────
         # Delete past scraped events older than SCRAPED_EVENT_RETENTION_DAYS

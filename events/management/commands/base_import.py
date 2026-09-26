@@ -32,6 +32,7 @@ from events.models import (
     Event,
     EventCategory,
 )
+from events.translation import DescriptionResult, process_description
 
 # If a scraper returns fewer than this fraction of a source's existing future
 # events, stale deletion is skipped — a near-empty result is more likely a
@@ -205,6 +206,11 @@ class BaseEventImportCommand(BaseCommand):
             action="store_true",
             help="Do not download or update event images.",
         )
+        parser.add_argument(
+            "--skip-translation",
+            action="store_true",
+            help="Do not detect the language of or translate descriptions.",
+        )
 
     def handle(self, *args, **options):
         from django.contrib.auth import get_user_model
@@ -222,6 +228,7 @@ class BaseEventImportCommand(BaseCommand):
         no_delete = options["no_delete"]
         force_delete = options["force_delete"]
         skip_images = options["skip_images"]
+        skip_translation = options.get("skip_translation", False)
 
         try:
             records = json.loads(json_path.read_text(encoding="utf-8"))
@@ -320,6 +327,31 @@ class BaseEventImportCommand(BaseCommand):
             for query in geocode_queries:
                 geocode(query)
 
+        # ── Language detection + translation, outside any DB transaction ──
+        # Translating is CPU-bound (a second or two per description), so like
+        # the pre-passes above it runs before the transaction opens. Only new
+        # or changed descriptions, or ones never processed, are handled;
+        # process_description memoizes, so the many performances sharing one
+        # description are processed once.
+        translations: dict[tuple[str, datetime.datetime], DescriptionResult] = {}
+        if (
+            not dry_run
+            and not skip_translation
+            and getattr(settings, "TRANSLATION_ENABLED", False)
+        ):
+            for key, rec in incoming.items():
+                existing_event = existing.get(key) or self._moved_event(
+                    rec, key[1], moved_index, incoming, rematched
+                )
+                description = rec.get("description", "")
+                if (
+                    existing_event is not None
+                    and existing_event.description == description
+                    and existing_event.description_language
+                ):
+                    continue
+                translations[key] = process_description(description)
+
         with transaction.atomic():
             # ── Upsert ────────────────────────────────────────────────────────
             for key, rec in incoming.items():
@@ -371,6 +403,11 @@ class BaseEventImportCommand(BaseCommand):
 
                 event = existing.get(key) or self._claim_moved_event(
                     rec, start_dt_utc, moved_index, incoming, rematched
+                )
+                fields.update(
+                    self._description_language_fields(
+                        translations.get(key), event, fields["description"]
+                    )
                 )
                 if event is not None:
                     changed = any(getattr(event, k) != v for k, v in fields.items())
@@ -468,6 +505,23 @@ class BaseEventImportCommand(BaseCommand):
             )
         else:
             self.stdout.write(self.style.SUCCESS(f"Done.  {summary}"))
+
+    @staticmethod
+    def _description_language_fields(
+        result: DescriptionResult | None, event: Event | None, description: str
+    ) -> dict:
+        """Language fields to write for a record, given its pre-pass result.
+
+        Without a result (translation off or skipped), an existing event whose
+        description changed gets its now-stale fields reset, so the English
+        page never shows a translation of an old text and backfill_translations
+        picks the event up again; otherwise the fields are left as they are.
+        """
+        if result is not None:
+            return result.as_fields()
+        if event is not None and event.description != description:
+            return DescriptionResult().as_fields()
+        return {}
 
     def _moved_event(
         self,

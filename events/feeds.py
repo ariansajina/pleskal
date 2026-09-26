@@ -84,8 +84,9 @@ def _build_vevent(event: Event) -> ICalEvent:
     if event.venue_address:
         location_parts.append(str(event.venue_address))
     vevent.add("location", ", ".join(location_parts))
-    if event.description:
-        vevent.add("description", _plain_text(str(event.description)))
+    description = event.description_for("en")
+    if description:
+        vevent.add("description", _plain_text(str(description)))
     if event.source_url:
         vevent.add("url", event.source_url)
     return vevent
@@ -121,7 +122,7 @@ class EventRSSFeed(Feed):
         return str(item.title)
 
     def item_description(self, item):
-        return _plain_text(str(item.description))
+        return _plain_text(str(item.description_for("en")))
 
     def item_link(self, item):
         from django.urls import reverse
