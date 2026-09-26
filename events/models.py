@@ -86,6 +86,12 @@ class EventCategory(models.TextChoices):
     OTHER = "other", "Other"
 
 
+class DescriptionLanguage(models.TextChoices):
+    DANISH = "da", "Danish"
+    ENGLISH = "en", "English"
+    MIXED = "mixed", "Danish and English"
+
+
 class Event(models.Model):
     objects = models.Manager()
     DoesNotExist: type[ObjectDoesNotExist]
@@ -127,6 +133,28 @@ class Event(models.Model):
         related_name="events",
     )
     is_draft = models.BooleanField(default=False)
+    # Language processing of scraped descriptions (events/translation.py).
+    # `description` always keeps the scraped original; these fields hold the
+    # per-language versions derived from it, so a bilingual site can later
+    # serve either language via description_for().
+    description_language = models.CharField(
+        max_length=5,
+        choices=DescriptionLanguage.choices,
+        blank=True,
+        help_text="Language of the original description; blank = not processed.",
+    )
+    description_da = models.TextField(
+        blank=True,
+        help_text="Danish part of a mixed-language description.",
+    )
+    description_en = models.TextField(
+        blank=True,
+        help_text=(
+            "English version: machine translation of a Danish description, "
+            "or the English part of a mixed-language one."
+        ),
+    )
+    description_en_is_machine = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -237,15 +265,42 @@ class Event(models.Model):
             return base
         return f"{base}, Copenhagen, Denmark"
 
+    def description_for(self, lang: str) -> str:
+        """Return the description in *lang* ("en" or "da"), as best available.
+
+        Falls back to the original when there's no version in that language
+        (an English-only event has no Danish text, and a Danish one whose
+        translation failed or hasn't run yet has no English).
+        """
+        language = self.description_language
+        if lang == DescriptionLanguage.ENGLISH and language in (
+            DescriptionLanguage.DANISH,
+            DescriptionLanguage.MIXED,
+        ):
+            return str(self.description_en or self.description)
+        if lang == DescriptionLanguage.DANISH and language == DescriptionLanguage.MIXED:
+            return str(self.description_da or self.description)
+        return str(self.description)
+
+    @property
+    def is_machine_translated(self) -> bool:
+        """True when the English description shown is a machine translation."""
+        return (
+            self.description_language == DescriptionLanguage.DANISH
+            and bool(self.description_en_is_machine)
+            and bool(self.description_en)
+        )
+
     def get_display_description(self):
-        """Return description with scraped event disclaimer prepended."""
+        """Return the English description with scraped event disclaimer prepended."""
         from django.conf import settings
 
+        description = self.description_for(DescriptionLanguage.ENGLISH)
         if not self.external_source or not settings.SCRAPED_EVENT_DISCLAIMER:
-            return self.description
+            return description
         disclaimer = settings.SCRAPED_EVENT_DISCLAIMER
-        if self.description:
-            return f"{disclaimer}\n\n{self.description}"
+        if description:
+            return f"{disclaimer}\n\n{description}"
         return disclaimer
 
     def save(self, *args, **kwargs):

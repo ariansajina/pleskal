@@ -39,6 +39,12 @@ ENV UV_LINK_MODE=copy
 # Omit development dependencies
 ENV UV_NO_DEV=1
 
+# Bake in the Danish → English translation model (~80 MB) used by
+# events/translation.py, so the ephemeral cron containers never download it.
+# Its own layer before the project copy, so code changes don't re-download it.
+COPY scripts/download_translation_model.py scripts/
+RUN python scripts/download_translation_model.py /app/models/translate-da_en
+
 # Copy dependency files and install
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project
