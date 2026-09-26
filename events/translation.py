@@ -52,7 +52,7 @@ _LINK_OR_URL_RE = re.compile(
 )
 _MD_LINK_RE = re.compile(r"^\[([^\]]*)\]\(([^)]*)\)$")
 # Leading block markup: headings, bullets, numbered lists, blockquotes.
-_BLOCK_PREFIX_RE = re.compile(r"^(\s*(?:(?:#{1,6}|[*+-]|\d+[.)]|>)\s+)*)(.*?)(\s*)$")
+_BLOCK_PREFIX_RE = re.compile(r"[ \t]*(?:(?:#{1,6}|[*+-]|\d+[.)]|>)[ \t]+)*")
 _WRAPPED_EMPHASIS_RE = re.compile(r"^(\*\*|__|\*|_)(.+)\1$")
 _INLINE_EMPHASIS_RE = re.compile(r"(\*\*|__)(.+?)\1")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+(?=[\"“«(\[]?[A-ZÆØÅ0-9])")
@@ -257,10 +257,15 @@ class _Batch:
 
     def add_line(self, line: str) -> list:
         """Queue one Markdown line, keeping its block prefix and hard break."""
-        match = _BLOCK_PREFIX_RE.match(line)
-        if not match or not match.group(2):
+        # Only the prefix is matched by regex; splitting off the trailing
+        # whitespace in Python keeps this linear on long whitespace runs.
+        match = _BLOCK_PREFIX_RE.match(line)  # always matches (possibly empty)
+        prefix = match.group(0) if match else ""
+        rest = line[len(prefix) :]
+        content = rest.rstrip()
+        if not content:
             return [line]
-        prefix, content, suffix = match.groups()
+        suffix = rest[len(content) :]
         wrapper = ""
         wrapped = _WRAPPED_EMPHASIS_RE.match(content)
         if wrapped:
