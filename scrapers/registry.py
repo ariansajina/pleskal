@@ -15,6 +15,7 @@ from scrapers.dansehallerne import scrape as scrape_dansehallerne
 from scrapers.dansehallerne_workshops import (
     scrape as scrape_dansehallerne_workshops,
 )
+from scrapers.faar302 import scrape as scrape_faar302
 from scrapers.hautscene import scrape as scrape_hautscene
 from scrapers.kbhdanser import scrape as scrape_kbhdanser
 from scrapers.sort_hvid import scrape as scrape_sort_hvid
@@ -130,6 +131,15 @@ _ALL_SOURCES = [
         # Poster images are served from the WordPress media library on
         # warehouse9.dk.
         allowed_image_domains=frozenset({"warehouse9.dk"}),
+    ),
+    ScraperSource(
+        name="faar302",
+        scrape=scrape_faar302,
+        scrape_kwargs={"delay": 0.5},
+        external_source="faar302",
+        default_venue_name="Teater FÅR302",
+        # Cover images come from the WordPress media library on faar302.dk.
+        allowed_image_domains=frozenset({"faar302.dk"}),
     ),
 ]
 

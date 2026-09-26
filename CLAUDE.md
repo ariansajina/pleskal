@@ -31,7 +31,7 @@ config/          # Django project settings (incl. SECURE_CSP), URLs, rate limiti
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
 events/          # Dance events app (CRUD, feeds, image processing, geocoding, map view, sharing)
 analytics/       # Cookieless server-side analytics (daily counters, staff /stats/ dashboard)
-scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9)
+scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9)
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX + Leaflet, PWA icons, JS shims)
 scripts/         # Standalone runtime scripts (e.g. backup_db.py for the backup cron)
@@ -97,6 +97,7 @@ scrapers/
   base.py                      # Shared utilities (get_soup, canonical_url, scrape_url_list, etc.)
   dansehallerne.py             # Dansehallerne scraper
   dansehallerne_workshops.py   # Dansehallerne workshops scraper
+  faar302.py                   # Teater FÅR302 scraper (front-page show cards + teaterbilletter.dk JSON API for performance times)
   hautscene.py                 # HAUT Scene scraper
   kbhdanser.py                 # KBH Danser scraper
   sort_hvid.py                 # Sort/Hvid scraper
@@ -169,7 +170,7 @@ uv run python manage.py import_events hautscene                 # default JSON: 
 uv run python manage.py import_events hautscene events.json --dry-run
 
 # Unified scraper (runs all sources; used by Railway scrape-cron service)
-uv run python manage.py run_scrapers              # run all 9 importers
+uv run python manage.py run_scrapers              # run all 10 importers
 uv run python manage.py run_scrapers --dry-run    # preview only (no DB writes)
 uv run python manage.py run_scrapers --skip-images  # skip image downloads
 uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # subset

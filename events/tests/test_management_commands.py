@@ -383,6 +383,47 @@ class TestImportWarehouse9:
 
 
 # ---------------------------------------------------------------------------
+# Command: import_events faar302
+# ---------------------------------------------------------------------------
+
+
+FAAR302_EVENT = {
+    "source_url": "https://www.faar302.dk/forestilling/gazed/",
+    "start_datetime": "2030-10-07T18:00:00+02:00",
+    "end_datetime": None,
+    "title": "Gazed",
+    "description": "En solo.",
+    "venue_name": "Teater FÅR302",
+    "venue_address": "Toldbodgade 6",
+    "category": "performance",
+    "is_free": False,
+    "is_wheelchair_accessible": False,
+    "price_note": "40–165 kr.",
+    "image_url": "",
+}
+
+
+@pytest.mark.django_db
+class TestImportFaar302:
+    def test_creates_event_under_faar302_publisher(self, tmp_path):
+        system_user = UserModel.objects.create(
+            email="system.faar302@pleskal.internal",
+            display_name="FÅR302",
+            display_name_slug="faar302",
+            is_system_account=True,
+        )
+        f = tmp_path / "events.json"
+        _write_json([FAAR302_EVENT], f)
+        call_command("import_events", "faar302", str(f))
+        event = Event.objects.get(external_source="faar302")
+        assert event.title == "Gazed"
+        assert event.venue_name == "Teater FÅR302"
+        assert event.price_note == "40–165 kr."
+        assert event.submitted_by == system_user
+        assert event.submitted_by.public_name == "FÅR302"
+
+
+# ---------------------------------------------------------------------------
 # Command: dry-run
 # ---------------------------------------------------------------------------
 
