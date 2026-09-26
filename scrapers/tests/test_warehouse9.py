@@ -66,6 +66,30 @@ def test_to_utc_converts_cph_datetime():
     assert result == datetime.datetime(2026, 6, 4, 15, 0, tzinfo=datetime.UTC)
 
 
+def test_zoned_start_is_read_as_copenhagen_wall_clock():
+    # The Qspace series is saved as Europe/London, but the site shows (and the
+    # copy says) 18:30 Copenhagen time.
+    feed = (
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//EN\r\n"
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Europe/London:20261001T183000\r\n"
+        "DTEND;TZID=Europe/London:20261001T203000\r\n"
+        "SUMMARY:Get Weird With Wrestling\r\n"
+        "URL:https://warehouse9.dk/event/get-weird-with-wrestling/2026-10-01/\r\n"
+        "END:VEVENT\r\nEND:VCALENDAR"
+    )
+    record = build_record(next(iter(Calendar.from_ical(feed).walk("VEVENT"))))
+    assert record is not None
+    assert record["start_datetime"] == "2026-10-01T16:30:00+00:00"
+    assert record["end_datetime"] == "2026-10-01T18:30:00+00:00"
+
+
+def test_explicit_utc_start_is_kept():
+    start = datetime.datetime(2026, 10, 1, 16, 30, tzinfo=datetime.UTC)
+    record = build_record(_vevent(start=start))
+    assert record is not None
+    assert record["start_datetime"] == "2026-10-01T16:30:00+00:00"
+
+
 def test_to_utc_handles_bare_date():
     result = _to_utc(datetime.date(2026, 6, 4))  # midnight CPH → 22:00 prev day UTC
     assert result == datetime.datetime(2026, 6, 3, 22, 0, tzinfo=datetime.UTC)
@@ -126,6 +150,31 @@ def test_category_party_is_social():
     assert _determine_category("Summer Party", "") == "social"
 
 
+def test_category_open_stage_is_performance_despite_workshop_copy():
+    assert (
+        _determine_category(
+            "QUEERMASH X OPEN STAGE", "Sign up for the workshop before the show."
+        )
+        == "performance"
+    )
+
+
+def test_category_residency_title_is_other():
+    assert (
+        _determine_category("Animated Sickwalker - Qlab artistic development", "")
+        == "other"
+    )
+
+
+def test_category_workshop_copy_beats_residency_mention():
+    assert (
+        _determine_category(
+            "Daydream Dialogues", "Workshops led by our residency artist."
+        )
+        == "workshop"
+    )
+
+
 def test_category_title_beats_body_keyword():
     # A stray "workshop" in the body must not override the "party" title.
     assert _determine_category("Summer Party", "We also run a workshop") == "social"
@@ -140,6 +189,26 @@ def test_is_free_true_when_text_says_free():
 
 def test_is_free_false_otherwise():
     assert _is_free("X", "Tickets 120 DKK") is False
+
+
+def test_is_free_ignores_the_access_note():
+    # Every event ends with this note; it is about step-free access.
+    description = (
+        "A wrestling workshop.\n\nAccess Information\n\nWarehouse9 has level "
+        "free entrance to the space and a gender neutral accessible toilet."
+    )
+    assert _is_free("Get Weird With Wrestling", description) is False
+
+
+def test_is_free_ignores_feel_free():
+    description = (
+        "Two ticket options, please feel free to choose the one that suits you."
+    )
+    assert _is_free("Open Stage", description) is False
+
+
+def test_is_free_reads_free_workshops():
+    assert _is_free("X", "How much does it cost? The workshops are free.") is True
 
 
 # ── _extract_image_url ────────────────────────────────────────────────────────

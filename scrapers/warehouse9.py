@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import re
 import zoneinfo
 
 from icalendar import Calendar
@@ -45,18 +46,32 @@ _CATEGORY_KEYWORDS: list[tuple[str, str]] = [
     ("work sharing", "worksharing"),
     ("worksharing", "worksharing"),
     ("showing", "worksharing"),
+    # Before "workshop": an open stage's description mentions its workshops.
+    ("open stage", "performance"),
     ("workshop", "workshop"),
     ("artist talk", "talk"),
     ("talk", "talk"),
     ("open practice", "openpractice"),
     ("open studio", "openpractice"),
     ("open call", "other"),
+    # A residency's title says so ("Qlab artistic development"); after the
+    # public formats, since workshop copy often mentions the host residency.
+    ("residency", "other"),
+    ("artistic development", "other"),
     ("party", "social"),
     ("celebration", "social"),
 ]
 
-# Words that signal free admission anywhere in the event text.
-_FREE_KEYWORDS = ("free", "gratis", "no charge", "free of charge")
+# Free admission: "The workshops are free", "Entrance: Free".  Not "level
+# free entrance" / "step-free" (access), nor "please feel free to choose".
+_FREE_RE = re.compile(
+    r"(?<!feel )(?<!level )(?<!step-)(?<!step )(?<!barrier-)\bfree\b(?!\s+to\b)"
+    r"|\bgratis\b|\bno charge\b",
+    re.IGNORECASE,
+)
+# Every event ends with the same access note ("Warehouse9 has level free
+# entrance to the space ..."), which says nothing about the price.
+_ACCESS_SECTION_RE = re.compile(r"\baccess(?:ibility)? information\b", re.IGNORECASE)
 
 log = logging.getLogger(__name__)
 
@@ -78,13 +93,22 @@ def fetch_calendar() -> Calendar:
 def _to_utc(value: datetime.datetime | datetime.date) -> datetime.datetime:
     """Normalise an iCal DTSTART/DTEND value to an aware UTC datetime.
 
-    Datetimes carry a timezone (Europe/Copenhagen) from the feed.  Bare dates
-    (all-day events) are interpreted as midnight Copenhagen time.
+    Datetimes carry the event's timezone from the feed, but that is an
+    editor's per-event setting and not always right: the Qspace series is
+    saved as Europe/London while the site shows (and the copy says) the
+    Copenhagen wall-clock time, "18:30–20:30".  Every event is in Copenhagen,
+    so a zoned time is read as Copenhagen wall-clock time; only an explicit
+    UTC time is converted.  Bare dates (all-day events) are interpreted as
+    midnight Copenhagen time.
     """
     if isinstance(value, datetime.datetime):
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=CPH_TZ)
-        return value.astimezone(datetime.UTC)
+        if (
+            value.tzinfo is not None
+            and value.utcoffset() == datetime.timedelta(0)
+            and (str(value.tzinfo) in {"UTC", "UTC+00:00", "Etc/UTC"})
+        ):
+            return value.astimezone(datetime.UTC)
+        return value.replace(tzinfo=CPH_TZ).astimezone(datetime.UTC)
     # datetime.date (all-day) → midnight CPH
     return datetime.datetime(
         value.year, value.month, value.day, tzinfo=CPH_TZ
@@ -136,8 +160,8 @@ def _determine_category(title: str, description: str) -> str:
 
 def _is_free(title: str, description: str) -> bool:
     """Return True if the event text signals free admission."""
-    haystack = f"{title}\n{description}".lower()
-    return any(keyword in haystack for keyword in _FREE_KEYWORDS)
+    description = _ACCESS_SECTION_RE.split(description, maxsplit=1)[0]
+    return bool(_FREE_RE.search(f"{title}\n{description}"))
 
 
 def _extract_image_url(component) -> str:
