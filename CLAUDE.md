@@ -103,8 +103,8 @@ scrapers/
   kbhdanser.py                 # KBH Danser scraper
   sort_hvid.py                 # Sort/Hvid scraper
   sydhavnteater.py             # Sydhavn Teater scraper
-  taornby.py                   # Tårnby Park Studio festival scraper (single hand-formatted page, overfit to the current edition)
-  toastercph.py                # Toaster CPH scraper
+  taornby.py                   # Tårnby Park Studio festival scraper (single hand-formatted page, overfit to the 2026 edition; retired via SCRAPER_DISABLED_AFTER)
+  toastercph.py                # Toaster CPH scraper (retired via SCRAPER_DISABLED_AFTER)
   warehouse9.py                # Warehouse9 scraper (Tribe Events iCal feed)
   registry.py                  # Scraper source registry (scrape fn, external_source, image-domain allowlist, etc.) consumed by run_scrapers + import_events
   sources.json                 # Source account config (external_source, display_name, email, website) for all scrapers
