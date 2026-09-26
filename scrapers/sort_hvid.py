@@ -6,6 +6,7 @@ array of event dicts ready for ingestion into the pleskal database.
 Each detail page carries a date range and a recurring weekly schedule, e.g.:
     24. April 2026 - 22. May 2026
     Tuesday-Friday @ 20h00, Saturday @ 17h00
+    Monday-Saturday 17h00, 18h15, 19h45, 21h00   (several shows a day)
 
 The scraper expands this into one record per matching performance date.
 
@@ -40,7 +41,9 @@ BASE_URL = "https://sort-hvid.dk"
 PROGRAM_URL = f"{BASE_URL}/en/program-en/"
 EXTERNAL_SOURCE = "sort-hvid"
 VENUE_NAME = "Sort/Hvid"
-VENUE_ADDRESS = "Valdemarsgade 35, 1665 København V"
+# Fallback only: each page names the address in its first <strong>
+# ("Sort/Hvid, Staldgade 26-30, 1699 Copenhagen V (The Meat Packing District)").
+VENUE_ADDRESS = "Staldgade 26-30, 1699 København V"
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 
 # Day-name → Python weekday number (Monday=0)
@@ -103,94 +106,158 @@ def _parse_date(s: str) -> datetime.date | None:
         return None
 
 
-def _parse_schedule(schedule_str: str) -> dict[int, datetime.time]:
+def _parse_schedule(schedule_str: str) -> dict[int, list[datetime.time]]:
     """
-    Parse a recurring schedule string into a weekday→time mapping.
+    Parse a recurring schedule string into a weekday→show-times mapping.
 
     Handles patterns like:
         "Tuesday-Friday @ 20h00, Saturday @ 17h00"
         "Wednesday @ 19h00"
-        "Tuesday, Thursday @ 20h00"
+        "Monday-Saturday 17h00, 18h15, 19h45, 21h00"  (several shows a day)
         "16h30" (single one-off event with no weekday name)
+        "Performance at 20h00, the bar opens at 19h00"
 
     Each comma-separated segment may have:
       - A day range:  "Tuesday-Friday"  → expand to all weekdays in range
-      - A day list:   "Tuesday, Thursday" is handled by splitting on comma first
       - A single day: "Saturday"
-      - No day at all: a bare time, used for one-off events with a single
-        performance date (the caller narrows this down via the actual date
-        range, so mapping it to every weekday is safe)
+      - Nothing but a time: a further show on the days named before it, or,
+        with no day named yet, a time for every day (one-off events; the
+        caller narrows it down via the actual dates)
+      - Prose ("Performance at"): the first such time is taken as the show
+        time; later ones ("the bar opens at 19h00") are not shows
 
-    Returns a dict mapping Python weekday ints (Mon=0) to datetime.time.
+    Returns a dict mapping Python weekday ints (Mon=0) to sorted show times.
     Falls back to Mon–Fri at 20:00 if the string cannot be parsed at all.
     """
-    result: dict[int, datetime.time] = {}
-    bare_time: datetime.time | None = None
+    result: dict[int, list[datetime.time]] = {}
+    bare_times: list[datetime.time] = []
+    current_days: list[int] = []
 
-    # Split on comma; each segment looks like "Day[range] @ HHhMM" or "Day[range] HHHxx"
-    segments = [seg.strip() for seg in schedule_str.split(",")]
-    for seg in segments:
+    for seg in (seg.strip() for seg in schedule_str.split(",")):
         time_match = re.search(r"(?:@\s*)?(\d{1,2})[Hh:.](\d{2})", seg)
         if not time_match:
             continue
-        t = datetime.time(int(time_match.group(1)), int(time_match.group(2)))
+        try:
+            t = datetime.time(int(time_match.group(1)), int(time_match.group(2)))
+        except ValueError:
+            continue
 
         # Day spec is everything before the time (strip trailing @ or whitespace)
         day_spec = seg[: time_match.start()].strip().rstrip("@").strip()
+        days = _parse_day_spec(day_spec)
 
-        if not day_spec:
-            # No weekday name present at all (e.g. a one-off event's bare time)
-            bare_time = t
-        elif "-" in day_spec:
-            # Range: "Tuesday-Friday"
-            parts = [p.strip().lower() for p in day_spec.split("-", 1)]
-            start_wd = WEEKDAY_MAP.get(parts[0])
-            end_wd = WEEKDAY_MAP.get(parts[1])
-            if start_wd is not None and end_wd is not None:
-                # Handle wrap-around (e.g. Friday-Sunday)
-                if start_wd <= end_wd:
-                    for wd in range(start_wd, end_wd + 1):
-                        result[wd] = t
-                else:
-                    for wd in list(range(start_wd, 7)) + list(range(0, end_wd + 1)):
-                        result[wd] = t
-        else:
-            wd = WEEKDAY_MAP.get(day_spec.lower())
-            if wd is not None:
-                result[wd] = t
+        if days:
+            current_days = days
+        elif day_spec and (bare_times or result):
+            continue  # prose after the show time, e.g. "the bar opens at 19h00"
+        if not days and not current_days:
+            bare_times.append(t)
+            continue
+        for wd in current_days:
+            result.setdefault(wd, []).append(t)
 
-    if not result and bare_time is not None:
-        result = {wd: bare_time for wd in range(7)}
+    if not result and bare_times:
+        result = {wd: list(bare_times) for wd in range(7)}
 
     if not result:
         log.warning(
             "Could not parse schedule %r; defaulting to Mon–Fri 20:00", schedule_str
         )
         default_time = datetime.time(20, 0)
-        result = {wd: default_time for wd in range(5)}
+        result = {wd: [default_time] for wd in range(5)}
 
-    return result
+    return {wd: sorted(set(times)) for wd, times in result.items()}
+
+
+def _parse_day_spec(day_spec: str) -> list[int]:
+    """Return the weekdays named by "Tuesday-Friday", "Saturday", etc."""
+    if "-" in day_spec:
+        parts = [p.strip().lower() for p in day_spec.split("-", 1)]
+        start_wd = WEEKDAY_MAP.get(parts[0])
+        end_wd = WEEKDAY_MAP.get(parts[1])
+        if start_wd is None or end_wd is None:
+            return []
+        # Handle wrap-around (e.g. Friday-Sunday)
+        if start_wd <= end_wd:
+            return list(range(start_wd, end_wd + 1))
+        return list(range(start_wd, 7)) + list(range(0, end_wd + 1))
+    wd = WEEKDAY_MAP.get(day_spec.lower())
+    return [wd] if wd is not None else []
 
 
 def _expand_dates(
     start: datetime.date,
     end: datetime.date,
-    schedule: dict[int, datetime.time],
+    schedule: dict[int, list[datetime.time]],
 ) -> list[tuple[datetime.date, datetime.time]]:
     """
     Expand a date range + schedule into a list of (date, time) pairs.
 
-    Iterates every date from *start* to *end* inclusive and yields those
-    whose weekday appears in *schedule*.
+    Iterates every date from *start* to *end* inclusive and yields one pair
+    per show time on the dates whose weekday appears in *schedule*.
     """
     pairs: list[tuple[datetime.date, datetime.time]] = []
     current = start
     one_day = datetime.timedelta(days=1)
     while current <= end:
-        if current.weekday() in schedule:
-            pairs.append((current, schedule[current.weekday()]))
+        for t in schedule.get(current.weekday(), []):
+            pairs.append((current, t))
         current += one_day
     return pairs
+
+
+_ENGLISH_MONTHS = {
+    datetime.date(2000, m, 1).strftime("%B").lower(): m for m in range(1, 13)
+}
+_MONTH_ALT = "|".join(_ENGLISH_MONTHS)
+# "13th November", "13. November", "November 13th"
+_DAY_MONTH_RE = re.compile(
+    rf"\b(\d{{1,2}})(?:st|nd|rd|th|\.)?\s+({_MONTH_ALT})\b"
+    rf"|\b({_MONTH_ALT})\s+(\d{{1,2}})(?:st|nd|rd|th)?\b",
+    re.IGNORECASE,
+)
+
+
+def _dates_named_in(
+    text: str, start: datetime.date, end: datetime.date
+) -> list[datetime.date]:
+    """Return the dates between *start* and *end* that *text* names by day and month.
+
+    A run with no weekly schedule ("21h00" over 13–27 November) is not a
+    nightly run: the copy lists the actual evenings ("FUENSANTA (MX) 13th
+    November"). Dates are matched to a year within the run.
+    """
+    found: set[datetime.date] = set()
+    for m in _DAY_MONTH_RE.finditer(text):
+        day = int(m.group(1) or m.group(4))
+        month = _ENGLISH_MONTHS[(m.group(2) or m.group(3)).lower()]
+        for year in {start.year, end.year}:
+            try:
+                d = datetime.date(year, month, day)
+            except ValueError:
+                continue
+            if start <= d <= end:
+                found.add(d)
+    return sorted(found)
+
+
+_DURATION_RE = re.compile(r"^(\d+)(?:\s*[-–]\s*(\d+))?\s*min", re.IGNORECASE)
+
+
+def _parse_duration(text: str) -> datetime.timedelta | None:
+    """Parse a running time like "45 min." or "60-70 min." (upper bound)."""
+    m = _DURATION_RE.match(text.strip())
+    if not m:
+        return None
+    return datetime.timedelta(minutes=int(m.group(2) or m.group(1)))
+
+
+def _parse_address(text: str) -> str | None:
+    """Return the street address from "Sort/Hvid, Staldgade 26-30, 1699 ... (…)"."""
+    if not text.lower().startswith("sort/hvid,"):
+        return None
+    address = re.sub(r"\s*\([^)]*\)\s*$", "", text.split(",", 1)[1]).strip()
+    return address or None
 
 
 def _earliest_program_time(text: str) -> datetime.time | None:
@@ -246,14 +313,21 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
     # Date range matches: "24. April 2026 - 22. May 2026"
     # Schedule matches:   "Tuesday-Friday @ 20h00, Saturday @ 17h00"
     #                  or "Tuesday-Thursday 20H00, Friday 17H00, Saturday 16H00"
+    # The address and running time are <strong> tags in the same info block.
     date_range_str = ""
     schedule_str = ""
+    address = None
+    duration = None
     for strong in soup.find_all("strong"):
         text = strong.get_text(" ", strip=True)
+        if address is None and (address := _parse_address(text)):
+            continue
         if not date_range_str and re.search(r"\d+\.\s+\w+\s+\d{4}", text):
             date_range_str = text
         elif not schedule_str and re.search(r"\d+[Hh:.]\d+", text):
             schedule_str = text
+        elif duration is None:
+            duration = _parse_duration(text)
 
     if not date_range_str:
         log.warning("No date range found at %s", url)
@@ -285,8 +359,18 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
 
     # Parse schedule; fall back to the earliest time mentioned in the
     # description (e.g. a "PROGRAM" itinerary), else start_date at 20:00
+    named_dates: list[datetime.date] = []
     if schedule_str:
         schedule = _parse_schedule(schedule_str)
+        # A multi-day run with a bare time and no weekdays plays on the
+        # evenings the copy names ("FUENSANTA (MX) 13th November"), not every
+        # night of the range.
+        if not re.search("|".join(WEEKDAY_MAP), schedule_str, re.IGNORECASE):
+            named_dates = _dates_named_in(
+                content_el.get_text(" ", strip=True) if content_el else "",
+                start_date,
+                end_date,
+            )
     else:
         fallback_time = _earliest_program_time(description) or datetime.time(20, 0)
         log.warning(
@@ -294,10 +378,15 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
             url,
             fallback_time,
         )
-        schedule = {start_date.weekday(): fallback_time}
+        schedule = {start_date.weekday(): [fallback_time]}
 
-    # Expand into individual (date, time) pairs
-    date_time_pairs = _expand_dates(start_date, end_date, schedule)
+    # Expand into individual (date, time) pairs. A bare-time schedule maps
+    # every weekday to the same times, so any weekday's entry will do.
+    if named_dates:
+        times = schedule[named_dates[0].weekday()]
+        date_time_pairs = [(d, t) for d in named_dates for t in times]
+    else:
+        date_time_pairs = _expand_dates(start_date, end_date, schedule)
     if not date_time_pairs:
         log.warning(
             "Schedule %r produced no dates in range %s–%s at %s",
@@ -326,18 +415,19 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
 
     # ── Venue ─────────────────────────────────────────────────────────────────
     venue_name = VENUE_NAME[:MAX_VENUE_LENGTH]
-    venue_address = VENUE_ADDRESS[:MAX_VENUE_LENGTH]
+    venue_address = (address or VENUE_ADDRESS)[:MAX_VENUE_LENGTH]
 
     # ── Build one record per performance date ─────────────────────────────────
     records: list[dict] = []
     for perf_date, perf_time in date_time_pairs:
         start_dt = _combine_dt(perf_date, perf_time)
+        end_dt = start_dt + duration if duration else None
         records.append(
             {
                 "title": title,
                 "description": description,
                 "start_datetime": start_dt.isoformat(),
-                "end_datetime": None,
+                "end_datetime": end_dt.isoformat() if end_dt else None,
                 "venue_name": venue_name,
                 "venue_address": venue_address,
                 "category": category,
