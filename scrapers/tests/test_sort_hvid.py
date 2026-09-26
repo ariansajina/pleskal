@@ -68,30 +68,30 @@ def test_parse_date_wrong_format_returns_none():
 
 def test_parse_schedule_single_day():
     result = _parse_schedule("Saturday @ 17h00")
-    assert result == {5: datetime.time(17, 0)}
+    assert result == {5: [datetime.time(17, 0)]}
 
 
 def test_parse_schedule_day_range():
     result = _parse_schedule("Tuesday-Friday @ 20h00")
     assert result == {
-        1: datetime.time(20, 0),
-        2: datetime.time(20, 0),
-        3: datetime.time(20, 0),
-        4: datetime.time(20, 0),
+        1: [datetime.time(20, 0)],
+        2: [datetime.time(20, 0)],
+        3: [datetime.time(20, 0)],
+        4: [datetime.time(20, 0)],
     }
 
 
 def test_parse_schedule_multiple_segments():
     result = _parse_schedule("Tuesday-Friday @ 20h00, Saturday @ 17h00")
-    assert result[1] == datetime.time(20, 0)
-    assert result[4] == datetime.time(20, 0)
-    assert result[5] == datetime.time(17, 0)
+    assert result[1] == [datetime.time(20, 0)]
+    assert result[4] == [datetime.time(20, 0)]
+    assert result[5] == [datetime.time(17, 0)]
     assert 6 not in result  # Sunday not included
 
 
 def test_parse_schedule_uppercase_h():
     result = _parse_schedule("Wednesday 19H30")
-    assert result == {2: datetime.time(19, 30)}
+    assert result == {2: [datetime.time(19, 30)]}
 
 
 def test_parse_schedule_wraparound_range():
@@ -107,17 +107,17 @@ def test_parse_schedule_bare_time_no_weekday():
     # weekday name — should map to every weekday so the caller's actual date
     # range narrows it down to the single real performance date.
     result = _parse_schedule("16h30")
-    assert result == {wd: datetime.time(16, 30) for wd in range(7)}
+    assert result == {wd: [datetime.time(16, 30)] for wd in range(7)}
 
 
 def test_parse_schedule_bare_time_colon_format():
     result = _parse_schedule("16:30")
-    assert result == {wd: datetime.time(16, 30) for wd in range(7)}
+    assert result == {wd: [datetime.time(16, 30)] for wd in range(7)}
 
 
 def test_parse_schedule_bare_time_period_format():
     result = _parse_schedule("16.30")
-    assert result == {wd: datetime.time(16, 30) for wd in range(7)}
+    assert result == {wd: [datetime.time(16, 30)] for wd in range(7)}
 
 
 def test_parse_schedule_invalid_falls_back_to_default():
@@ -125,7 +125,34 @@ def test_parse_schedule_invalid_falls_back_to_default():
     # Default: Mon-Fri at 20:00
     assert len(result) == 5
     for wd in range(5):
-        assert result[wd] == datetime.time(20, 0)
+        assert result[wd] == [datetime.time(20, 0)]
+
+
+def test_parse_schedule_several_shows_a_day():
+    # sort-hvid.dk DEATH SUITE: four shows a day, the times after the first
+    # belonging to the days named before them.
+    result = _parse_schedule("Monday-Saturday 17h00, 18h15, 19h45, 21h00")
+    times = [
+        datetime.time(17, 0),
+        datetime.time(18, 15),
+        datetime.time(19, 45),
+        datetime.time(21, 0),
+    ]
+    assert result == {wd: times for wd in range(6)}
+
+
+def test_parse_schedule_prose_takes_the_show_time():
+    # KLUB KREATUR: the bar opening is not a performance.
+    result = _parse_schedule("Performance at 20h00, the bar opens at 19h00")
+    assert result == {wd: [datetime.time(20, 0)] for wd in range(7)}
+
+
+def test_parse_schedule_spaced_day_range():
+    result = _parse_schedule("Monday - Thursday 20h00, Friday 17h00, Saturday 16h00")
+    assert result[0] == [datetime.time(20, 0)]
+    assert result[3] == [datetime.time(20, 0)]
+    assert result[4] == [datetime.time(17, 0)]
+    assert result[5] == [datetime.time(16, 0)]
 
 
 def test_parse_schedule_empty_falls_back_to_default():
@@ -161,7 +188,7 @@ def test_expand_dates_single_day():
     # April 24, 2026 is a Friday (weekday=4)
     start = datetime.date(2026, 4, 24)
     end = datetime.date(2026, 4, 24)
-    schedule = {4: datetime.time(20, 0)}
+    schedule = {4: [datetime.time(20, 0)]}
     result = _expand_dates(start, end, schedule)
     assert len(result) == 1
     assert result[0] == (start, datetime.time(20, 0))
@@ -171,7 +198,7 @@ def test_expand_dates_range():
     # One week: Mon-Sun, only select Mon (0) and Wed (2)
     start = datetime.date(2026, 4, 20)  # Monday
     end = datetime.date(2026, 4, 26)  # Sunday
-    schedule = {0: datetime.time(18, 0), 2: datetime.time(19, 0)}
+    schedule = {0: [datetime.time(18, 0)], 2: [datetime.time(19, 0)]}
     result = _expand_dates(start, end, schedule)
     assert len(result) == 2
     dates = [r[0] for r in result]
@@ -179,11 +206,20 @@ def test_expand_dates_range():
     assert datetime.date(2026, 4, 22) in dates  # Wednesday
 
 
+def test_expand_dates_several_times_a_day():
+    day = datetime.date(2026, 4, 20)  # Monday
+    schedule = {0: [datetime.time(17, 0), datetime.time(21, 0)]}
+    assert _expand_dates(day, day, schedule) == [
+        (day, datetime.time(17, 0)),
+        (day, datetime.time(21, 0)),
+    ]
+
+
 def test_expand_dates_no_matching_days():
     # Range is only Monday, but schedule only has Saturday
     start = datetime.date(2026, 4, 20)  # Monday
     end = datetime.date(2026, 4, 20)
-    schedule = {5: datetime.time(17, 0)}  # Saturday only
+    schedule = {5: [datetime.time(17, 0)]}  # Saturday only
     result = _expand_dates(start, end, schedule)
     assert result == []
 
@@ -191,7 +227,7 @@ def test_expand_dates_no_matching_days():
 def test_expand_dates_end_before_start_returns_empty():
     start = datetime.date(2026, 4, 25)
     end = datetime.date(2026, 4, 20)
-    schedule = {0: datetime.time(20, 0)}
+    schedule = {0: [datetime.time(20, 0)]}
     result = _expand_dates(start, end, schedule)
     assert result == []
 
@@ -476,3 +512,78 @@ def test_scrape_detail_bad_end_date_falls_back_to_start():
     result = scrape_detail("https://sort-hvid.dk/en/forestilling/x/", session)
     assert result is not None
     assert len(result) == 1
+
+
+# ── Pages as the live site renders them ──────────────────────────────────────
+
+
+def _detail_html(info: str, content: str = "") -> str:
+    return f"""
+    <html><body>
+      <h1>SHOW</h1>
+      {info}
+      <div class="performance-content">{content}</div>
+    </body></html>
+    """
+
+
+def test_scrape_detail_reads_address_and_duration():
+    html = _detail_html(
+        "<strong>Sort/Hvid, Staldgade 26-30, 1699 Copenhagen V "
+        "(The Meat Packing District)</strong>"
+        "<strong>26. May 2027 - 26. May 2027</strong>"
+        "<strong>Monday-Saturday 17h00, 21h00</strong>"
+        "<strong>Danish</strong>"
+        "<strong>60-70 min. (to be updated before the premiere)</strong>"
+    )
+    records = scrape_detail(
+        "https://sort-hvid.dk/en/forestilling/x/", _mock_session(html)
+    )
+    assert records is not None
+    assert [(r["start_datetime"], r["end_datetime"]) for r in records] == [
+        ("2027-05-26T15:00:00+00:00", "2027-05-26T16:10:00+00:00"),
+        ("2027-05-26T19:00:00+00:00", "2027-05-26T20:10:00+00:00"),
+    ]
+    assert records[0]["venue_address"] == "Staldgade 26-30, 1699 Copenhagen V"
+
+
+def test_scrape_detail_address_falls_back_to_constant():
+    html = _detail_html("<strong>26. May 2027</strong><strong>Wednesday 20h00</strong>")
+    records = scrape_detail(
+        "https://sort-hvid.dk/en/forestilling/x/", _mock_session(html)
+    )
+    assert records is not None
+    assert records[0]["venue_address"] == "Staldgade 26-30, 1699 København V"
+    assert records[0]["end_datetime"] is None
+
+
+def test_scrape_detail_bare_time_run_uses_the_named_evenings():
+    # ALICE X SORT/HVID: "21h00" over two weeks, but the concerts are on
+    # the three Fridays the copy names — not every night of the range.
+    html = _detail_html(
+        "<strong>13. November 2026 - 27. November 2026</strong><strong>21h00</strong>",
+        "<p>CONCERTS:</p><p>FUENSANTA (MX)</p><p>13th November</p>"
+        "<p>REZMORAH</p><p>20th November</p>"
+        "<p>BLANCO TETA (AR)</p><p>27th November</p>",
+    )
+    records = scrape_detail(
+        "https://sort-hvid.dk/en/forestilling/x/", _mock_session(html)
+    )
+    assert records is not None
+    assert [r["start_datetime"] for r in records] == [
+        "2026-11-13T20:00:00+00:00",
+        "2026-11-20T20:00:00+00:00",
+        "2026-11-27T20:00:00+00:00",
+    ]
+
+
+def test_scrape_detail_bare_time_run_without_named_dates_plays_nightly():
+    html = _detail_html(
+        "<strong>13. November 2026 - 15. November 2026</strong><strong>21h00</strong>",
+        "<p>A festival every night.</p>",
+    )
+    records = scrape_detail(
+        "https://sort-hvid.dk/en/forestilling/x/", _mock_session(html)
+    )
+    assert records is not None
+    assert len(records) == 3

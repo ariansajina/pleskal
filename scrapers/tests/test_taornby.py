@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+from unittest.mock import MagicMock, patch
 
 from bs4 import BeautifulSoup, Tag
 
@@ -19,6 +20,7 @@ from scrapers.taornby import (
     is_meta_block,
     parse_meta,
     pick_title_and_artist,
+    scrape,
 )
 
 TODAY = datetime.date(2026, 7, 13)
@@ -71,6 +73,16 @@ def test_infer_year_past_date_rolls_to_next_year():
     assert _infer_year(1, 1, TODAY) == 2027
 
 
+def test_infer_year_recent_past_stays_this_year():
+    # Weeks after the August festival its "20/8" is last month's show, not
+    # next August's: rolling it forward would republish the festival.
+    assert _infer_year(8, 20, datetime.date(2026, 9, 26)) == 2026
+
+
+def test_infer_year_january_seen_in_december_is_next_year():
+    assert _infer_year(1, 10, datetime.date(2026, 12, 20)) == 2027
+
+
 # ── extract_date_time_pairs ────────────────────────────────────────────────────
 
 
@@ -81,10 +93,11 @@ def test_single_date_and_time():
     ]
 
 
-def test_multiple_showtimes_same_day_use_first_only():
-    result = extract_date_time_pairs("21/8 kl 16.00 og 17:45", TODAY)
+def test_multiple_showtimes_same_day_each_get_a_slot():
+    result = extract_date_time_pairs("21/8 kl  16 .00 og 17:45", TODAY)
     assert result == [
-        SingleSlot(datetime.date(2026, 8, 21), datetime.time(16, 0), None)
+        SingleSlot(datetime.date(2026, 8, 21), datetime.time(16, 0), None),
+        SingleSlot(datetime.date(2026, 8, 21), datetime.time(17, 45), None),
     ]
 
 
@@ -92,6 +105,7 @@ def test_multiple_dates_each_get_a_record():
     result = extract_date_time_pairs("21/8 kl 16:00 & kl 17:45 & 22/8 kl 16:15", TODAY)
     assert result == [
         SingleSlot(datetime.date(2026, 8, 21), datetime.time(16, 0), None),
+        SingleSlot(datetime.date(2026, 8, 21), datetime.time(17, 45), None),
         SingleSlot(datetime.date(2026, 8, 22), datetime.time(16, 15), None),
     ]
 
@@ -332,3 +346,44 @@ def test_build_records_falls_back_when_no_date_found():
     assert len(records) == 1
     assert records[0]["start_datetime"] == "2026-08-20T10:00:00+00:00"
     assert "confirmed" in records[0]["price_note"].lower()
+
+
+# ── scrape ─────────────────────────────────────────────────────────────────────
+
+
+def _section(title: str, artist: str, when: str) -> str:
+    return f"""
+    <section class="page-section">
+      <div class="sqs-block"><div class="sqs-html-content"><h1>{title}</h1></div></div>
+      <div class="sqs-block"><div class="sqs-html-content"><p>{artist}</p></div></div>
+      <div class="sqs-block">
+        <div class="sqs-html-content">
+          <p><strong>TID</strong> {when}<br/>
+          <strong>HVOR</strong> Tårnbyparken<br/>NB Forestillingen er udendørs</p>
+        </div>
+      </div>
+    </section>
+    """
+
+
+def test_scrape_reads_region_wrapped_sections_and_drops_past_shows():
+    # Squarespace nests the sections in a region (article > section.region >
+    # section.page-section); a show earlier this season has already happened.
+    today = datetime.datetime.now(datetime.UTC).date()
+    past = today - datetime.timedelta(days=20)
+    future = today + datetime.timedelta(days=30)
+    html = f"""
+    <html><body><article><section class="region">
+      {_section("OLD PIECE", "SOMEONE", f"{past.day}/{past.month} kl. 16.00")}
+      {_section("NEW PIECE", "SOMEONE ELSE", f"{future.day}/{future.month} kl. 16.00")}
+    </section></article></body></html>
+    """
+    session = MagicMock()
+    session.get.return_value.text = html
+    with patch("scrapers.taornby.make_session", return_value=session):
+        records = scrape()
+    assert [r["title"] for r in records] == ["New Piece"]
+    assert records[0]["start_datetime"].startswith(future.isoformat())
+    assert records[0]["venue_name"] == "Tårnbyparken"
+    # The scraper identifies itself instead of sending python-requests' UA.
+    assert "pleskalScraper" in session.get.call_args.kwargs["headers"]["User-Agent"]

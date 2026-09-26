@@ -35,7 +35,7 @@ import markdownify
 import requests
 from bs4 import BeautifulSoup, Tag
 
-from events.models import MAX_PRICE_NOTE_LENGTH
+from events.limits import MAX_PRICE_NOTE_LENGTH
 from scrapers.base import (
     HEADERS,
     build_arg_parser,
@@ -105,10 +105,12 @@ def parse_listing(soup: BeautifulSoup) -> list[dict]:
         date_el = card.select_one("h3")
         image_el = card.select_one("[data-src]")
         button = card.select_one("[data-event_no]")
+        # Collapse editor artefacts (zero-width joiners, doubled spaces).
+        title = re.sub(r"[\u200b-\u200d\ufeff]", "", title_el.get_text(" ", strip=True))
         shows.append(
             {
                 "url": url,
-                "title": title_el.get_text(" ", strip=True),
+                "title": re.sub(r"\s+", " ", title).strip(),
                 "date_text": date_el.get_text(" ", strip=True) if date_el else "",
                 "image_url": str(image_el["data-src"]).strip() if image_el else "",
                 "event_no": str(button["data-event_no"]).strip() if button else "",
@@ -155,6 +157,34 @@ def parse_date_range(text: str) -> tuple[datetime.date, datetime.date] | None:
 
 
 # ── Detail page ───────────────────────────────────────────────────────────────
+
+
+# "Varighed ca. 35 min", "ca. 1 time og 45 minutter", "Duration 75 min."
+_DURATION_LABEL_RE = re.compile(r"^(?:varighed|duration)\b:?\s*(.*)$", re.IGNORECASE)
+_HOURS_RE = re.compile(r"(\d+)\s*(?:timer?|hours?)\b", re.IGNORECASE)
+_MINUTES_RE = re.compile(r"(\d+)\s*(?:minutter|minutes?|min)\b", re.IGNORECASE)
+
+
+def parse_duration(soup: BeautifulSoup) -> datetime.timedelta | None:
+    """Return the running time stated on a detail page, if any.
+
+    The label and value may share a line ("Varighed ca. 35 min") or the value
+    may follow on the next one ("Varighed" / "75 minutter").
+    """
+    lines = [ln.strip() for ln in soup.get_text("\n").split("\n") if ln.strip()]
+    for i, line in enumerate(lines):
+        m = _DURATION_LABEL_RE.match(line)
+        if m is None:
+            continue
+        value = m.group(1) or (lines[i + 1] if i + 1 < len(lines) else "")
+        hours = _HOURS_RE.search(value)
+        minutes = _MINUTES_RE.search(value)
+        total = (int(hours.group(1)) * 60 if hours else 0) + (
+            int(minutes.group(1)) if minutes else 0
+        )
+        if total:
+            return datetime.timedelta(minutes=total)
+    return None
 
 
 def _is_blank_paragraph(el: Tag) -> bool:
@@ -253,10 +283,13 @@ def build_records(
     description: str,
     ticket_event: dict | None,
     now: datetime.datetime | None = None,
+    page_duration: datetime.timedelta | None = None,
 ) -> list[dict]:
     """Build the pleskal records for one show.
 
-    One record per upcoming performance when the ticketing API lists times;
+    One record per upcoming performance when the ticketing API lists times,
+    each ending after the running time (the API's ``durationInMinutes``, or
+    *page_duration* from the detail page when the API leaves it at 0);
     otherwise a single record spanning the card's date range (midnight on the
     first day to the end of the last), kept while the run hasn't ended.
     """
@@ -279,11 +312,17 @@ def build_records(
 
     times = show_times(ticket_event)
     if times:
+        api_minutes = (ticket_event or {}).get("durationInMinutes") or 0
+        duration = (
+            datetime.timedelta(minutes=api_minutes)
+            if api_minutes > 0
+            else page_duration
+        )
         return [
             {
                 **base,
                 "start_datetime": t.isoformat(),
-                "end_datetime": None,
+                "end_datetime": (t + duration).isoformat() if duration else None,
             }
             for t in times
             if t >= now
@@ -326,12 +365,19 @@ def scrape(delay: float = 0.5) -> list[dict]:
         time.sleep(delay)
         log.info("[%d/%d] Scraping %s", i, len(shows), show["url"])
         try:
-            description = parse_description(get_soup(show["url"], session))
+            detail = get_soup(show["url"], session)
         except requests.RequestException as exc:
             log.warning("Could not fetch %s: %s", show["url"], exc)
             continue
+        # Read the running time before parse_description trims the page.
+        duration = parse_duration(detail)
         records.extend(
-            build_records(show, description, ticket_events.get(show["event_no"]))
+            build_records(
+                show,
+                parse_description(detail),
+                ticket_events.get(show["event_no"]),
+                page_duration=duration,
+            )
         )
 
     log.info("Scraped %d event records from %d shows", len(records), len(shows))

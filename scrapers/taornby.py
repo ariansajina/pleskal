@@ -27,9 +27,9 @@ import re
 import zoneinfo
 from typing import NamedTuple
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import NavigableString, Tag
 
-from scrapers.base import build_arg_parser, make_session, write_output
+from scrapers.base import build_arg_parser, get_soup, make_session, write_output
 
 BASE_URL = "https://www.taarnby.art"
 PROGRAM_URL = f"{BASE_URL}/kunstnere-1"
@@ -303,13 +303,25 @@ def parse_meta(text: str) -> dict[str, str]:
     return {k: " ".join(v).strip() for k, v in result.items()}
 
 
+# How far back a year-less "20/8" may lie and still mean this year's date.
+# The program stays online for weeks after the festival; rolling its dates
+# into next year would republish the whole festival a year early.
+_RECENT_PAST = datetime.timedelta(days=183)
+
+
 def _infer_year(month: int, day: int, today: datetime.date) -> int:
-    """Return the nearest future calendar year for the given month/day."""
+    """Return the year a year-less day/month most plausibly refers to.
+
+    This year, unless the date lies more than half a year back (a January
+    date seen in December means next January). A date a few weeks back stays
+    in this year: it is a performance that has already happened, which the
+    caller drops.
+    """
     try:
         candidate = datetime.date(today.year, month, day)
     except ValueError:
         return today.year + 1
-    return today.year if candidate >= today else today.year + 1
+    return today.year if candidate >= today - _RECENT_PAST else today.year + 1
 
 
 class SingleSlot(NamedTuple):
@@ -334,8 +346,7 @@ def extract_date_time_pairs(
       RangeSlot(start_date, end_date)  -- e.g. a week-long installation with
         no showtimes, "17/8 - 22/8"
 
-    Multiple showtimes on the same day (joined by "og"/"&") collapse to the
-    first one, matching the convention already used by sydhavnteater.py.
+    Multiple showtimes on the same day (joined by "og"/"&") each get a slot.
     """
     dates = list(_DATE_RE.finditer(when))
     if not dates:
@@ -365,16 +376,17 @@ def extract_date_time_pairs(
         segment_end = dates[i + 1].start() if i + 1 < len(dates) else len(when)
         segment = when[segment_start:segment_end]
 
-        start_t = end_t = None
         range_m = _RANGE_TIME_RE.search(segment)
         if range_m:
             start_t = datetime.time(int(range_m.group(1)), int(range_m.group(2)))
             end_t = datetime.time(int(range_m.group(3)), int(range_m.group(4)))
-        else:
-            single_m = _SINGLE_TIME_RE.search(segment)
-            if single_m:
-                start_t = datetime.time(int(single_m.group(1)), int(single_m.group(2)))
-        results.append(SingleSlot(date, start_t, end_t))
+            results.append(SingleSlot(date, start_t, end_t))
+            continue
+        times = [
+            datetime.time(int(m.group(1)), int(m.group(2)))
+            for m in _SINGLE_TIME_RE.finditer(segment)
+        ]
+        results.extend(SingleSlot(date, t, None) for t in times or [None])
     return results
 
 
@@ -511,7 +523,9 @@ def build_records(
     if not description:
         description = "Details to be announced."
 
-    venue_name = meta.get("hvor") or DEFAULT_VENUE
+    # The value can run on into a note on the next line ("Tårnbyparken\nNB
+    # Forestillingen ..."); the venue is the first line.
+    venue_name = (meta.get("hvor") or "").split("\n", 1)[0].strip() or DEFAULT_VENUE
     category = _CATEGORY_OVERRIDES.get(title.strip().upper(), "performance")
     duration_minutes = _parse_duration_minutes(
         meta.get("længde") or meta.get("varighed") or ""
@@ -626,15 +640,17 @@ def _make_record(
 
 def scrape() -> list[dict]:
     session = make_session()
-    resp = session.get(PROGRAM_URL, timeout=30)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
+    soup = get_soup(PROGRAM_URL, session)
     article = soup.find("article")
     if article is None:
         log.warning("No <article> found on %s", PROGRAM_URL)
         return []
 
-    sections = article.find_all("section", class_="page-section", recursive=False)
+    # Squarespace wraps the sections in a region container (article >
+    # section.region > section.page-section), so they aren't direct children.
+    sections = article.select("section.page-section")
+    if not sections:
+        log.warning("No page sections found on %s", PROGRAM_URL)
     today = datetime.datetime.now(CPH_TZ).date()
 
     # First pass: find the earliest parseable date on the page, used as a
@@ -656,9 +672,20 @@ def scrape() -> list[dict]:
     for section in sections:
         section_records = build_records(section, today, fallback_date)
         records.extend(section_records)
-
     log.info("Built %d event records from %d sections", len(records), len(sections))
-    return records
+
+    # The program stays up after the festival; its past performances are not
+    # events to publish.
+    now = datetime.datetime.now(datetime.UTC)
+    upcoming = [
+        r
+        for r in records
+        if datetime.datetime.fromisoformat(r["end_datetime"] or r["start_datetime"])
+        >= now
+    ]
+    if len(upcoming) < len(records):
+        log.info("Dropped %d past records", len(records) - len(upcoming))
+    return upcoming
 
 
 def main() -> None:

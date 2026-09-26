@@ -315,12 +315,14 @@ def test_build_records_five_day_range_with_simple_time():
 
 
 def test_build_records_two_times_same_day():
-    # "at 16.00 & 18.00" → 1 record per day, start_datetime uses the first time
+    # "at 16.00 & 18.00" → two shows that day, one record each
     sections = [{"data": [{"titleEnglish": "When", "textEnglish": "at 16.00 & 18.00"}]}]
     records = build_records(_make_event(sections=sections))
-    assert len(records) == 1
-    start = datetime.datetime.fromisoformat(records[0]["start_datetime"])
-    assert start.astimezone(CPH_TZ).hour == 16
+    hours = [
+        datetime.datetime.fromisoformat(r["start_datetime"]).astimezone(CPH_TZ).hour
+        for r in records
+    ]
+    assert hours == [16, 18]
 
 
 def test_build_records_weekly_schedule_filters_days():
@@ -374,3 +376,125 @@ def test_build_records_isnatter_schedule():
     assert by_wd[3] == [20]  # Thu
     assert by_wd[4] == [20]  # Fri
     assert by_wd[5] == [16]  # Sat
+
+
+# ── Rows as the live CMS returns them ─────────────────────────────────────────
+
+
+def _row(title_da: str, text_da: str, title_en: str, text_en: str = "") -> dict:
+    return {
+        "title": title_da,
+        "text": text_da,
+        "titleEnglish": title_en,
+        "textEnglish": text_en,
+    }
+
+
+def _next_weekday(weekday: int) -> datetime.date:
+    today = datetime.date.today()
+    return today + datetime.timedelta(days=(weekday - today.weekday()) % 7 or 7)
+
+
+def test_parse_when_pm_time_with_end():
+    # TEATERVÆRKSTED: the start is 4 PM, not 4 AM.
+    assert parse_when("Every Tuesday at 4:00 PM — 6:00 PM") == {
+        1: [datetime.time(16, 0)]
+    }
+
+
+def test_parse_when_and_starts_a_new_clause_after_a_time():
+    expected = {
+        3: [datetime.time(19, 0)],
+        4: [datetime.time(19, 0)],
+        5: [datetime.time(15, 0)],
+    }
+    assert parse_when("Thur & Fri at 19.00 and Sat at 15.00") == expected
+    assert parse_when("Tors & fre kl. 19.00 og lørdag kl. 15.00") == expected
+
+
+def test_parse_when_and_between_days_lists_them():
+    assert parse_when("Tue and Thu at 19.00") == {
+        1: [datetime.time(19, 0)],
+        3: [datetime.time(19, 0)],
+    }
+
+
+def test_build_records_falls_back_to_danish_rows():
+    # Desorientering: only the Danish columns are filled in; "tba" is no venue.
+    sections = [
+        {
+            "data": [
+                _row("Spilletid", "kl. 20.00", "When"),
+                _row("Sted", "tba", "Where"),
+                _row("Varighed", "1 time og 15 min.", "Duration"),
+            ]
+        }
+    ]
+    records = build_records(
+        _make_event(sections=sections, stage=[{"title": "Annex scenen"}])
+    )
+    assert len(records) == 1
+    start = datetime.datetime.fromisoformat(records[0]["start_datetime"])
+    end = datetime.datetime.fromisoformat(records[0]["end_datetime"])
+    assert start.astimezone(CPH_TZ).time() == datetime.time(20, 0)
+    assert end - start == datetime.timedelta(hours=1, minutes=15)
+    assert records[0]["venue_name"] == "Annex scenen"
+
+
+def test_build_records_danish_where_used_when_english_is_empty():
+    sections = [{"data": [_row("Sted", "Spor10", "Where")]}]
+    records = build_records(_make_event(sections=sections))
+    assert records[0]["venue_name"] == "Spor10"
+
+
+def test_build_records_duration_sets_end_time():
+    sections = [
+        {
+            "data": [
+                _row("Spilletid", "", "When", "At 8 PM"),
+                _row("Varighed", "25 min.", "Duration", "25 min."),
+            ]
+        }
+    ]
+    records = build_records(_make_event(sections=sections))
+    start = datetime.datetime.fromisoformat(records[0]["start_datetime"])
+    end = datetime.datetime.fromisoformat(records[0]["end_datetime"])
+    assert end - start == datetime.timedelta(minutes=25)
+
+
+def test_build_records_no_schedule_has_no_end_time():
+    sections = [{"data": [_row("Varighed", "2 timer", "Duration", "2 hours")]}]
+    records = build_records(_make_event(sections=sections))
+    assert records[0]["end_datetime"] is None
+
+
+def test_build_records_weekday_clauses_joined_by_and():
+    thursday = _next_weekday(3)
+    saturday = thursday + datetime.timedelta(days=2)
+    sections = [
+        {
+            "data": [
+                _row("Spilletid", "", "When", "Thur & Fri at 19.00 and Sat at 15.00")
+            ]
+        }
+    ]
+    event = _make_range_event(
+        thursday.isoformat(), saturday.isoformat(), sections=sections
+    )
+    starts = [
+        datetime.datetime.fromisoformat(r["start_datetime"]).astimezone(CPH_TZ)
+        for r in build_records(event)
+    ]
+    assert [(s.weekday(), s.hour) for s in starts] == [(3, 19), (4, 19), (5, 15)]
+
+
+def test_parse_description_falls_back_to_danish():
+    event = _make_event(
+        textEnglish="", text="<p>KALK FALD er en danseforestilling.</p>"
+    )
+    assert parse_description(event) == "KALK FALD er en danseforestilling."
+
+
+def test_build_records_cleans_title():
+    event = _make_event(title="Skæbnen  \u200d- en spøgelseshistorie i VR")
+    assert build_records(event)[0]["title"] == "Skæbnen - en spøgelseshistorie i VR"

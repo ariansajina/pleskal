@@ -313,6 +313,52 @@ def test_collect_event_urls_deduplicates():
     assert len(urls) == 1
 
 
+def test_collect_event_urls_ignores_the_archive_pager():
+    # The archive paginates on its own; its pager must not make the scraper
+    # re-fetch the calendar once per archive page.
+    html = """
+    <html><body>
+      <div class="calendar-container">
+        <div class="calendar-event-teaser"><a href="/en/events/upcoming">A</a></div>
+      </div>
+      <div class="calendar-archive">
+        <div class="calendar-event-teaser"><a href="/en/events/past">B</a></div>
+        <a href="?e593248d_page=2">Next</a>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    urls = collect_event_urls(session, delay=0)
+    assert urls == ["https://www.hautscene.dk/en/events/upcoming"]
+    assert session.get.call_count == 1
+
+
+def test_collect_event_urls_follows_the_upcoming_pager():
+    page1 = """
+    <html><body><div class="calendar-container">
+      <div class="calendar-event-teaser"><a href="/en/events/one">A</a></div>
+      <a href="?a1b2_page=2">Next</a>
+    </div></body></html>
+    """
+    page2 = """
+    <html><body><div class="calendar-container">
+      <div class="calendar-event-teaser"><a href="/en/events/two">B</a></div>
+    </div></body></html>
+    """
+    session = MagicMock()
+    responses = []
+    for html in (page1, page2):
+        resp = MagicMock()
+        resp.text = html
+        responses.append(resp)
+    session.get.side_effect = responses
+    urls = collect_event_urls(session, delay=0)
+    assert urls == [
+        "https://www.hautscene.dk/en/events/one",
+        "https://www.hautscene.dk/en/events/two",
+    ]
+
+
 def test_collect_event_urls_http_error_breaks_loop():
     session = MagicMock()
     session.get.return_value.raise_for_status.side_effect = requests.HTTPError("503")
@@ -517,6 +563,69 @@ def test_scrape_detail_free_event():
     result = scrape_detail("https://www.hautscene.dk/en/events/free", session)
     assert result is not None
     assert result["is_free"] is True
+
+
+def test_scrape_detail_free_reads_the_visible_booking_text():
+    # Webflow keeps an empty, hidden richtext for the unused CMS field ahead of
+    # the one that is shown.
+    html = """
+    <html><body>
+      <div class="section-tag">Worksharing</div>
+      <div class="event-info">
+        <div data-compare-dates="true" data-start="24.3.26"></div>
+      </div>
+      <div class="booking-info">
+        <div class="rich-text-block-2 w-condition-invisible w-richtext"></div>
+        <div class="rich-text-block w-richtext">
+          <p>Participation is <strong>FREE</strong>, but please reserve a ticket.</p>
+        </div>
+        <a class="link-button-cta" href="https://billetto.dk/e/x">Book ticket</a>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail("https://www.hautscene.dk/en/events/free", session)
+    assert result is not None
+    assert result["is_free"] is True
+    assert result["price_note"] == (
+        "Participation is FREE, but please reserve a ticket."
+    )
+
+
+def test_scrape_detail_danish_gratis_is_free():
+    html = """
+    <html><body>
+      <div class="section-tag">Rene penge</div>
+      <div class="event-info">
+        <div data-compare-dates="true" data-start="24.3.26"></div>
+      </div>
+      <div class="booking-info">
+        <div class="w-richtext"><p>Antal pladser: 20 – gratis adgang.</p></div>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail("https://www.hautscene.dk/en/events/rene", session)
+    assert result is not None
+    assert result["is_free"] is True
+
+
+def test_scrape_detail_free_for_members_is_not_free():
+    html = """
+    <html><body>
+      <div class="section-tag">Show</div>
+      <div class="event-info">
+        <div data-compare-dates="true" data-start="24.3.26"></div>
+      </div>
+      <div class="booking-info">
+        <div class="w-richtext"><p>Tickets 120 DKK, free for members.</p></div>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail("https://www.hautscene.dk/en/events/show", session)
+    assert result is not None
+    assert result["is_free"] is False
 
 
 def test_scrape_detail_paid_event():
