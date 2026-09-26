@@ -9,16 +9,19 @@ from django.templatetags.static import static
 from django.utils import timezone
 from django.utils.text import slugify
 
+from .limits import (
+    MAX_PRICE_NOTE_LENGTH,
+    MAX_SLUG_LENGTH,
+    MAX_SOURCE_URL_LENGTH,
+    MAX_TITLE_LENGTH,
+    MAX_VENUE_LENGTH,
+)
 from .validators import validate_url_scheme
 
 logger = logging.getLogger(__name__)
 
-# Field length constraints; need to makemigrations if this is updated
-MAX_TITLE_LENGTH = 250
-MAX_VENUE_LENGTH = 200
-MAX_PRICE_NOTE_LENGTH = 200
-MAX_SOURCE_URL_LENGTH = 200
-MAX_SLUG_LENGTH = 250
+# Field length constraints are defined in events.limits (Django-free, so
+# scrapers can use them standalone); need to makemigrations if they change.
 
 # Default images shown when an event has no scraped/uploaded image of its own.
 # Keyed by Event.external_source; static paths under static/images/defaults/.

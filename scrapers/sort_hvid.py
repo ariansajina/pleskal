@@ -26,7 +26,7 @@ from urllib.parse import urljoin
 import markdownify
 import requests
 
-from events.models import MAX_VENUE_LENGTH
+from events.limits import MAX_VENUE_LENGTH
 from scrapers.base import (
     build_arg_parser,
     get_crawl_delay,

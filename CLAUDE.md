@@ -45,6 +45,7 @@ docker-compose.yml   # Local PostgreSQL for development
 ```
 events/
   models.py            # Event, EventCategory, FeedHit models
+  limits.py            # Field length limits (Django-free, so scrapers run standalone)
   views.py             # CRUD + list + map + subscribe views
   forms.py             # EventForm (markdownx)
   feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)

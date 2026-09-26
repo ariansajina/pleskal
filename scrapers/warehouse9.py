@@ -25,7 +25,7 @@ import zoneinfo
 
 from icalendar import Calendar
 
-from events.models import MAX_VENUE_LENGTH
+from events.limits import MAX_VENUE_LENGTH
 from scrapers.base import HEADERS, build_arg_parser, make_session, write_output
 
 BASE_URL = "https://warehouse9.dk"

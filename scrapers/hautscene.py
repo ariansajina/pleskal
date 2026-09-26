@@ -22,7 +22,7 @@ import markdownify
 import requests
 from bs4 import BeautifulSoup, Tag
 
-from events.models import MAX_PRICE_NOTE_LENGTH, MAX_VENUE_LENGTH
+from events.limits import MAX_PRICE_NOTE_LENGTH, MAX_VENUE_LENGTH
 from scrapers.base import (
     build_arg_parser,
     get_crawl_delay,
