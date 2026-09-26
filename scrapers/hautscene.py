@@ -55,14 +55,19 @@ log = logging.getLogger(__name__)
 # ── Listing page ──────────────────────────────────────────────────────────────
 
 
-def _next_page_url(soup: BeautifulSoup, current_url: str) -> str | None:
+def _next_page_url(scope: BeautifulSoup | Tag, current_url: str) -> str | None:
     """
-    Extract the next-page URL from Webflow's pagination controls.
+    Extract the next-page URL from Webflow's pagination controls in *scope*.
 
     Webflow renders pagination links whose href contains the current page's
     query string with a page counter.  We find any link whose href includes
     a query parameter ending in ``_page=<N>`` and return the one with the
     highest page number that is greater than the current page.
+
+    Each collection list paginates on its own, so the caller passes the
+    upcoming-events list: the calendar page also carries the archive's pager,
+    and following that re-fetches the same upcoming events once per archive
+    page.
 
     Falls back to None if no such link is found (last page or single page).
     """
@@ -71,7 +76,7 @@ def _next_page_url(soup: BeautifulSoup, current_url: str) -> str | None:
     current_page = int(current_page_match.group(1)) if current_page_match else 1
 
     best: tuple[int, str] | None = None
-    for a in soup.find_all("a", href=True):
+    for a in scope.find_all("a", href=True):
         href = str(a["href"])
         m = re.search(r"(_page=)(\d+)", href)
         if not m:
@@ -170,7 +175,7 @@ def collect_event_listing_data(
         log.debug(
             "[%d] %s: found %d new event URLs", pages_fetched, page_url, found_on_page
         )
-        page_url = _next_page_url(soup, page_url)
+        page_url = _next_page_url(upcoming, page_url)
 
     log.info("Found %d event URLs across %d listing pages", len(entries), pages_fetched)
     return entries
@@ -262,6 +267,7 @@ def combine_dt(date: datetime.date, t: datetime.time) -> datetime.datetime:
 _DESCRIPTION_SELECTOR = "div.section-event-research, div.section-event-about"
 _ZWJ_LINE_RE = re.compile(r"^[\s​‌‍]+$", re.MULTILINE)
 _BLANK_LINES_RE = re.compile(r"\n{3,}")
+_FREE_RE = re.compile(r"\bfree\b(?!\s+for\b)|\bgratis\b|no charge")
 
 
 def _richtext_markdown(el: Tag | None) -> str:
@@ -429,17 +435,19 @@ def scrape_detail(
         category = CATEGORY_MAP.get(tag_el.get_text(strip=True).lower(), "other")
 
     # ── Price / free detection ────────────────────────────────────────────────
-    price_note = ""
-    is_free = False
-    booking_div = soup.select_one("div.booking-info .w-richtext")
-    if booking_div:
-        booking_text = booking_div.get_text(" ", strip=True)
-        price_note = booking_text[:MAX_PRICE_NOTE_LENGTH]
-        lower = booking_text.lower()
-        if re.search(
-            r"free admission|free entry|gratis|free of charge|no charge", lower
-        ):
-            is_free = True
+    # The booking block holds a hidden (w-condition-invisible) richtext for the
+    # CMS field the event doesn't use, so read the visible one(s).
+    booking_text = " ".join(
+        el.get_text(" ", strip=True)
+        for el in soup.select("div.booking-info .w-richtext")
+        if "w-condition-invisible" not in (el.get("class") or [])
+    ).strip()
+    # get_text(" ") pads inline tags: "is <strong>FREE</strong>, but" → "FREE , but"
+    booking_text = re.sub(r"\s+([,.;:!?])", r"\1", booking_text)
+    price_note = booking_text[:MAX_PRICE_NOTE_LENGTH]
+    # "Participation is FREE", "Free admission", "gratis adgang" — but not a
+    # discount like "free for members".
+    is_free = bool(re.search(_FREE_RE, booking_text.lower()))
 
     return {
         "title": title,
