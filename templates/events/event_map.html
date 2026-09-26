@@ -21,7 +21,7 @@
         height: calc(100vh - 96px);
         min-height: 420px;
         border: 1.5px solid var(--border-light);
-        background: rgba(255, 255, 255, 0.5);
+        background: var(--panel-bg);
     }
 
     .map-canvas #event-map {
@@ -138,6 +138,16 @@
     .leaflet-container {
         background: var(--surface-2);
         font-family: var(--font-sans);
+    }
+    /* Leaflet paints popups white; match the page so --ink text stays
+       readable in the dark theme. */
+    .leaflet-popup-content-wrapper,
+    .leaflet-popup-tip {
+        background: var(--surface);
+        color: var(--ink);
+    }
+    .leaflet-container a.leaflet-popup-close-button {
+        color: var(--ink-muted);
     }
 
     /* Mobile: collapse to tabs */

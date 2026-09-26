@@ -117,6 +117,14 @@ class TestBaseTemplateIntegration:
         response = client.get("/")
         assert b'name="theme-color"' in response.content
 
+    def test_declares_dark_mode_support(self, client):
+        # Without this, Chrome/Samsung Internet auto-darken the page instead
+        # of using the designed dark theme.
+        response = client.get("/")
+        assert b'<meta name="color-scheme" content="light dark">' in response.content
+        assert b'media="(prefers-color-scheme: dark)"' in response.content
+        assert b"logo-dark.png" in response.content
+
     def test_sw_registration_script_loaded(self, client):
         response = client.get("/")
         assert b"pwa.js" in response.content
