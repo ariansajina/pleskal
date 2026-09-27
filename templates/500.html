@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
   <title>Something went wrong — pleskal</title>
   <style>
     body {
@@ -37,6 +38,14 @@
       font-size: 0.8rem;
       font-weight: 600;
       text-decoration: none;
+    }
+    /* Standalone copy of base.html's dark tokens (this page must not depend
+       on the template stack or collected static files). */
+    @media (prefers-color-scheme: dark) {
+      body { background: #14133D; color: #ECE8DC; }
+      h1 { color: #A3A3FF; }
+      p { color: #B9B6DE; }
+      a { border-color: #A3A3FF; background: #A3A3FF; color: #14133D; }
     }
   </style>
 </head>

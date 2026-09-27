@@ -22,6 +22,7 @@ const PRECACHE_URLS = [
   "{% static 'js/subscribe-filters.js' %}",
   "{% static 'js/pwa.js' %}",
   "{% static 'images/logo.png' %}",
+  "{% static 'images/logo-dark.png' %}",
   "{% static 'images/favicon-32x32.png' %}",
   "{% static 'images/apple-touch-icon.png' %}",
   "{% static 'icons/icon-192.png' %}",

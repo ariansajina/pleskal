@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  {# Both themes are designed (dark tokens below), so browsers don't auto-darken the page #}
+  <meta name="color-scheme" content="light dark">
   <title>{% block title %}pleskal{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}Copenhagen's dance and performance art agenda.{% endblock %}">
   {% load static %}
@@ -22,7 +24,8 @@
 
   {# PWA #}
   <link rel="manifest" href="{% url 'pwa_manifest' %}">
-  <meta name="theme-color" content="#3333CC">
+  <meta name="theme-color" content="#3333CC" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14133D" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="pleskal">
@@ -104,6 +107,43 @@
       --c-social:      #C2410C;
       --c-talk:        #64748B;
       --c-free:        #047857;
+      --c-other:       #475569;
+      --c-wheelchair:  #1565C0;
+      --c-draft:       #7a5c00;
+
+      /* Derived colours: text on fills, layered surfaces, dot grid */
+      --on-blue:       #E8E4D8;   /* text/icons on a --blue fill */
+      --on-danger:     #FFFFFF;   /* text on a --c-perf / --c-op fill */
+      --surface-alt:   #F7F7F5;
+      --header-bg:     rgba(244, 240, 232, 0.95);
+      --card-bg:       rgba(255, 255, 255, 0.6);
+      --card-bg-hover: rgba(255, 255, 255, 0.9);
+      --panel-bg:      rgba(255, 255, 255, 0.5);
+      --dot:           rgba(51, 51, 204, 0.10);
+      --focus-tint:    rgba(51, 51, 204, 0.03);
+      --backdrop:      rgba(0, 0, 0, 0.55);
+      --field-bg:      #FFFFFF;      /* boxed fields (Markdown editor) */
+      --img-bg:        transparent;  /* behind event images (the fallback logo is transparent) */
+
+      /* Badge tints */
+      --bg-perf:       #FFF1F2;
+      --bg-ws:         #EFF6FF;
+      --bg-wip:        #FAF5FF;
+      --bg-op:         #CFFAFE;
+      --bg-talk:       #F8FAFC;
+      --bg-social:     #FFF7ED;
+      --bg-other:      #F1F5F9;
+      --border-other:  #CBD5E1;
+      --bg-free:       #ECFDF5;
+      --bg-wheelchair: #E3F2FD;
+      --bg-draft:      #FFF8E6;
+      --border-draft:  #F0D060;
+
+      /* Alerts */
+      --alert-info-bg:    #EEF0FF;  --alert-info-fg:    #1a1a88;
+      --alert-success-bg: #EEFBF3;  --alert-success-fg: #0D5228;
+      --alert-warning-bg: #FFF8E1;  --alert-warning-fg: #6B4F00;  --alert-warning-border: #926C00;
+      --alert-error-bg:   #FFF0F3;  --alert-error-fg:   #8B0020;
 
       /* Spacing scale */
       --space-1: 0.25rem;
@@ -123,6 +163,71 @@
       --text-lg: 1.2rem;
       --text-xl: 1.8rem;
       --text-display: clamp(2rem, 6vw, 3.4rem);
+
+      color-scheme: light dark;
+    }
+
+    /* ─── Dark theme ────────────────────────────────────────
+       Follows the OS/browser setting. Only colours change, so every new
+       colour must be a token above with a dark value here — never a
+       literal in a rule or template. Declaring `color-scheme` also stops
+       browsers (Chrome/Samsung "darken websites") from auto-darkening. */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --blue:          #A3A3FF;
+        --blue-dark:     #C0C0FF;
+        --blue-deep:     #D6D6FF;
+        --cream:         #ECE8DC;
+        --cream-dim:     #B9B6DE;
+        --surface:       #14133D;
+        --surface-2:     #1D1C4E;
+        --ink:           #ECE8DC;
+        --ink-muted:     #B9B6DE;
+        --border:        #4F4D96;
+        --border-light:  #34326E;
+        --border-strong: #7E7CC4;
+        --c-perf:        #FB7185;
+        --c-ws:          #7AB4FF;
+        --c-wip:         #D19BFF;
+        --c-op:          #4DD9EE;
+        --c-social:      #FDA266;
+        --c-talk:        #A9B6C8;
+        --c-free:        #4ADE9E;
+        --c-other:       #B4BFCE;
+        --c-wheelchair:  #8CC4FF;
+        --c-draft:       #F5D06B;
+
+        --on-blue:       #14133D;
+        --on-danger:     #14133D;
+        --surface-alt:   #1D1C4E;
+        --header-bg:     rgba(20, 19, 61, 0.92);
+        --card-bg:       rgba(236, 232, 220, 0.04);
+        --card-bg-hover: rgba(236, 232, 220, 0.08);
+        --panel-bg:      rgba(236, 232, 220, 0.04);
+        --dot:           rgba(163, 163, 255, 0.10);
+        --focus-tint:    rgba(163, 163, 255, 0.06);
+        --backdrop:      rgba(5, 5, 20, 0.7);
+        --field-bg:      #1D1C4E;
+        --img-bg:        #E8E4D8;
+
+        --bg-perf:       #3A1428;
+        --bg-ws:         #15264D;
+        --bg-wip:        #2C1A4D;
+        --bg-op:         #0E3340;
+        --bg-talk:       #232845;
+        --bg-social:     #3A2218;
+        --bg-other:      #252A40;
+        --border-other:  #5A6278;
+        --bg-free:       #0E3328;
+        --bg-wheelchair: #152A4D;
+        --bg-draft:      #3A3014;
+        --border-draft:  #8A7428;
+
+        --alert-info-bg:    #23225A;  --alert-info-fg:    #D6D6FF;
+        --alert-success-bg: #0F3328;  --alert-success-fg: #A7F0CB;
+        --alert-warning-bg: #3A3014;  --alert-warning-fg: #F7DC8A;  --alert-warning-border: #C9A02E;
+        --alert-error-bg:   #3F1424;  --alert-error-fg:   #FFB3C1;
+      }
     }
 
     /* ─── Base ──────────────────────────────────────────── */
@@ -137,14 +242,14 @@
       background-color: var(--surface);
       color: var(--ink);
       min-height: 100vh;
-      background-image: radial-gradient(circle, rgba(51,51,204,0.10) 1px, transparent 1px);
+      background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
       background-size: 22px 22px;
     }
 
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: var(--surface-2); }
     ::-webkit-scrollbar-thumb { background: var(--blue); }
-    ::selection { background: var(--blue); color: var(--cream); }
+    ::selection { background: var(--blue); color: var(--on-blue); }
     a { color: inherit; text-decoration: none; }
     a:hover { color: var(--blue); }
     .link-accent { color: var(--blue); }
@@ -153,7 +258,7 @@
     /* ─── SKIP LINK ─────────────────────────────────────── */
     .skip-link {
       position: absolute; top: -100px; left: var(--space-4); z-index: 100;
-      background: var(--blue); color: var(--cream);
+      background: var(--blue); color: var(--on-blue);
       font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
       padding: 0.55rem 1.25rem; border: 1.5px solid var(--blue);
       transition: top 0.15s;
@@ -163,7 +268,7 @@
     /* ─── HEADER ────────────────────────────────────────── */
     .site-header {
       position: sticky; top: 0; z-index: 50;
-      background: rgba(244, 240, 232, 0.95);
+      background: var(--header-bg);
       backdrop-filter: blur(8px);
       border-bottom: 2px solid var(--blue);
     }
@@ -175,7 +280,7 @@
     .site-logo {
       display: flex; align-items: center; flex-shrink: 0; line-height: 1;
     }
-    .site-logo img { height: 40px; width: auto; display: block; }
+    .site-logo picture, .site-logo img { height: 40px; width: auto; display: block; }
 
     .site-nav { display: flex; align-items: center; gap: 0.2rem; flex: 1; }
     .nav-link {
@@ -194,8 +299,8 @@
       background: transparent; cursor: pointer; transition: background 0.15s, color 0.15s; white-space: nowrap;
       display: inline-block;
     }
-    .nav-btn:hover { background: var(--blue); color: var(--cream); }
-    .nav-btn--filled { background: var(--blue); color: var(--cream); }
+    .nav-btn:hover { background: var(--blue); color: var(--on-blue); }
+    .nav-btn--filled { background: var(--blue); color: var(--on-blue); }
     .nav-btn--filled:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
 
     /* Mobile nav toggle */
@@ -262,13 +367,13 @@
     .event-list { display: flex; flex-direction: column; gap: var(--space-4); }
 
     .card {
-      display: block; background: rgba(255,255,255,0.6);
+      display: block; background: var(--card-bg);
       border: 1.5px solid var(--border-light);
       transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
       text-decoration: none;
     }
     .card:hover {
-      border-color: var(--blue); background: rgba(255,255,255,0.9);
+      border-color: var(--blue); background: var(--card-bg-hover);
       box-shadow: 3px 3px 0 var(--blue);
     }
 
@@ -300,7 +405,7 @@
     .event-row__thumb-inner {
       position: absolute; inset: 0;
     }
-    .event-row__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .event-row__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; background: var(--img-bg); }
 
     @media (max-width: 480px) { .event-row__thumb { width: 90px; } }
 
@@ -310,16 +415,16 @@
       letter-spacing: 0.08em; text-transform: uppercase;
       padding: 0.2rem 0.5rem; border: 1.5px solid currentColor;
     }
-    .badge--performance  { color: var(--c-perf);   background: #FFF1F2; }
-    .badge--workshop     { color: var(--c-ws);     background: #EFF6FF; }
-    .badge--worksharing  { color: var(--c-wip);    background: #FAF5FF; }
-    .badge--openpractice { color: var(--c-op);     background: #CFFAFE; }
-    .badge--talk         { color: var(--c-talk);  background: #F8FAFC; }
-    .badge--social       { color: var(--c-social); background: #FFF7ED; }
-    .badge--other        { color: #475569; background: #F1F5F9; border-color: #CBD5E1; }
-    .badge--free         { color: var(--c-free); background: #ECFDF5; border-color: var(--c-free); }
-    .badge--wheelchair   { color: #1565C0; background: #E3F2FD; border-color: #1565C0; }
-    .badge--draft        { color: #7a5c00; background: #fff8e6; border-color: #f0d060; }
+    .badge--performance  { color: var(--c-perf);   background: var(--bg-perf); }
+    .badge--workshop     { color: var(--c-ws);     background: var(--bg-ws); }
+    .badge--worksharing  { color: var(--c-wip);    background: var(--bg-wip); }
+    .badge--openpractice { color: var(--c-op);     background: var(--bg-op); }
+    .badge--talk         { color: var(--c-talk);   background: var(--bg-talk); }
+    .badge--social       { color: var(--c-social); background: var(--bg-social); }
+    .badge--other        { color: var(--c-other); background: var(--bg-other); border-color: var(--border-other); }
+    .badge--free         { color: var(--c-free); background: var(--bg-free); border-color: var(--c-free); }
+    .badge--wheelchair   { color: var(--c-wheelchair); background: var(--bg-wheelchair); border-color: var(--c-wheelchair); }
+    .badge--draft        { color: var(--c-draft); background: var(--bg-draft); border-color: var(--border-draft); }
 
     /* ─── FORM ELEMENTS ─────────────────────────────────── */
     .form-label {
@@ -334,10 +439,11 @@
     }
     .form-input:focus, .form-select:focus, .form-textarea:focus {
       outline: none; border-bottom-color: var(--blue);
-      background: rgba(51,51,204,0.03);
+      background: var(--focus-tint);
     }
     .form-input::placeholder, .form-textarea::placeholder { color: var(--ink-muted); opacity: 0.75; }
     .form-textarea { resize: vertical; min-height: 120px; }
+    textarea.markdownx-editor { background: var(--field-bg); color: var(--ink); }
 
     .form-check { display: flex; align-items: center; gap: var(--space-3); cursor: pointer; }
     .form-check input[type="checkbox"] {
@@ -348,7 +454,7 @@
     .form-check input[type="checkbox"]:checked::after {
       content: '✓'; position: absolute; inset: 0;
       display: flex; align-items: center; justify-content: center;
-      font-size: 0.6rem; color: var(--cream); font-weight: 700;
+      font-size: 0.6rem; color: var(--on-blue); font-weight: 700;
     }
     .form-field-error { font-size: var(--text-sm); color: var(--c-perf); margin-top: var(--space-1); }
     .form-help { font-size: var(--text-sm); color: var(--ink-muted); margin-top: var(--space-1); }
@@ -362,23 +468,23 @@
       cursor: pointer; transition: background 0.15s, color 0.15s, box-shadow 0.15s;
       background: transparent; white-space: nowrap;
     }
-    .btn:hover { background: var(--blue); color: var(--cream); box-shadow: 3px 3px 0 var(--blue-dark); }
-    .btn--primary { background: var(--blue); color: var(--cream); }
+    .btn:hover { background: var(--blue); color: var(--on-blue); box-shadow: 3px 3px 0 var(--blue-dark); }
+    .btn--primary { background: var(--blue); color: var(--on-blue); }
     .btn--primary:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
     .btn--ghost { border-color: var(--border); color: var(--ink-muted); }
     .btn--ghost:hover { border-color: var(--ink-muted); color: var(--ink); background: transparent; box-shadow: none; }
     .btn--danger { border-color: var(--c-perf); color: var(--c-perf); }
-    .btn--danger:hover { background: var(--c-perf); color: #fff; box-shadow: none; }
+    .btn--danger:hover { background: var(--c-perf); color: var(--on-danger); box-shadow: none; }
     .btn--sm { font-size: var(--text-xs); padding: 0.4rem 0.85rem; }
     .btn--approve { border-color: var(--c-op); color: var(--c-op); }
-    .btn--approve:hover { background: var(--c-op); color: #fff; box-shadow: none; }
+    .btn--approve:hover { background: var(--c-op); color: var(--on-danger); box-shadow: none; }
 
     /* ─── MESSAGES / ALERTS ─────────────────────────────── */
     .alert { font-size: var(--text-sm); padding: var(--space-3) var(--space-4); border-left: 3px solid; margin-bottom: var(--space-4); }
-    .alert--info    { border-color: var(--blue);   background: #EEF0FF; color: var(--blue-deep); }
-    .alert--success { border-color: var(--c-op);   background: #EEFBF3; color: #0D5228; }
-    .alert--warning { border-color: #926C00;        background: #FFF8E1; color: #6B4F00; }
-    .alert--error   { border-color: var(--c-perf); background: #FFF0F3; color: #8B0020; }
+    .alert--info    { border-color: var(--blue);   background: var(--alert-info-bg);    color: var(--alert-info-fg); }
+    .alert--success { border-color: var(--c-op);   background: var(--alert-success-bg); color: var(--alert-success-fg); }
+    .alert--warning { border-color: var(--alert-warning-border); background: var(--alert-warning-bg); color: var(--alert-warning-fg); }
+    .alert--error   { border-color: var(--c-perf); background: var(--alert-error-bg);   color: var(--alert-error-fg); }
 
     /* ─── RULE ──────────────────────────────────────────── */
     .rule { border: none; border-top: 1px solid var(--border-light); margin: 2rem 0; }
@@ -437,7 +543,7 @@
     }
     .filter-clear-link:hover { color: var(--blue); opacity: 1; }
     .filter-panel {
-      background: rgba(255,255,255,0.5); border: 1.5px solid var(--border-light);
+      background: var(--panel-bg); border: 1.5px solid var(--border-light);
       padding: var(--space-4) var(--space-4); margin-top: var(--space-3);
       display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-8); align-items: flex-end;
     }
@@ -462,8 +568,8 @@
       cursor: pointer; transition: all 0.12s; background: transparent;
     }
     .filter-chip:hover { border-color: var(--blue); color: var(--blue); }
-    input[type="checkbox"]:checked + .filter-chip { border-color: var(--blue); color: var(--cream); background: var(--blue); }
-    button.filter-chip[data-active] { border-color: var(--blue); color: var(--cream); background: var(--blue); }
+    input[type="checkbox"]:checked + .filter-chip { border-color: var(--blue); color: var(--on-blue); background: var(--blue); }
+    button.filter-chip[data-active] { border-color: var(--blue); color: var(--on-blue); background: var(--blue); }
     .filter-checkboxes input[type="checkbox"] {
       opacity: 0;
       position: absolute;
@@ -517,7 +623,7 @@
       color: var(--ink-muted); margin-bottom: var(--space-3); font-weight: 600;
     }
     .card-panel {
-      background: rgba(255,255,255,0.6); border: 1.5px solid var(--border-light);
+      background: var(--card-bg); border: 1.5px solid var(--border-light);
       padding: var(--space-6);
     }
     .btn-row { display: flex; align-items: center; gap: var(--space-3); }
@@ -544,7 +650,7 @@
     .map-modal[hidden] { display: none; }
     .map-modal__backdrop {
       position: absolute; inset: 0;
-      background: rgba(0, 0, 0, 0.55);
+      background: var(--backdrop);
     }
     .map-modal__panel {
       position: relative;
@@ -588,7 +694,10 @@
     <div class="site-header__inner">
 
       <a href="{% url 'event_list' %}" class="site-logo">
-        <img src="{% static 'images/logo.png' %}" alt="pleskal" height="40">
+        <picture>
+          <source srcset="{% static 'images/logo-dark.png' %}" media="(prefers-color-scheme: dark)">
+          <img src="{% static 'images/logo.png' %}" alt="pleskal" height="40">
+        </picture>
       </a>
 
       <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">

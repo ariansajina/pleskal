@@ -12,6 +12,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 - **Database:** PostgreSQL (production), SQLite (dev default)
 - **Frontend:** Django templates + HTMX (no JS framework)
 - **Styling:** Tailwind CSS 4.0 (built via CLI)
+- **Theming:** light + dark themes; dark follows `prefers-color-scheme` (no toggle). Colors are CSS custom properties in `templates/base.html` `:root`, overridden in its `@media (prefers-color-scheme: dark)` block
 - **Package manager:** `uv` (Python), `npm` (Tailwind only)
 - **Image storage:** Cloudflare R2 (S3-compatible) in production, local filesystem in dev
 - **Image formats:** JPEG, PNG, WebP, HEIF/HEIC (via pillow-heif)
@@ -236,6 +237,13 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - Tests live in `<app>/tests/` directories with `test_*.py` naming
 - Each app has `factories.py` for shared test factories
 - `conftest.py` (root) provides autouse fixture: disables SSL redirect, sets `PASSWORD_PEPPER`, uses simple static storage
+
+### Theming (light/dark)
+
+- Every color is a token in `:root` in `templates/base.html` with a matching dark value in the `@media (prefers-color-scheme: dark)` block; never hardcode hex/rgba in rules, inline styles or page `<style>` blocks (`500.html` is the standalone exception and carries its own copy)
+- `--blue` is lighter in dark mode, so text on a `--blue` fill uses `--on-blue` (not `--cream`); text on `--c-perf`/`--c-op` fills uses `--on-danger`
+- `<meta name="color-scheme" content="light dark">` stops browsers (Chrome/Samsung Internet "darken websites") from auto-darkening the page
+- Header logo swaps to `static/images/logo-dark.png` (cream recolor of `logo.png`) via `<picture>`; `--img-bg` gives the transparent fallback event image a cream backdrop in dark mode
 
 ### Security
 
