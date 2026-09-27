@@ -109,6 +109,20 @@ Retired (not checked): toastercph, taornby
 
 Below the table, list the sampled events per scraper (pleskal URL → source
 URL) so a human can re-check a verdict quickly. Don't fix scrapers as part
-of this skill — it only reports. If the prompt that invoked the skill asks
-for an issue to be filed, open one GitHub issue with the report when any
-row is not Healthy.
+of this skill — it only reports.
+
+## 5. File an issue (when asked)
+
+If the prompt that invoked the skill asks for an issue, and **any** row is
+Needs work or Unhealthy, open **one** GitHub issue in `ariansajina/pleskal`
+covering every problem found — never one issue per scraper:
+
+- Title: `Scraper health YYYY-MM-DD: N scraper(s) need attention`
+- Body: the full table, then one `###` section per scraper that is not
+  Healthy listing each concrete problem with the pleskal URL, the source
+  URL and what differs (expected vs. found), then the sampled-events list.
+- If an earlier scraper-health issue is still open, link it in the body
+  ("Previous report: #…") so recurring problems are visible.
+- End the body with the Claude Code attribution footer.
+
+When every scraper is Healthy, open no issue; just give the report.
