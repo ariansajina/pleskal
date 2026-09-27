@@ -30,6 +30,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="pleskal">
 
+  {# Theme toggle: deliberately not deferred, so a saved light/dark choice is #}
+  {# applied before first paint (no flash of the other theme). Must stay after the theme-color metas. #}
+  <script src="{% static 'js/theme.js' %}"></script>
+
   {# Compiled Tailwind CSS #}
   <link rel="stylesheet" href="{% static 'css/output.css' %}">
 
@@ -168,67 +172,21 @@
     }
 
     /* ─── Dark theme ────────────────────────────────────────
-       Follows the OS/browser setting. Only colours change, so every new
-       colour must be a token above with a dark value here — never a
-       literal in a rule or template. Declaring `color-scheme` also stops
-       browsers (Chrome/Samsung "darken websites") from auto-darkening. */
+       Follows the OS/browser setting unless the header toggle picked a
+       theme (data-theme on <html>). Only colours change, so every new
+       colour must be a token above with a dark value in
+       partials/dark_theme_tokens.css — never a literal in a rule or
+       template. Declaring `color-scheme` also stops browsers
+       (Chrome/Samsung "darken websites") from auto-darkening. */
     @media (prefers-color-scheme: dark) {
-      :root {
-        --blue:          #A3A3FF;
-        --blue-dark:     #C0C0FF;
-        --blue-deep:     #D6D6FF;
-        --cream:         #ECE8DC;
-        --cream-dim:     #B9B6DE;
-        --surface:       #14133D;
-        --surface-2:     #1D1C4E;
-        --ink:           #ECE8DC;
-        --ink-muted:     #B9B6DE;
-        --border:        #4F4D96;
-        --border-light:  #34326E;
-        --border-strong: #7E7CC4;
-        --c-perf:        #FB7185;
-        --c-ws:          #7AB4FF;
-        --c-wip:         #D19BFF;
-        --c-op:          #4DD9EE;
-        --c-social:      #FDA266;
-        --c-talk:        #A9B6C8;
-        --c-free:        #4ADE9E;
-        --c-other:       #B4BFCE;
-        --c-wheelchair:  #8CC4FF;
-        --c-draft:       #F5D06B;
-
-        --on-blue:       #14133D;
-        --on-danger:     #14133D;
-        --surface-alt:   #1D1C4E;
-        --header-bg:     rgba(20, 19, 61, 0.92);
-        --card-bg:       rgba(236, 232, 220, 0.04);
-        --card-bg-hover: rgba(236, 232, 220, 0.08);
-        --panel-bg:      rgba(236, 232, 220, 0.04);
-        --dot:           rgba(163, 163, 255, 0.10);
-        --focus-tint:    rgba(163, 163, 255, 0.06);
-        --backdrop:      rgba(5, 5, 20, 0.7);
-        --field-bg:      #1D1C4E;
-        --img-bg:        #E8E4D8;
-
-        --bg-perf:       #3A1428;
-        --bg-ws:         #15264D;
-        --bg-wip:        #2C1A4D;
-        --bg-op:         #0E3340;
-        --bg-talk:       #232845;
-        --bg-social:     #3A2218;
-        --bg-other:      #252A40;
-        --border-other:  #5A6278;
-        --bg-free:       #0E3328;
-        --bg-wheelchair: #152A4D;
-        --bg-draft:      #3A3014;
-        --border-draft:  #8A7428;
-
-        --alert-info-bg:    #23225A;  --alert-info-fg:    #D6D6FF;
-        --alert-success-bg: #0F3328;  --alert-success-fg: #A7F0CB;
-        --alert-warning-bg: #3A3014;  --alert-warning-fg: #F7DC8A;  --alert-warning-border: #C9A02E;
-        --alert-error-bg:   #3F1424;  --alert-error-fg:   #FFB3C1;
-      }
+      :root:not([data-theme="light"]) {
+{% include "partials/dark_theme_tokens.css" %}      }
     }
+    /* Header toggle (static/js/theme.js) overrides the system setting. */
+    :root[data-theme="dark"] {
+{% include "partials/dark_theme_tokens.css" %}      color-scheme: dark;
+    }
+    :root[data-theme="light"] { color-scheme: light; }
 
     /* ─── Base ──────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -280,7 +238,30 @@
     .site-logo {
       display: flex; align-items: center; flex-shrink: 0; line-height: 1;
     }
-    .site-logo picture, .site-logo img { height: 40px; width: auto; display: block; }
+    .site-logo img { height: 40px; width: auto; display: block; }
+
+    /* Theme toggle (static/js/theme.js). The logo and the icon follow the
+       effective theme: the toggle's choice, else the system setting. */
+    .theme-toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; flex-shrink: 0; order: 3;
+      border: 1.5px solid var(--blue); color: var(--blue); background: transparent;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .theme-toggle[hidden] { display: none; }
+    .theme-toggle:hover { background: var(--blue); color: var(--on-blue); }
+    .theme-toggle svg { width: 18px; height: 18px; display: block; }
+    .site-logo .logo--dark, .theme-toggle .icon--sun { display: none; }
+    :root[data-theme="dark"] .site-logo .logo--light,
+    :root[data-theme="dark"] .theme-toggle .icon--moon { display: none; }
+    :root[data-theme="dark"] .site-logo .logo--dark,
+    :root[data-theme="dark"] .theme-toggle .icon--sun { display: block; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .site-logo .logo--light,
+      :root:not([data-theme="light"]) .theme-toggle .icon--moon { display: none; }
+      :root:not([data-theme="light"]) .site-logo .logo--dark,
+      :root:not([data-theme="light"]) .theme-toggle .icon--sun { display: block; }
+    }
 
     .site-nav { display: flex; align-items: center; gap: 0.2rem; flex: 1; }
     .nav-link {
@@ -312,7 +293,8 @@
     .nav-toggle span { display: block; width: 20px; height: 2px; background: var(--ink); }
 
     @media (max-width: 640px) {
-      .nav-toggle { display: flex; }
+      .nav-toggle { display: flex; margin-left: 0; }
+      .theme-toggle { order: 0; margin-left: auto; }
       .site-nav {
         display: none; position: absolute; top: 56px; left: 0; right: 0;
         background: var(--surface); border-bottom: 2px solid var(--blue);
@@ -694,12 +676,17 @@
     <div class="site-header__inner">
 
       <a href="{% url 'event_list' %}" class="site-logo">
-        <picture>
-          {# 120px renditions (3x the 40px display size) of logo.png / logo-dark.png #}
-          <source srcset="{% static 'images/logo-header-dark.png' %}" media="(prefers-color-scheme: dark)">
-          <img src="{% static 'images/logo-header.png' %}" alt="pleskal" width="40" height="40">
-        </picture>
+        {# 120px renditions (3x the 40px display size) of logo.png / logo-dark.png; #}
+        {# CSS shows the one matching the effective theme (a <picture> media query can't follow the toggle) #}
+        <img class="logo--light" src="{% static 'images/logo-header.png' %}" alt="pleskal" width="40" height="40">
+        <img class="logo--dark" src="{% static 'images/logo-header-dark.png' %}" alt="pleskal" width="40" height="40">
       </a>
+
+      {# Hidden until theme.js wires it up, so it never shows as a dead button without JS #}
+      <button type="button" class="theme-toggle" aria-label="Switch to dark mode" title="Switch to dark mode" hidden>
+        <svg class="icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2.5M12 20v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M1.5 12H4M20 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></svg>
+      </button>
 
       <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
         <span></span><span></span><span></span>

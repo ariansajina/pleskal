@@ -12,7 +12,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 - **Database:** PostgreSQL (production), SQLite (dev default)
 - **Frontend:** Django templates + HTMX (no JS framework)
 - **Styling:** Tailwind CSS 4.0 (built via CLI)
-- **Theming:** light + dark themes; dark follows `prefers-color-scheme` (no toggle). Colors are CSS custom properties in `templates/base.html` `:root`, overridden in its `@media (prefers-color-scheme: dark)` block
+- **Theming:** light + dark themes; follows `prefers-color-scheme` unless the header toggle (`static/js/theme.js`) picked one. Colors are CSS custom properties in `templates/base.html` `:root`; dark values live in `templates/partials/dark_theme_tokens.css`
 - **Package manager:** `uv` (Python), `npm` (Tailwind only)
 - **Image storage:** Cloudflare R2 (S3-compatible) in production, local filesystem in dev
 - **Image formats:** JPEG, PNG, WebP, HEIF/HEIC (via pillow-heif)
@@ -246,10 +246,12 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 
 ### Theming (light/dark)
 
-- Every color is a token in `:root` in `templates/base.html` with a matching dark value in the `@media (prefers-color-scheme: dark)` block; never hardcode hex/rgba in rules, inline styles or page `<style>` blocks (`500.html` is the standalone exception and carries its own copy)
+- Every color is a token in `:root` in `templates/base.html` with a matching dark value in `templates/partials/dark_theme_tokens.css`; never hardcode hex/rgba in rules, inline styles or page `<style>` blocks (`500.html` is the standalone exception and carries its own copy)
+- `base.html` includes the dark tokens twice: under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }` (system setting) and under `:root[data-theme="dark"]` (toggle). Any other theme-dependent rule needs both selectors too (see the logo/icon swap in the header CSS)
+- Toggle: `static/js/theme.js` is loaded **synchronously** in `<head>` (after the `theme-color` metas) so a saved choice applies before first paint; it sets `data-theme` on `<html>`, pins both `theme-color` metas, and stores the choice in `localStorage["theme"]` (cleared when the user toggles back to the system's own theme). The button is `hidden` until the script wires it up
 - `--blue` is lighter in dark mode, so text on a `--blue` fill uses `--on-blue` (not `--cream`); text on `--c-perf`/`--c-op` fills uses `--on-danger`
 - `<meta name="color-scheme" content="light dark">` stops browsers (Chrome/Samsung Internet "darken websites") from auto-darkening the page
-- Header logo swaps to `static/images/logo-header-dark.png` (cream recolor) via `<picture>`; the header uses 120px renditions (`logo-header*.png`, ~15 KB) of the 1024px `logo.png` / `logo-dark.png` sources, so regenerate them when the logo changes; `--img-bg` gives the transparent fallback event image a cream backdrop in dark mode
+- Header shows `logo-header.png` or `logo-header-dark.png` (cream recolor) as two `<img>`s swapped by CSS, since a `<picture>` media query can't follow the toggle; the header uses 120px renditions (`logo-header*.png`, ~15 KB) of the 1024px `logo.png` / `logo-dark.png` sources, so regenerate them when the logo changes; `--img-bg` gives the transparent fallback event image a cream backdrop in dark mode
 
 ### Security
 

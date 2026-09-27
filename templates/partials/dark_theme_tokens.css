@@ -1,0 +1,58 @@
+{% comment %}
+Dark values for the colour tokens in base.html's :root. base.html includes this
+twice — under prefers-color-scheme: dark (system setting) and under
+[data-theme="dark"] (header toggle) — so the two can't drift apart.
+{% endcomment %}
+--blue:          #A3A3FF;
+--blue-dark:     #C0C0FF;
+--blue-deep:     #D6D6FF;
+--cream:         #ECE8DC;
+--cream-dim:     #B9B6DE;
+--surface:       #14133D;
+--surface-2:     #1D1C4E;
+--ink:           #ECE8DC;
+--ink-muted:     #B9B6DE;
+--border:        #4F4D96;
+--border-light:  #34326E;
+--border-strong: #7E7CC4;
+--c-perf:        #FB7185;
+--c-ws:          #7AB4FF;
+--c-wip:         #D19BFF;
+--c-op:          #4DD9EE;
+--c-social:      #FDA266;
+--c-talk:        #A9B6C8;
+--c-free:        #4ADE9E;
+--c-other:       #B4BFCE;
+--c-wheelchair:  #8CC4FF;
+--c-draft:       #F5D06B;
+
+--on-blue:       #14133D;
+--on-danger:     #14133D;
+--surface-alt:   #1D1C4E;
+--header-bg:     rgba(20, 19, 61, 0.92);
+--card-bg:       rgba(236, 232, 220, 0.04);
+--card-bg-hover: rgba(236, 232, 220, 0.08);
+--panel-bg:      rgba(236, 232, 220, 0.04);
+--dot:           rgba(163, 163, 255, 0.10);
+--focus-tint:    rgba(163, 163, 255, 0.06);
+--backdrop:      rgba(5, 5, 20, 0.7);
+--field-bg:      #1D1C4E;
+--img-bg:        #E8E4D8;
+
+--bg-perf:       #3A1428;
+--bg-ws:         #15264D;
+--bg-wip:        #2C1A4D;
+--bg-op:         #0E3340;
+--bg-talk:       #232845;
+--bg-social:     #3A2218;
+--bg-other:      #252A40;
+--border-other:  #5A6278;
+--bg-free:       #0E3328;
+--bg-wheelchair: #152A4D;
+--bg-draft:      #3A3014;
+--border-draft:  #8A7428;
+
+--alert-info-bg:    #23225A;  --alert-info-fg:    #D6D6FF;
+--alert-success-bg: #0F3328;  --alert-success-fg: #A7F0CB;
+--alert-warning-bg: #3A3014;  --alert-warning-fg: #F7DC8A;  --alert-warning-border: #C9A02E;
+--alert-error-bg:   #3F1424;  --alert-error-fg:   #FFB3C1;
