@@ -4,6 +4,7 @@ from allauth.account.signals import email_confirmed
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
+from django.db import transaction
 from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 
@@ -89,3 +90,39 @@ def preserve_claim_code_emails_on_user_delete(sender, instance, **kwargs):
     ClaimCode.objects.filter(created_by=instance).update(created_by_email=user_email)
     # Update claim codes where this user claimed the code
     ClaimCode.objects.filter(claimed_by=instance).update(claimed_by_email=user_email)
+
+
+@receiver(pre_delete, sender=User)
+def remove_from_resend_contacts_on_user_delete(sender, instance, **kwargs):
+    """Remove a deleted user from the Resend contact list.
+
+    Only verified addresses were ever added (see add_to_resend_contacts), so
+    those are the ones removed. The API call runs after the deletion commits,
+    so a rolled-back deletion leaves the contact in place.
+    """
+    api_key = getattr(settings, "RESEND_API_KEY", None)
+    if not api_key or instance.is_system_account:
+        return
+
+    from allauth.account.models import EmailAddress
+
+    emails = set(
+        EmailAddress.objects.filter(user=instance, verified=True).values_list(
+            "email", flat=True
+        )
+    )
+    if not emails:
+        return
+
+    def remove_contacts():
+        import resend
+
+        resend.api_key = api_key
+        for email in sorted(emails):
+            try:
+                resend.Contacts.remove(email=email)
+            except Exception:
+                # No address in the log: the account is gone.
+                logger.exception("Failed to remove a deleted user from Resend contacts")
+
+    transaction.on_commit(remove_contacts)

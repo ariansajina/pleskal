@@ -63,8 +63,11 @@ class TestProfileForm:
         EmailAddress.objects.create(
             user=user, email="pending@example.com", primary=False, verified=False
         )
-        form = ProfileForm({"email": "pending@example.com"}, instance=user)
-        assert form.is_valid()
+        form = ProfileForm(
+            {"email": "pending@example.com", "current_password": "testpass123"},
+            instance=user,
+        )
+        assert form.is_valid(), form.errors
 
 
 @pytest.mark.django_db

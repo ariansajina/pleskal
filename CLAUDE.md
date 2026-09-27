@@ -76,10 +76,10 @@ accounts/
   models.py          # Custom User (UUID PK, display_name, display_name_slug) + ClaimCode
   managers.py        # UserManager; `publishers()` = named, active source accounts or users with published events (directory + sitemap)
   views.py           # Login, password reset, profile, account deletion, claim flow, invite management
-  forms.py           # CustomAuthenticationForm, ProfileForm, ClaimCodeForm, ClaimRegisterForm
+  forms.py           # CustomAuthenticationForm, ProfileForm (current password required to change email), AccountDeleteForm (password required), ClaimCodeForm, ClaimRegisterForm
   hashers.py         # HmacPepperedArgon2PasswordHasher
   validators.py      # ZxcvbnPasswordValidator
-  signals.py         # Admin notification on new signup; Resend CRM sync on email verification; preserve claim-code emails on user delete
+  signals.py         # Admin notification on new signup; Resend CRM sync on email verification (removed again on account deletion); preserve claim-code emails on user delete
   urls.py            # Account URL patterns
   management/commands/
     generate_claim_codes.py     # Generate invite codes (--count, --expires, --created-by)
@@ -259,6 +259,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
+- Re-authentication: changing the login email (`ProfileForm.current_password`) and deleting the account (`AccountDeleteForm`) require the current password, so a hijacked session alone can't take over or delete an account
 
 ### Rate Limits (current)
 
@@ -424,7 +425,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `RateLimitedLoginView` | `/accounts/login/` | Public |
 | `RateLimitedPasswordResetView` | `/accounts/password-reset/` | Public |
 | `EmailVerifiedView` | `/accounts/email-verified/` | Public (post-verification landing page) |
-| `AccountDeleteView` | `/accounts/delete/` | Login required |
+| `AccountDeleteView` | `/accounts/delete/` | Login required + current password |
 | `EditProfileView` | `/accounts/profile/edit/` | Login required |
 | `ChangePasswordView` | `/accounts/change-password/` | Login required |
 | `PublisherListView` | `/accounts/publishers/` | Public (directory of `User.objects.publishers()`, linked from the footer) |

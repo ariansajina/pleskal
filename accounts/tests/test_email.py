@@ -53,6 +53,82 @@ class TestResendContactSync:
             mock_resend.Contacts.create.assert_called_once()
 
 
+@pytest.mark.django_db
+class TestResendContactRemovalOnDelete:
+    def _verified_user(self, email="gone@example.com", **kwargs):
+        from allauth.account.models import EmailAddress
+
+        user = UserFactory.create(email=email, **kwargs)
+        EmailAddress.objects.create(user=user, email=email, verified=True, primary=True)
+        return user
+
+    def test_verified_address_removed_after_delete(
+        self, settings, django_capture_on_commit_callbacks
+    ):
+        settings.RESEND_API_KEY = "test-key"
+        user = self._verified_user()
+        mock_resend = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"resend": mock_resend}),
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            user.delete()
+
+        mock_resend.Contacts.remove.assert_called_once_with(email="gone@example.com")
+
+    def test_unverified_address_not_removed(
+        self, settings, django_capture_on_commit_callbacks
+    ):
+        from allauth.account.models import EmailAddress
+
+        settings.RESEND_API_KEY = "test-key"
+        user = UserFactory.create(email="never@example.com")
+        EmailAddress.objects.create(
+            user=user, email="never@example.com", verified=False, primary=True
+        )
+        mock_resend = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"resend": mock_resend}),
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            user.delete()
+
+        mock_resend.Contacts.remove.assert_not_called()
+
+    def test_skipped_without_api_key(
+        self, settings, django_capture_on_commit_callbacks
+    ):
+        settings.RESEND_API_KEY = None
+        user = self._verified_user()
+        mock_resend = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"resend": mock_resend}),
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            user.delete()
+
+        mock_resend.Contacts.remove.assert_not_called()
+
+    def test_api_failure_does_not_block_deletion(
+        self, settings, django_capture_on_commit_callbacks
+    ):
+        settings.RESEND_API_KEY = "test-key"
+        user = self._verified_user()
+        mock_resend = MagicMock()
+        mock_resend.Contacts.remove.side_effect = RuntimeError("API down")
+
+        with (
+            patch.dict("sys.modules", {"resend": mock_resend}),
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            user.delete()
+
+        assert not User.objects.filter(pk=user.pk).exists()
+
+
 # ---------------------------------------------------------------------------
 # Admin signup notification signal
 # ---------------------------------------------------------------------------

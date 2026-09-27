@@ -33,6 +33,16 @@ class ProfileForm(forms.ModelForm):
         ),
     )
 
+    current_password = forms.CharField(
+        required=False,
+        strip=False,
+        label="Current password",
+        widget=forms.PasswordInput(
+            attrs={"class": "form-input", "autocomplete": "current-password"}
+        ),
+        help_text="Only needed when you change your email address.",
+    )
+
     class Meta:
         model = User
         fields = ("display_name", "bio", "website")
@@ -98,10 +108,44 @@ class ProfileForm(forms.ModelForm):
 
         return email
 
+    def clean(self):
+        cleaned_data = super().clean()
+        # The login email controls password resets, so changing it needs the
+        # password too: a hijacked session alone can't take over the account.
+        if self.email_changed and not self.instance.check_password(
+            cleaned_data.get("current_password", "")
+        ):
+            self.add_error(
+                "current_password",
+                "Enter your current password to change your email address.",
+            )
+        return cleaned_data
+
     @property
     def email_changed(self) -> bool:
         new_email = self.cleaned_data.get("email", "")
         return bool(new_email) and new_email.lower() != self.instance.email.lower()
+
+
+class AccountDeleteForm(forms.Form):
+    password = forms.CharField(
+        label="Your password",
+        strip=False,
+        widget=forms.PasswordInput(
+            attrs={"class": "form-input", "autocomplete": "current-password"}
+        ),
+    )
+    delete_posts = forms.BooleanField(required=False)
+
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean_password(self):
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError("Incorrect password.")
+        return password
 
 
 class ClaimCodeForm(forms.Form):

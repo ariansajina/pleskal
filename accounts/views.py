@@ -17,6 +17,7 @@ from config.ratelimit import RateLimitMixin, get_client_ip
 from events.structured_data import publisher_jsonld
 
 from .forms import (
+    AccountDeleteForm,
     ClaimCodeForm,
     ClaimRegisterForm,
     CustomAuthenticationForm,
@@ -29,12 +30,18 @@ logger = logging.getLogger(__name__)
 
 
 class AccountDeleteView(LoginRequiredMixin, View):
+    template_name = "accounts/account_delete_confirm.html"
+
     def get(self, request):
-        return render(request, "accounts/account_delete_confirm.html")
+        form = AccountDeleteForm(request.user)
+        return render(request, self.template_name, {"form": form})
 
     def post(self, request):
         user = request.user
-        if request.POST.get("delete_posts"):
+        form = AccountDeleteForm(user, request.POST)
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form})
+        if form.cleaned_data["delete_posts"]:
             user.events.all().delete()
         else:
             user.events.update(submitted_by=None)

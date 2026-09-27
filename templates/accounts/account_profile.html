@@ -37,6 +37,17 @@
             </div>
 
             <div>
+                <label for="id_current_password" class="form-label">{{ form.current_password.label }}</label>
+                {{ form.current_password }}
+                {% if form.current_password.help_text %}
+                    <p class="form-help">{{ form.current_password.help_text }}</p>
+                {% endif %}
+                {% for error in form.current_password.errors %}
+                    <p class="form-field-error">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div>
                 <label for="id_bio" class="form-label">{{ form.bio.label }} <span class="form-help" style="text-transform:none;letter-spacing:0;">(<a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" rel="noopener noreferrer">Markdown</a> supported)</span></label>
                 {{ form.bio }}
                 {% if form.bio.help_text %}
