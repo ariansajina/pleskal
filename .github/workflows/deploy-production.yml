@@ -7,15 +7,24 @@ on:
 permissions:
   contents: read
 
+# Never run two production deploys at once; a newer tag queues behind the
+# running one instead of racing it.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: production
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install Railway CLI
         run: |
