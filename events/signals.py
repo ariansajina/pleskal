@@ -6,9 +6,11 @@ from events.models import Event
 
 @receiver(post_delete, sender=Event)
 def delete_event_image_on_delete(sender, instance, **kwargs):
-    if not (instance.image and instance.image.name):
-        return
-    # Don't delete the file if another event still references the same path
-    if Event.objects.filter(image=instance.image.name).exists():
-        return
-    instance.image.storage.delete(instance.image.name)
+    for field_name in ("image", "thumbnail"):
+        file = getattr(instance, field_name)
+        if not (file and file.name):
+            continue
+        # Don't delete the file if another event still references the same path
+        if Event.objects.filter(**{field_name: file.name}).exists():
+            continue
+        file.storage.delete(file.name)

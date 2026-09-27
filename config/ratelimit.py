@@ -41,37 +41,30 @@ def check_rate_limit(key, limit, window):
 
     The counter key is bucketed by the current window index
     (``int(time.time() // window)``), so each window gets a fresh key that
-    starts at zero. This makes correctness independent of whether the cache
-    backend's ``incr()`` preserves the original TTL.
+    starts at zero. This makes correctness independent of how the cache
+    backend handles TTLs on update.
 
     Why bucketing matters: production uses DatabaseCache (see CACHES in
-    settings), which inherits ``BaseCache.incr`` — a get-then-``set`` with no
-    timeout, so each increment re-sets the key with the *default* cache timeout
-    (DEFAULT_TIMEOUT, 300s). Without bucketing that would (a) inflate every
-    window to 300s and (b) — because even rejected (over-limit) requests still
-    increment — keep pushing the expiry forward on every hit, so a counter that
-    crossed the limit would never reset under sustained traffic, permanently
-    locking out the client. Bucketing sidesteps this: a stale bucket's inflated
-    TTL is harmless because the next window uses a new key. (LocMemCache, used in
-    dev/tests, preserves the add() TTL on incr(), so it was never affected.)
+    settings), whose writes re-set the key's expiry. Without bucketing, a
+    counter under sustained traffic would keep pushing its expiry forward and
+    never reset, permanently locking the client out. With it, a stale bucket's
+    TTL is irrelevant because the next window uses a new key.
 
-    cache.add() seeds the bucket at 0 only if absent (atomic no-op if present),
-    then cache.incr() increments it. DatabaseCache's incr is not atomic
-    (get-then-set), so concurrent requests can occasionally undercount by one —
-    acceptable for abuse throttling.
+    The counter is a plain get-then-set rather than ``add()`` + ``incr()``:
+    DatabaseCache has no atomic increment (its ``incr`` is itself a get and a
+    set) and every write costs several queries, so this does the same work in
+    half the round trips. Once the limit is reached, rejected requests only
+    read the counter, so a client hammering the endpoint adds no writes.
+    Concurrent requests can occasionally undercount by one — acceptable for
+    abuse throttling.
     """
     window_index = int(time.time() // window)
     bucket_key = f"{key}:{window_index}"
-    # cache.add() sets the bucket to 0 only if absent (no-op if it exists).
-    cache.add(bucket_key, 0, window)
-    try:
-        count = cache.incr(bucket_key)
-    except ValueError:
-        # Rare: the bucket expired between add() and incr(). Re-seed and count
-        # this request as the first in a fresh window.
-        cache.add(bucket_key, 0, window)
-        count = cache.incr(bucket_key)
-    return count > limit
+    count = cache.get(bucket_key, 0)
+    if count >= limit:
+        return True
+    cache.set(bucket_key, count + 1, window)
+    return False
 
 
 class RateLimitMixin:

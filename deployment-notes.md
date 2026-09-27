@@ -84,6 +84,61 @@ git push origin v1.3.9-rollback
 Approve the workflow run in GitHub Actions. Alternatively, redeploy the previous
 successful build directly from the Railway dashboard (Deployments → Redeploy).
 
+## One-off post-deploy steps
+
+Steps to run once after the release that introduces a change, per environment
+(staging first, then production). Remove an entry once both environments are
+done.
+
+### List thumbnails (`events.0008_event_thumbnail`)
+
+The event list now shows a ~360px thumbnail (`Event.thumbnail`, stored in R2
+under `events/thumbs/`) instead of the full 1200px image. New and changed
+images get their thumbnail when the event is saved; events that existed before
+the release need a one-off backfill. Until then their cards fall back to the
+full image, so nothing looks broken in the meantime.
+
+1. **Deploy.** The migration only adds a nullable column (instant, no table
+   rewrite) and runs in the usual `preDeployCommand`. The static thumbnails of
+   the default images ship in the Docker image.
+2. **Preview** what will be generated (writes nothing):
+   ```bash
+   railway run --environment staging --service web-service python manage.py backfill_thumbnails --dry-run
+   ```
+3. **Run the backfill.** It reads each distinct image from R2 once, uploads its
+   thumbnail and attaches it to every event using that image. It doesn't bump
+   `updated_at`, so calendar subscribers and the sitemap see no change:
+   ```bash
+   railway run --environment staging --service web-service python manage.py backfill_thumbnails
+   ```
+   Use `--limit N` to do it in batches. It is safe to re-run or interrupt,
+   because it only picks up events still missing a thumbnail. The run ends with
+   `Generated N thumbnail(s); M failed.` A failure (e.g. an image file missing
+   from R2) is logged as `[failed] <image name>`. Those events keep showing
+   the full image, and the backfill retries them on every run.
+4. **Production:** repeat steps 2–3 with `--environment production`, or let the
+   next daily `scrape-cron` run do it, since `run_scrapers` now runs
+   `backfill_thumbnails` as a step. Staging has no cron, so run it there by
+   hand.
+5. **Verify.** Open the event list and check that the card images load from
+   `…/events/thumbs/<hash>.webp` (browser dev tools → Network). The backfill
+   should report `Generated 0 thumbnail(s); 0 failed.` on a second run.
+
+If `railway run` can't resolve `postgres.railway.internal`, run the same
+commands from a shell inside the service (see the scraper section below).
+
+**Rollback:** safe. Older releases ignore the `thumbnail` column, and the files
+under `events/thumbs/` are only orphaned, not referenced by anything else.
+
+### gunicorn threads
+
+The web service now runs `--workers 2 --threads 4`. It holds up to 8
+persistent Postgres connections (one per thread, reused for `CONN_MAX_AGE`).
+That is well under Railway Postgres's default `max_connections` of 100. After
+the deploy, check the service's **Metrics** tab. If memory climbs noticeably
+(several image uploads processed at once), drop to `--threads 2` in the
+`Dockerfile` `CMD`.
+
 ---
 
 ## Monitoring
@@ -154,7 +209,8 @@ scheduled Cron Job service in the **production** environment only.
 
    `run_scrapers` already calls all `import_*` commands internally: it scrapes
    each source, writes a temp JSON file, and invokes the corresponding
-   importer. It then backfills missing geocoding and runs
+   importer. It then backfills missing geocoding, translations and list
+   thumbnails (`backfill_thumbnails`, skipped with `--skip-images`) and runs
    `purge_expired_events`, which deletes past **scraped** events older than
    `SCRAPED_EVENT_RETENTION_DAYS` (default 90). This cron is the only thing
    enforcing that, so set the variable on this service if you override it.
