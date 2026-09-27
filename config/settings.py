@@ -82,6 +82,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "config.middleware.NoStoreForAuthenticatedMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -360,6 +361,10 @@ AXES_USERNAME_CALLABLE = "config.ratelimit.get_login_username"
 # visitor; resolve the client IP the same way the rate limiter does.
 AXES_CLIENT_IP_CALLABLE = "config.ratelimit.get_client_ip"
 AXES_RESET_ON_SUCCESS = True
+# Lockouts only need the failed attempts (AccessAttempt, dropped after the
+# cool-off). axes' AccessLog would otherwise keep the email, IP address and
+# browser of every *successful* login forever, with no retention.
+AXES_DISABLE_ACCESS_LOG = True
 
 # Cache
 #
@@ -458,6 +463,9 @@ LOGGING = {
 # django-markdownx
 
 MARKDOWNX_MARKDOWN_EXTENSIONS = ["fenced_code"]
-# Restrict image uploads via markdownx preview endpoint (not used for event images)
-MARKDOWNX_UPLOAD_MAX_SIZE = 4 * 1024 * 1024  # 4 MB
-MARKDOWNX_UPLOAD_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"]
+# The editor's live preview goes through the same nh3-sanitized renderer as the
+# published page. markdownx's default markdownify() returns raw HTML, which the
+# widget inserts into the page unsanitized.
+MARKDOWNX_MARKDOWNIFY_FUNCTION = "events.templatetags.markdown_filters.render_markdown"
+# The markdownx image-upload endpoint is not routed (see config/urls.py):
+# rendered Markdown strips <img>, so uploads would only pile up in storage.

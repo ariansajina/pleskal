@@ -150,7 +150,9 @@ class ClaimRegisterForm(forms.Form):
 
     def clean_email(self):
         email = self.cleaned_data["email"]
-        if User.objects.filter(email=email).exists():
+        # Case-insensitive, like login and password reset: "Name@x.dk" and
+        # "name@x.dk" must not become two accounts for one mailbox.
+        if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError(EMAIL_ALREADY_IN_USE_ERROR)
         return email
 

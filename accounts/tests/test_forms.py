@@ -1,6 +1,6 @@
 import pytest
 
-from accounts.forms import ProfileForm
+from accounts.forms import ClaimRegisterForm, ProfileForm
 
 from .factories import UserFactory
 
@@ -65,3 +65,24 @@ class TestProfileForm:
         )
         form = ProfileForm({"email": "pending@example.com"}, instance=user)
         assert form.is_valid()
+
+
+@pytest.mark.django_db
+class TestClaimRegisterFormEmail:
+    def _data(self, email):
+        return {
+            "email": email,
+            "display_name": "New Dancer",
+            "password1": "correct-horse-battery-staple-42",
+            "password2": "correct-horse-battery-staple-42",
+        }
+
+    def test_rejects_taken_email_with_different_case(self):
+        UserFactory.create(email="dancer@example.com")
+        form = ClaimRegisterForm(self._data("Dancer@Example.com"))
+        assert not form.is_valid()
+        assert "email" in form.errors
+
+    def test_accepts_unused_email(self):
+        form = ClaimRegisterForm(self._data("fresh@example.com"))
+        assert form.is_valid(), form.errors

@@ -11,9 +11,11 @@ Caching strategy implemented in ``service-worker.js``:
 * **Precache** (cache-first): the site shell — ``/``, the offline fallback
   page, compiled Tailwind CSS, vendored HTMX and small UI scripts, the logo
   and PWA icons.
-* **Stale-while-revalidate**: GET navigations (e.g. event detail pages) and
-  same-origin images. The cached copy is served immediately and revalidated
-  in the background.
+* **Network-first** GET navigations (e.g. event detail pages), cached for
+  offline use; **stale-while-revalidate** for same-origin images. Responses
+  marked ``Cache-Control: no-store`` are never cached — that covers every page
+  served to a logged-in user (``config.middleware``), so drafts and edit forms
+  don't survive logout in Cache Storage.
 * **Network-only**: anything authenticated or state-changing — POST/PUT/
   DELETE, ``/accounts/*``, ``/claim/*``, ``/admin/*``, ``/markdownx/*``,
   ``/health/`` — never cached, so we cannot serve stale HTML to a logged-in

@@ -78,6 +78,18 @@ class TestAxesLockout:
         )
         assert resp.status_code == 302  # still logs in fine
 
+    def test_successful_login_is_not_logged(self, client):
+        """No permanent record of IP/browser per successful login (AccessLog)."""
+        from axes.models import AccessLog
+
+        UserFactory.create(email="private@example.com")
+        resp = client.post(
+            reverse("login"),
+            {"username": "private@example.com", "password": "testpass123"},
+        )
+        assert resp.status_code == 302
+        assert not AccessLog.objects.exists()  # type: ignore
+
 
 @pytest.mark.django_db
 class TestAxesLockoutScope:

@@ -8,7 +8,7 @@ from django.db import DatabaseError, connection
 from django.http import HttpResponse
 from django.urls import include, path
 from django.views.decorators.cache import cache_control, never_cache
-from markdownx.views import ImageUploadView, MarkdownifyView
+from markdownx.views import MarkdownifyView
 
 from accounts.views import ClaimCodeView, ClaimRegisterView
 from config.pwa import manifest_view, offline_view, service_worker_view
@@ -87,14 +87,11 @@ urlpatterns = [
     # allauth provides email confirmation views (/accounts/confirm-email/<key>/).
     # Our custom views above shadow allauth's login/logout/signup routes.
     path("accounts/", include("allauth.urls")),
-    # markdownx's default urls.py mounts these views with no auth requirement;
-    # wrap them with login_required since only authenticated users can edit
-    # markdown content (event descriptions, bios).
-    path(
-        "markdownx/upload/",
-        login_required(ImageUploadView.as_view()),
-        name="markdownx_upload",
-    ),
+    # markdownx's default urls.py mounts its views with no auth requirement;
+    # wrap the preview view with login_required since only authenticated users
+    # can edit markdown content (event descriptions, bios). Its image-upload
+    # view is deliberately not mounted: rendered Markdown strips <img>, so
+    # uploads would only be unmanaged files in the public media bucket.
     path(
         "markdownx/markdownify/",
         login_required(MarkdownifyView.as_view()),

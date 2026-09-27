@@ -58,6 +58,14 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/* Responses marked no-store (every page served to a logged-in user, see
+ * config/middleware.py) must never be written to Cache Storage: they hold
+ * per-user state that would otherwise outlive logout on a shared device. */
+function isCacheable(response) {
+  if (!response || !response.ok || response.type !== "basic") return false;
+  return !/no-store/i.test(response.headers.get("Cache-Control") || "");
+}
+
 function isNetworkOnly(url) {
   if (url.origin !== self.location.origin) return true;
   return NETWORK_ONLY_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
@@ -70,7 +78,7 @@ function staleWhileRevalidate(request) {
     caches.match(request).then((cached) => {
       const network = fetch(request)
         .then((response) => {
-          if (response && response.ok && response.type === "basic") {
+          if (isCacheable(response)) {
             cache.put(request, response.clone());
           }
           return response;
@@ -89,12 +97,13 @@ self.addEventListener("fetch", (event) => {
   if (isNetworkOnly(url)) return;
 
   /* Navigation requests: network-first so auth state is always current.
-   * Cache the response for offline fallback; serve stale only when offline. */
+   * Cache anonymous responses for offline fallback; serve stale only when
+   * offline. */
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response && response.ok && response.type === "basic") {
+          if (isCacheable(response)) {
             caches.open(RUNTIME).then((cache) => cache.put(request, response.clone()));
           }
           return response;
