@@ -243,7 +243,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - Every color is a token in `:root` in `templates/base.html` with a matching dark value in the `@media (prefers-color-scheme: dark)` block; never hardcode hex/rgba in rules, inline styles or page `<style>` blocks (`500.html` is the standalone exception and carries its own copy)
 - `--blue` is lighter in dark mode, so text on a `--blue` fill uses `--on-blue` (not `--cream`); text on `--c-perf`/`--c-op` fills uses `--on-danger`
 - `<meta name="color-scheme" content="light dark">` stops browsers (Chrome/Samsung Internet "darken websites") from auto-darkening the page
-- Header logo swaps to `static/images/logo-dark.png` (cream recolor of `logo.png`) via `<picture>`; `--img-bg` gives the transparent fallback event image a cream backdrop in dark mode
+- Header logo swaps to `static/images/logo-header-dark.png` (cream recolor) via `<picture>`; the header uses 120px renditions (`logo-header*.png`, ~15 KB) of the 1024px `logo.png` / `logo-dark.png` sources, so regenerate them when the logo changes; `--img-bg` gives the transparent fallback event image a cream backdrop in dark mode
 
 ### Security
 
@@ -252,7 +252,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
 - Image uploads: Pillow-validated (not Content-Type), capped at `MAX_IMAGE_PIXELS` (50 MP, checked from the header before decoding; JPEGs measured after draft downscaling), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min lockout of the (email, client IP) pair; client IP resolved via `config.ratelimit.get_client_ip`, since `REMOTE_ADDR` is Railway's proxy)
-- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's `incr()` TTL behavior; limits per endpoint listed below
+- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's TTL behavior; counted with a get-then-set (no `add()`/`incr()`, which cost twice the queries on DatabaseCache) and rejected requests don't write; limits per endpoint listed below
 - CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
@@ -462,6 +462,7 @@ See `.env.example` for the full list. Key variables:
 | `DEBUG` | `true`/`false` |
 | `ALLOWED_HOSTS` | Comma-separated hostnames |
 | `DATABASE_URL` | DB connection string (default: `sqlite:///db.sqlite3`) |
+| `CONN_MAX_AGE` | Seconds a worker keeps its DB connection open for reuse (default: 600; health-checked before each request) |
 | `PASSWORD_PEPPER` | 64-char hex string (32-byte key) for HMAC password hashing |
 | `R2_BUCKET_NAME` | Enables Cloudflare R2 storage when set |
 | `R2_ACCESS_KEY` | R2 access key |

@@ -500,6 +500,75 @@ class TestEventListView:
         assert str(near.title).encode() in resp.content
         assert str(far.title).encode() not in resp.content
 
+    def test_date_range_bounds_are_local_calendar_days(self, client):
+        """date_from/date_to cover whole days in local time (Europe/Copenhagen),
+        not UTC: the bounds are local midnights."""
+        tz = timezone.get_current_timezone()
+        day = timezone.localdate() + datetime.timedelta(days=10)
+
+        def at(d, hour, minute):
+            return datetime.datetime.combine(d, datetime.time(hour, minute), tz)
+
+        prev_day = day - datetime.timedelta(days=1)
+        next_day = day + datetime.timedelta(days=1)
+        EventFactory.create(title="Before", start_datetime=at(prev_day, 23, 30))
+        EventFactory.create(title="Early", start_datetime=at(day, 0, 15))
+        EventFactory.create(title="Late", start_datetime=at(day, 23, 30))
+        EventFactory.create(title="After", start_datetime=at(next_day, 0, 15))
+
+        resp = client.get(reverse("event_list") + f"?date_from={day}&date_to={day}")
+        titles = {e.title for e in resp.context["events"]}
+        assert titles == {"Early", "Late"}
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "?date_from=0001-01-01&date_to=9999-12-31",
+            "?date_to=9999-12-31",
+            "?date_from=9999-12-31",
+        ],
+    )
+    def test_extreme_dates_do_not_error(self, client, query):
+        EventFactory.create()
+        resp = client.get(reverse("event_list") + query)
+        assert resp.status_code == 200
+
+    def test_counts_events_once(self, client):
+        """The upcoming/past toggle counts come from one aggregate query that
+        the paginator reuses, instead of three separate COUNT(*)s."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        EventFactory.create_batch(EVENTS_PER_PAGE + 5)
+        EventFactory.create(start_datetime=timezone.now() - timezone.timedelta(days=3))
+        with CaptureQueriesContext(connection) as ctx:
+            resp = client.get(reverse("event_list") + "?q=dance")
+        counting = [q for q in ctx.captured_queries if "COUNT(" in q["sql"]]
+        assert len(counting) == 1
+        assert resp.context["upcoming_count"] == EVENTS_PER_PAGE + 5
+        assert resp.context["past_count"] == 1
+        assert resp.context["page_obj"].paginator.count == EVENTS_PER_PAGE + 5
+        assert resp.context["page_obj"].paginator.num_pages == 2
+
+    def test_paginator_count_matches_past_and_date_range(self, client):
+        EventFactory.create_batch(2)
+        EventFactory.create(start_datetime=timezone.now() - timezone.timedelta(days=3))
+        resp = client.get(reverse("event_list") + "?past=1")
+        assert resp.context["page_obj"].paginator.count == 1
+        yesterday = timezone.localdate() - datetime.timedelta(days=30)
+        resp = client.get(reverse("event_list") + f"?date_from={yesterday}")
+        assert resp.context["page_obj"].paginator.count == 3
+
+    def test_htmx_partial_skips_publisher_badges(self, client):
+        """The results partial has no publisher badges, so HTMX requests don't
+        query for them."""
+        system_user = UserFactory.create(is_system_account=True, display_name="HAUT")
+        EventFactory.create(submitted_by=system_user)
+        resp = client.get(reverse("event_list"), HTTP_HX_REQUEST="true")
+        assert resp.status_code == 200
+        assert "system_publishers" not in resp.context
+        assert "has_community_publishers" not in resp.context
+
     def test_quickbar_chips_rendered(self, client):
         resp = client.get(reverse("event_list"))
         assert resp.status_code == 200

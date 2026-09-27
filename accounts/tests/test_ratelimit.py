@@ -40,6 +40,21 @@ class TestCheckRateLimit:
             check_rate_limit("test:key3", limit=3, window=60)
         assert check_rate_limit("test:key3", limit=3, window=60) is True
 
+    def test_rejected_requests_do_not_write(self, monkeypatch):
+        """Over the limit, the counter is only read: under DatabaseCache every
+        write costs several queries, so a flood must not add any."""
+        import config.ratelimit as rl
+        from config.ratelimit import check_rate_limit
+
+        for _ in range(3):
+            check_rate_limit("test:nowrite", limit=3, window=60)
+
+        writes = []
+        monkeypatch.setattr(rl.cache, "set", lambda *a, **kw: writes.append(a))
+        for _ in range(5):
+            assert check_rate_limit("test:nowrite", limit=3, window=60) is True
+        assert writes == []
+
     def test_different_keys_are_independent(self):
         from config.ratelimit import check_rate_limit
 

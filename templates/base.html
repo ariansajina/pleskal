@@ -695,8 +695,9 @@
 
       <a href="{% url 'event_list' %}" class="site-logo">
         <picture>
-          <source srcset="{% static 'images/logo-dark.png' %}" media="(prefers-color-scheme: dark)">
-          <img src="{% static 'images/logo.png' %}" alt="pleskal" height="40">
+          {# 120px renditions (3x the 40px display size) of logo.png / logo-dark.png #}
+          <source srcset="{% static 'images/logo-header-dark.png' %}" media="(prefers-color-scheme: dark)">
+          <img src="{% static 'images/logo-header.png' %}" alt="pleskal" width="40" height="40">
         </picture>
       </a>
 
