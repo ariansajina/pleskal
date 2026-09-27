@@ -9,11 +9,11 @@ from events.models import Event, EventCategory, FeedHit
 from events.tests.factories import EventFactory
 
 
-def _past_event(**kwargs):
+def _past_event(days_ago=5, **kwargs):
     """Create an event with a past start_datetime (bypassing model clean)."""
     e = Event(
         title=kwargs.get("title", "Past Event"),
-        start_datetime=timezone.now() - timezone.timedelta(days=5),
+        start_datetime=timezone.now() - timezone.timedelta(days=days_ago),
         venue_name=kwargs.get("venue_name", "Old Hall"),
         category=kwargs.get("category", "social"),
     )
@@ -92,10 +92,22 @@ class TestICalFeed:
         resp = client.get(reverse("event_ical_feed"))
         assert str(event.title).encode() in resp.content
 
-    def test_ical_excludes_past_events(self, client):
-        _past_event(title="Past iCal Event")
+    def test_ical_excludes_events_older_than_retention_window(self, client):
+        _past_event(days_ago=31, title="Past iCal Event")
         resp = client.get(reverse("event_ical_feed"))
         assert b"Past iCal Event" not in resp.content
+
+    def test_ical_keeps_recently_ended_events(self, client):
+        _past_event(days_ago=29, title="Recent iCal Event")
+        resp = client.get(reverse("event_ical_feed"))
+        assert b"Recent iCal Event" in resp.content
+
+    def test_ical_window_counts_from_end_of_long_event(self, client):
+        e = _past_event(days_ago=60, title="Long Run")
+        e.end_datetime = timezone.now() - timezone.timedelta(days=10)
+        e.save()
+        resp = client.get(reverse("event_ical_feed"))
+        assert b"Long Run" in resp.content
 
     def test_ical_category_filter(self, client):
         workshop = EventFactory.create(category="workshop")
@@ -451,11 +463,11 @@ class TestFeedReviewFixes:
         resp = client.get(reverse("event_rss_feed"))
         assert b"Running Festival" in resp.content
 
-    def test_ical_excludes_event_that_has_ended(self, client):
+    def test_rss_excludes_event_that_has_ended(self, client):
         e = _past_event(title="Finished Run")
         e.end_datetime = e.start_datetime + timezone.timedelta(hours=2)
         e.save()
-        resp = client.get(reverse("event_ical_feed"))
+        resp = client.get(reverse("event_rss_feed"))
         assert b"Finished Run" not in resp.content
 
     def test_community_filter_includes_events_of_deleted_users(self, client):

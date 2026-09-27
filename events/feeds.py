@@ -24,16 +24,23 @@ def _plain_text(markdown_text: str) -> str:
     return text.strip()
 
 
+# How long an event stays in the iCal feed after it ends, so it doesn't vanish
+# from subscribers' calendars the moment it's over and they can look back at
+# what they attended.
+ICAL_PAST_EVENT_DAYS = 30
+
+
 def _upcoming_qs(
     categories: list[str] | None = None,
     publisher_slugs: list[str] | None = None,
+    past_days: int = 0,
 ):
-    now = timezone.now()
-    # Upcoming *or still running*: a multi-day event (or one that is on right
-    # now) stays in the feed until it ends, rather than vanishing from
+    since = timezone.now() - timezone.timedelta(days=past_days)
+    # Upcoming *or still running* (or ended within *past_days*): a multi-day
+    # event stays in the feed until it ends, rather than vanishing from
     # subscribers' calendars the moment it starts.
     qs = Event.objects.filter(
-        Q(start_datetime__gte=now) | Q(end_datetime__gte=now),
+        Q(start_datetime__gte=since) | Q(end_datetime__gte=since),
         is_draft=False,
     ).order_by("start_datetime", "id")
     if categories:
@@ -153,7 +160,11 @@ class EventICalFeed(View):
         FeedHit.record(FeedHit.ICAL)
         categories = request.GET.getlist("category")
         publisher_slugs = request.GET.getlist("publisher")
-        queryset = _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)
+        queryset = _upcoming_qs(
+            categories=categories,
+            publisher_slugs=publisher_slugs,
+            past_days=ICAL_PAST_EVENT_DAYS,
+        )
 
         cal = Calendar()
         cal.add("prodid", "-//Copenhagen Dance Calendar//EN")
