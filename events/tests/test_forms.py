@@ -24,8 +24,9 @@ def make_form_data(title, date, start_time, **overrides):
 @pytest.mark.django_db
 class TestEventFormUniqueness:
     def _future_date_and_time(self):
+        # Fixed time of day: tests add hours to it, which must not wrap past midnight.
         future = timezone.localtime(timezone.now() + timezone.timedelta(days=7))
-        return future.date(), future.replace(minute=0, second=0, microsecond=0).time()
+        return future.date(), datetime.time(18, 0)
 
     def test_duplicate_title_and_start_datetime_is_invalid(self):
         date, start_time = self._future_date_and_time()
@@ -92,8 +93,9 @@ class TestEventFormUniqueness:
 @pytest.mark.django_db
 class TestEventFormMultiDay:
     def _future_date_and_time(self):
+        # Fixed time of day: tests add hours to it, which must not wrap past midnight.
         future = timezone.localtime(timezone.now() + timezone.timedelta(days=7))
-        return future.date(), future.replace(minute=0, second=0, microsecond=0).time()
+        return future.date(), datetime.time(18, 0)
 
     def test_end_date_defaults_to_start_date_when_blank(self):
         date, start_time = self._future_date_and_time()

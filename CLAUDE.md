@@ -455,6 +455,8 @@ This repo ships `.claude/hooks/` + `.claude/settings.json` for remote/web sessio
 - **`session-start.sh`** (`SessionStart`): runs `uv sync --dev`, `npm install`, and `pre-commit install --install-hooks` at session start, so dependencies are ready without spending turns on setup.
 - **`pre-pr-check.sh`** (`PreToolUse`, matches `create_pull_request`): runs `pre-commit run --all-files` — ruff format, ruff check, ty check, and the full `pytest -n 8` suite (see `.pre-commit-config.yaml`) — and blocks PR creation with the failure output until it's clean.
 
+Project skills live in `.claude/skills/`: `run-pleskal` (run + smoke-test the app locally) and `scraper-health` (samples 1–3 scraped events per active scraper from the live site, compares them with the venues' pages, and reports a Healthy / Needs work / Unhealthy table; meant to run as a periodic routine; evidence gathered by `collect.py`, which reads public pages only and never the feeds, so FeedHit counts stay clean).
+
 Because of this hook, **do not manually run `ruff format`, `ruff check`, `ty check`, or `pytest` before opening a PR** — the hook runs them automatically and will block the PR creation tool call if anything fails, feeding the failure output back for you to fix and retry. Manually re-running these first just duplicates the check. Only run them ad hoc if you want a mid-task sanity check on a single file, or if the hook itself surfaces a failure to diagnose.
 
 ## CI / CD
