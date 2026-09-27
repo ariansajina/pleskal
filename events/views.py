@@ -1,6 +1,7 @@
 import calendar
 import datetime
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -780,6 +781,23 @@ class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
         return redirect("event_detail", slug=event.slug)
 
 
+def _webcal_url(url: str) -> str:
+    """``webcal://`` form of an http(s) feed URL.
+
+    Calendar apps (Apple Calendar, Outlook, Thunderbird) treat a webcal link
+    as "subscribe to this calendar", whereas following the plain https URL
+    downloads a one-off ``.ics`` that gets imported once and never updates.
+    """
+    return "webcal://" + url.split("://", 1)[1]
+
+
+def _google_subscribe_url(url: str) -> str:
+    """Google Calendar "add by URL" link for a feed URL."""
+    return "https://calendar.google.com/calendar/r?" + urlencode(
+        {"cid": _webcal_url(url)}
+    )
+
+
 class SubscribeView(TemplateView):
     template_name = "events/subscribe.html"
 
@@ -789,6 +807,11 @@ class SubscribeView(TemplateView):
         publishers, has_community_publishers = _subscribe_publishers()
         ctx["publishers"] = publishers
         ctx["has_community_publishers"] = has_community_publishers
+        ical_url = self.request.build_absolute_uri(reverse("event_ical_feed"))
+        ctx["ical_url"] = ical_url
+        ctx["ical_webcal_url"] = _webcal_url(ical_url)
+        ctx["ical_google_url"] = _google_subscribe_url(ical_url)
+        ctx["rss_url"] = self.request.build_absolute_uri(reverse("event_rss_feed"))
         return ctx
 
 

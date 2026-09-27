@@ -24,12 +24,23 @@ def _plain_text(markdown_text: str) -> str:
     return text.strip()
 
 
+# How long an event stays in the iCal feed after it ends, so it doesn't vanish
+# from subscribers' calendars the moment it's over and they can look back at
+# what they attended.
+ICAL_PAST_EVENT_DAYS = 30
+
+
 def _upcoming_qs(
     categories: list[str] | None = None,
     publisher_slugs: list[str] | None = None,
+    past_days: int = 0,
 ):
+    since = timezone.now() - timezone.timedelta(days=past_days)
+    # Upcoming *or still running* (or ended within *past_days*): a multi-day
+    # event stays in the feed until it ends, rather than vanishing from
+    # subscribers' calendars the moment it starts.
     qs = Event.objects.filter(
-        start_datetime__gte=timezone.now(),
+        Q(start_datetime__gte=since) | Q(end_datetime__gte=since),
         is_draft=False,
     ).order_by("start_datetime", "id")
     if categories:
@@ -40,13 +51,14 @@ def _upcoming_qs(
     if publisher_slugs:
         other = "community" in publisher_slugs
         named = [s for s in publisher_slugs if s != "community"]
+        # "Community" = anything not from a system (scraper) account, including
+        # events whose submitter deleted their account (submitted_by NULL) —
+        # matching the event list's "other" publisher filter.
+        community = ~Q(submitted_by__is_system_account=True)
         if other and named:
-            qs = qs.filter(
-                Q(submitted_by__display_name_slug__in=named)
-                | Q(submitted_by__is_system_account=False)
-            )
+            qs = qs.filter(Q(submitted_by__display_name_slug__in=named) | community)
         elif other:
-            qs = qs.filter(submitted_by__is_system_account=False)
+            qs = qs.filter(community)
         else:
             qs = qs.filter(submitted_by__display_name_slug__in=named)
     return qs
@@ -76,6 +88,9 @@ def _build_vevent(event: Event) -> ICalEvent:
     """Build an iCalendar VEVENT component from an Event instance."""
     vevent = ICalEvent()
     vevent.add("uid", _stable_uid(event))
+    # DTSTAMP is REQUIRED by RFC 5545; LAST-MODIFIED lets clients spot edits.
+    vevent.add("dtstamp", event.updated_at)
+    vevent.add("last-modified", event.updated_at)
     vevent.add("summary", event.title)
     vevent.add("dtstart", event.start_datetime)
     if event.end_datetime:
@@ -145,13 +160,26 @@ class EventICalFeed(View):
         FeedHit.record(FeedHit.ICAL)
         categories = request.GET.getlist("category")
         publisher_slugs = request.GET.getlist("publisher")
-        queryset = _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)
+        queryset = _upcoming_qs(
+            categories=categories,
+            publisher_slugs=publisher_slugs,
+            past_days=ICAL_PAST_EVENT_DAYS,
+        )
 
         cal = Calendar()
         cal.add("prodid", "-//Copenhagen Dance Calendar//EN")
         cal.add("version", "2.0")
         cal.add("calscale", "GREGORIAN")
         cal.add("x-wr-calname", "Copenhagen Dance Calendar")
+        # Polling hint for subscribed calendars (Apple uses X-PUBLISHED-TTL,
+        # RFC 7986 clients REFRESH-INTERVAL); matches the daily refresh the
+        # subscribe page recommends.
+        cal.add(
+            "refresh-interval",
+            timezone.timedelta(days=1),
+            parameters={"VALUE": "DURATION"},
+        )
+        cal.add("x-published-ttl", "P1D")
 
         for event in queryset:
             cal.add_component(_build_vevent(event))
