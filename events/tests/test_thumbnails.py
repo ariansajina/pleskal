@@ -92,12 +92,14 @@ class TestMakeThumbnail:
 
     def test_oversized_image_is_rejected(self, settings):
         settings.MAX_IMAGE_PIXELS = 1000
+        fileobj = io.BytesIO(_image_bytes((100, 100)))
         with pytest.raises(ValueError):
-            make_thumbnail(io.BytesIO(_image_bytes((100, 100))))
+            make_thumbnail(fileobj)
 
     def test_invalid_data_raises(self):
+        fileobj = io.BytesIO(b"not an image")
         with pytest.raises(OSError):
-            make_thumbnail(io.BytesIO(b"not an image"))
+            make_thumbnail(fileobj)
 
 
 @pytest.mark.django_db
