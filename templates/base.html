@@ -652,6 +652,16 @@
     }
     .map-modal__close { align-self: flex-end; }
 
+    /* ─── KO-FI WIDGET ─────────────────────────────────────── */
+    /* static/js/kofi.js loads Ko-fi's floating button into transparent
+       iframes styled `color-scheme: auto`, which isn't a real scheme: the
+       iframe element falls back to this page's schemes (dark in dark mode)
+       while the document inside stays light. Browsers paint an opaque
+       backdrop behind an iframe whose scheme differs from its document's,
+       i.e. a white box around the button. Pin the iframes to light so the
+       two match. */
+    iframe[id^="kofi-"] { color-scheme: light !important; }
+
     /* ─── RESPONSIVE ───────────────────────────────────────── */
     @media (max-width: 768px) {
       .content-wrap { padding: 0 var(--space-4) var(--space-12); }

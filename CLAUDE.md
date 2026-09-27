@@ -252,6 +252,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - `--blue` is lighter in dark mode, so text on a `--blue` fill uses `--on-blue` (not `--cream`); text on `--c-perf`/`--c-op` fills uses `--on-danger`
 - `<meta name="color-scheme" content="light dark">` stops browsers (Chrome/Samsung Internet "darken websites") from auto-darkening the page
 - Header shows `logo-header.png` or `logo-header-dark.png` (cream recolor) as two `<img>`s swapped by CSS, since a `<picture>` media query can't follow the toggle; the header uses 120px renditions (`logo-header*.png`, ~15 KB) of the 1024px `logo.png` / `logo-dark.png` sources, so regenerate them when the logo changes; `--img-bg` gives the transparent fallback event image a cream backdrop in dark mode
+- Third-party iframes must resolve to the same color scheme as their inner document, or browsers (Safari/Firefox) paint an opaque white backdrop behind them in dark mode: the Ko-fi widget's iframes are pinned with `iframe[id^="kofi-"] { color-scheme: light !important; }`
 
 ### Security
 
