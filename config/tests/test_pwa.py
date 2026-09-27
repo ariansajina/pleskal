@@ -125,6 +125,14 @@ class TestBaseTemplateIntegration:
         assert b'media="(prefers-color-scheme: dark)"' in response.content
         assert b"logo-header-dark.png" in response.content
 
+    def test_theme_toggle_present(self, client):
+        response = client.get("/")
+        assert b'class="theme-toggle"' in response.content
+        # Loaded without defer so a saved theme applies before first paint.
+        assert b'js/theme.js"></script>' in response.content
+        # The system-setting and toggle rules share one set of dark tokens.
+        assert response.content.count(b"--surface:       #14133D;") == 2
+
     def test_sw_registration_script_loaded(self, client):
         response = client.get("/")
         assert b"pwa.js" in response.content
