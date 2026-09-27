@@ -243,7 +243,11 @@ class TestEditProfileView:
         client.force_login(user)
         response = client.post(
             "/accounts/profile/edit/",
-            {"display_name": user.display_name, "email": "new@example.com"},
+            {
+                "display_name": user.display_name,
+                "email": "new@example.com",
+                "current_password": "testpass123",
+            },
         )
         assert response.status_code == 302
         user.refresh_from_db()
@@ -274,15 +278,68 @@ class TestEditProfileView:
         client.force_login(user)
         client.post(
             "/accounts/profile/edit/",
-            {"display_name": user.display_name, "email": "typo@example.com"},
+            {
+                "display_name": user.display_name,
+                "email": "typo@example.com",
+                "current_password": "testpass123",
+            },
         )
         client.post(
             "/accounts/profile/edit/",
-            {"display_name": user.display_name, "email": "fixed@example.com"},
+            {
+                "display_name": user.display_name,
+                "email": "fixed@example.com",
+                "current_password": "testpass123",
+            },
         )
         pending = EmailAddress.objects.filter(user=user, verified=False, primary=False)
         assert pending.count() == 1
         assert pending.get().email == "fixed@example.com"
+
+    def test_email_change_with_wrong_password_is_rejected(self):
+        from allauth.account.models import EmailAddress
+
+        user = UserFactory.create(email="old@example.com", display_name="Old Name")
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/profile/edit/",
+            {
+                "display_name": "New Name",
+                "email": "attacker@example.com",
+                "current_password": "wrongpassword",
+            },
+        )
+        assert response.status_code == 200
+        assert b"Enter your current password" in response.content
+        assert not EmailAddress.objects.filter(email="attacker@example.com").exists()
+        user.refresh_from_db()
+        assert user.display_name == "Old Name"
+
+    def test_email_change_without_password_is_rejected(self):
+        from allauth.account.models import EmailAddress
+
+        user = UserFactory.create(email="old@example.com")
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/profile/edit/",
+            {"display_name": user.display_name, "email": "new@example.com"},
+        )
+        assert response.status_code == 200
+        assert not EmailAddress.objects.filter(email="new@example.com").exists()
+
+    def test_other_changes_do_not_need_password(self):
+        user = UserFactory.create(email="same@example.com")
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/profile/edit/",
+            {"display_name": "Renamed", "email": "same@example.com"},
+        )
+        assert response.status_code == 302
+        user.refresh_from_db()
+        assert user.display_name == "Renamed"
 
 
 @pytest.mark.django_db
@@ -342,7 +399,7 @@ class TestAccountDeleteView:
         user = UserFactory.create()
         client = Client()
         client.force_login(user)
-        response = client.post("/accounts/delete/")
+        response = client.post("/accounts/delete/", {"password": "testpass123"})
         assert response.status_code == 302
         assert not User.objects.filter(pk=user.pk).exists()
 
@@ -351,7 +408,7 @@ class TestAccountDeleteView:
         event = EventFactory.create(submitted_by=user)
         client = Client()
         client.force_login(user)
-        client.post("/accounts/delete/")
+        client.post("/accounts/delete/", {"password": "testpass123"})
         event.refresh_from_db()
         assert event.submitted_by is None
 
@@ -362,14 +419,38 @@ class TestAccountDeleteView:
         event = EventFactory.create(submitted_by=user)
         client = Client()
         client.force_login(user)
-        client.post("/accounts/delete/", {"delete_posts": "1"})
+        client.post(
+            "/accounts/delete/", {"password": "testpass123", "delete_posts": "1"}
+        )
         assert not Event.objects.filter(pk=event.pk).exists()
+
+    def test_wrong_password_keeps_account(self):
+        user = UserFactory.create()
+        event = EventFactory.create(submitted_by=user)
+        client = Client()
+        client.force_login(user)
+        response = client.post(
+            "/accounts/delete/", {"password": "wrongpassword", "delete_posts": "1"}
+        )
+        assert response.status_code == 200
+        assert b"Incorrect password." in response.content
+        assert User.objects.filter(pk=user.pk).exists()
+        event.refresh_from_db()
+        assert event.submitted_by == user
+
+    def test_missing_password_keeps_account(self):
+        user = UserFactory.create()
+        client = Client()
+        client.force_login(user)
+        response = client.post("/accounts/delete/")
+        assert response.status_code == 200
+        assert User.objects.filter(pk=user.pk).exists()
 
     def test_delete_logs_out_user(self):
         user = UserFactory.create()
         client = Client()
         client.force_login(user)
-        client.post("/accounts/delete/")
+        client.post("/accounts/delete/", {"password": "testpass123"})
         response = client.get("/accounts/delete/")
         assert response.status_code == 302
         assert "/accounts/login/" in response.url

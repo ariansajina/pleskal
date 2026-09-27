@@ -80,3 +80,85 @@ class TestDeleteEventImageSignal:
         event_b.delete()
         # Now the last reference is gone — file must be deleted
         assert not image_a.storage.exists(image_name)
+
+
+@pytest.mark.django_db
+class TestDeleteReplacedEventImageSignal:
+    """Replacing or clearing an event's image removes the old file, since the
+    media bucket is public and the orphan would stay reachable at its URL."""
+
+    def _event_with_image(self):
+        event = EventFactory.create()
+        image = cast(ImageFieldFile, event.image)
+        image.save("photo.webp", ContentFile(_make_webp_content()), save=True)
+        return event, image.name, image.storage
+
+    def test_replacing_image_deletes_old_file(
+        self, settings, tmp_path, django_capture_on_commit_callbacks
+    ):
+        settings.MEDIA_ROOT = tmp_path
+        event, old_name, storage = self._event_with_image()
+        old_thumbnail = event.thumbnail.name
+        assert old_thumbnail
+        assert storage.exists(old_thumbnail)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            cast(ImageFieldFile, event.image).save(
+                "photo.webp", ContentFile(_make_webp_content((1, 2, 3))), save=True
+            )
+
+        new_name = event.image.name
+        assert new_name != old_name
+        assert not storage.exists(old_name)
+        assert storage.exists(new_name)
+        assert event.thumbnail.name != old_thumbnail
+        assert not storage.exists(old_thumbnail)
+        assert storage.exists(event.thumbnail.name)
+
+    def test_clearing_image_deletes_old_file(
+        self, settings, tmp_path, django_capture_on_commit_callbacks
+    ):
+        settings.MEDIA_ROOT = tmp_path
+        event, old_name, storage = self._event_with_image()
+        old_thumbnail = event.thumbnail.name
+
+        with django_capture_on_commit_callbacks(execute=True):
+            event.image = None
+            event.save()
+
+        assert not storage.exists(old_name)
+        assert not storage.exists(old_thumbnail)
+
+    def test_saving_without_image_change_keeps_file(
+        self, settings, tmp_path, django_capture_on_commit_callbacks
+    ):
+        settings.MEDIA_ROOT = tmp_path
+        event, name, storage = self._event_with_image()
+
+        with django_capture_on_commit_callbacks(execute=True):
+            event.title = "Renamed event"
+            event.save()
+            event.is_draft = True
+            event.save(update_fields=["is_draft"])
+
+        assert storage.exists(name)
+
+    def test_replaced_image_still_referenced_elsewhere_is_kept(
+        self, settings, tmp_path, django_capture_on_commit_callbacks
+    ):
+        settings.MEDIA_ROOT = tmp_path
+        event_a, shared_name, storage = self._event_with_image()
+        event_b = EventFactory.create()
+        cast(ImageFieldFile, event_b.image).name = shared_name
+        event_b.save(update_fields=["image"])
+
+        event_b.refresh_from_db()
+        shared_thumbnail = cast(ImageFieldFile, event_b.thumbnail).name
+        assert shared_thumbnail == event_a.thumbnail.name
+
+        with django_capture_on_commit_callbacks(execute=True):
+            event_a.image = None
+            event_a.save()
+
+        assert storage.exists(shared_name)
+        assert storage.exists(shared_thumbnail)

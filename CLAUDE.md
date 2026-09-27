@@ -55,7 +55,7 @@ events/
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
   translation.py       # Offline per-paragraph EN/DA detection (lingua) + Markdown-preserving da→en translation (CTranslate2)
   sharing.py           # Apple/Google calendar URL builders used by detail page
-  signals.py           # Event-related signal handlers
+  signals.py           # Event file cleanup: deletes image + thumbnail files on event delete and when an image is replaced/cleared (unless another event references them)
   context_processors.py  # Template context (MAP_VIEW_ENABLED for nav; site_origin = https://SITE_DOMAIN for canonical/og:url)
   structured_data.py   # SEO: schema.org Event JSON-LD + meta description for event detail pages
   sitemaps.py          # /sitemap.xml (events, publishers, static pages)
@@ -77,10 +77,10 @@ accounts/
   models.py          # Custom User (UUID PK, display_name, display_name_slug) + ClaimCode
   managers.py        # UserManager; `publishers()` = named, active source accounts or users with published events (directory + sitemap)
   views.py           # Login, password reset, profile, account deletion, claim flow, invite management
-  forms.py           # CustomAuthenticationForm, ProfileForm, ClaimCodeForm, ClaimRegisterForm
+  forms.py           # CustomAuthenticationForm, ProfileForm (current password required to change email), AccountDeleteForm (password required), ClaimCodeForm, ClaimRegisterForm
   hashers.py         # HmacPepperedArgon2PasswordHasher
   validators.py      # ZxcvbnPasswordValidator
-  signals.py         # Admin notification on new signup; Resend CRM sync on email verification; preserve claim-code emails on user delete
+  signals.py         # Admin notification on new signup; Resend CRM sync on email verification (old address removed on email change, all removed on account deletion); preserve claim-code emails on user delete
   urls.py            # Account URL patterns
   management/commands/
     generate_claim_codes.py     # Generate invite codes (--count, --expires, --created-by)
@@ -94,8 +94,9 @@ analytics/
 
 config/
   settings.py        # Django settings
-  urls.py            # Root URL conf (includes /health/, /health/db/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's upload/markdownify views with login_required (its default urls.py mounts them unauthenticated)
+  urls.py            # Root URL conf (includes /health/, /health/db/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's markdownify (preview) view with login_required and leaves its image-upload view unmounted (its default urls.py mounts both unauthenticated)
   ratelimit.py       # Cache-based RateLimitMixin
+  middleware.py      # NoStoreForAuthenticatedMiddleware: `Cache-Control: no-store` on logged-in responses (kept out of browser + service-worker caches)
   pwa.py             # PWA endpoints: manifest, service worker, offline fallback page
   cron_monitoring.py # cron_monitor(): Sentry Crons check-ins for run_scrapers + weekly_digest
 
@@ -253,14 +254,17 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 ### Security
 
 - CSRF protection via Django middleware; HTMX includes token via `hx-headers` on `<body>`
-- XSS: Markdown sanitized via nh3 (allowlist of tags/attributes in `markdown_filters.py`)
+- XSS: Markdown sanitized via nh3 (allowlist of tags/attributes in `markdown_filters.py`); the markdownx editor preview uses the same renderer (`MARKDOWNX_MARKDOWNIFY_FUNCTION`). The markdownx image-upload endpoint is not mounted (`<img>` is stripped on render anyway)
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
 - Image uploads: Pillow-validated (not Content-Type), capped at `MAX_IMAGE_PIXELS` (50 MP, checked from the header before decoding; JPEGs measured after draft downscaling), EXIF stripped, resized to 1200px, converted to WebP
-- Brute-force: django-axes (5 failures = 30 min lockout of the (email, client IP) pair; client IP resolved via `config.ratelimit.get_client_ip`, since `REMOTE_ADDR` is Railway's proxy)
+- Brute-force: django-axes (5 failures = 30 min lockout of the (email, client IP) pair; client IP resolved via `config.ratelimit.get_client_ip`, since `REMOTE_ADDR` is Railway's proxy). `AXES_DISABLE_ACCESS_LOG = True`: successful logins aren't recorded; failed attempts are dropped after the cool-off
+- Caching: `NoStoreForAuthenticatedMiddleware` marks logged-in responses `no-store`; the service worker never writes `no-store` responses to Cache Storage, so per-user pages (drafts, edit forms) don't outlive logout
+- Media is served from a public bucket, so replaced/cleared event images and their thumbnails are deleted (`events/signals.py`) rather than left reachable at their old URL
 - Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's TTL behavior; counted with a get-then-set (no `add()`/`incr()`, which cost twice the queries on DatabaseCache) and rejected requests don't write; limits per endpoint listed below
 - CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
+- Re-authentication: changing the login email (`ProfileForm.current_password`) and deleting the account (`AccountDeleteForm`) require the current password, so a hijacked session alone can't take over or delete an account
 
 ### Rate Limits (current)
 
@@ -429,7 +433,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `RateLimitedLoginView` | `/accounts/login/` | Public |
 | `RateLimitedPasswordResetView` | `/accounts/password-reset/` | Public |
 | `EmailVerifiedView` | `/accounts/email-verified/` | Public (post-verification landing page) |
-| `AccountDeleteView` | `/accounts/delete/` | Login required |
+| `AccountDeleteView` | `/accounts/delete/` | Login required + current password |
 | `EditProfileView` | `/accounts/profile/edit/` | Login required |
 | `ChangePasswordView` | `/accounts/change-password/` | Login required |
 | `PublisherListView` | `/accounts/publishers/` | Public (directory of `User.objects.publishers()`, linked from the footer) |
