@@ -99,7 +99,8 @@ class TestDeleteReplacedEventImageSignal:
         settings.MEDIA_ROOT = tmp_path
         event, old_name, storage = self._event_with_image()
         old_thumbnail = event.thumbnail.name
-        assert old_thumbnail and storage.exists(old_thumbnail)
+        assert old_thumbnail
+        assert storage.exists(old_thumbnail)
 
         with django_capture_on_commit_callbacks(execute=True):
             cast(ImageFieldFile, event.image).save(
