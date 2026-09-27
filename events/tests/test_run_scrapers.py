@@ -324,6 +324,46 @@ class TestRunScrapersRetentionPurge:
 
 
 @pytest.mark.django_db
+class TestRunScrapersThumbnailBackfill:
+    """Events that predate thumbnails (or whose generation failed) get them
+    from the daily scrape cron."""
+
+    def test_backfill_runs_after_scrapers(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        with patch(
+            "events.management.commands.run_scrapers.call_command",
+            side_effect=call_command,
+        ) as spy:
+            call_command("run_scrapers", only=["hautscene"])
+        assert any(c.args[0] == "backfill_thumbnails" for c in spy.call_args_list)
+
+    def test_skipped_with_skip_images(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        with patch(
+            "events.management.commands.run_scrapers.call_command",
+            side_effect=call_command,
+        ) as spy:
+            call_command("run_scrapers", only=["hautscene"], skip_images=True)
+        assert not any(c.args[0] == "backfill_thumbnails" for c in spy.call_args_list)
+
+    def test_backfill_failure_is_captured_and_does_not_abort_run(self, monkeypatch):
+        _patched_sources(monkeypatch, lambda **kwargs: [])
+        captured = []
+        monkeypatch.setattr(
+            run_scrapers.sentry_sdk, "capture_exception", captured.append
+        )
+        boom = RuntimeError("thumbnail boom")
+
+        with patch(
+            "events.management.commands.run_scrapers.call_command",
+            side_effect=_failing_call_command("backfill_thumbnails", boom),
+        ):
+            call_command("run_scrapers", only=["hautscene"])  # must not raise
+
+        assert captured == [boom]
+
+
+@pytest.mark.django_db
 class TestImportEventsSourceArg:
     def test_unknown_source_raises(self, tmp_path):
         from django.core.management.base import CommandError

@@ -139,6 +139,26 @@ class TestEventCreateView:
         assert detail_resp.status_code == 200
         assert event.image.url.encode() in detail_resp.content
 
+    def test_uploaded_image_gets_a_list_thumbnail(self, client, settings, tmp_path):
+        settings.MEDIA_ROOT = tmp_path
+        client.force_login(UserFactory.create())
+        client.post(
+            reverse("event_create"),
+            {
+                "title": "Thumbnail Test",
+                "date": _future_dt(3).strftime("%Y-%m-%d"),
+                "start_time": _future_dt(3).strftime("%H:%M"),
+                "venue_name": "Gallery",
+                "category": "performance",
+                "is_free": True,
+                "image": _make_image_upload(1600, 900),
+            },
+        )
+        event = Event.objects.get(title="Thumbnail Test")
+        assert event.thumbnail.name.startswith("events/thumbs/")
+        assert event.thumbnail.storage.exists(event.thumbnail.name)
+        assert event.thumbnail.height == 360
+
     def test_oversized_image_rejected(self, client, settings):
         settings.MAX_IMAGE_SIZE_BYTES = 100  # tiny limit
         user = UserFactory.create()

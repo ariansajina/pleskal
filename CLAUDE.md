@@ -51,7 +51,7 @@ events/
   views.py             # CRUD + list + map + subscribe views
   forms.py             # EventForm (markdownx)
   feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)
-  images.py            # WebP conversion, EXIF stripping, resize
+  images.py            # WebP conversion, EXIF stripping, resize; list-card thumbnails (make_thumbnail/store_thumbnail)
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
   translation.py       # Offline per-paragraph EN/DA detection (lingua) + Markdown-preserving da→en translation (CTranslate2)
   sharing.py           # Apple/Google calendar URL builders used by detail page
@@ -69,6 +69,7 @@ events/
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
     backfill_translations.py    # Detect language / translate scraped descriptions not yet processed (run by run_scrapers)
+    backfill_thumbnails.py      # Generate list-card thumbnails for images that have none yet (run by run_scrapers)
     purge_expired_events.py     # Delete past scraped events older than their retention period (run by run_scrapers)
     weekly_digest.py            # Weekly digest email (growth, feed hits, last 7 days of site traffic)
 
@@ -192,6 +193,10 @@ uv run python manage.py purge_expired_events --dry-run    # report counts only
 uv run python manage.py backfill_geocoding                  # all events without coords
 uv run python manage.py backfill_geocoding --dry-run        # print resolutions only
 uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
+
+# List-card thumbnails for images saved before thumbnails existed (also runs daily as a step of run_scrapers)
+uv run python manage.py backfill_thumbnails --dry-run      # list images missing a thumbnail
+uv run python manage.py backfill_thumbnails --limit 100    # generate in batches
 
 # Description translation (also runs daily as a step of run_scrapers)
 uv run python scripts/download_translation_model.py         # one-time local model download (~80 MB, git-ignored models/)
@@ -323,6 +328,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `title` | Max 250 chars, min 3 chars |
 | `description` | Markdown |
 | `image` | Optional; WebP, max 10 MB, 1200px max dimension, EXIF stripped |
+| `thumbnail` | Not editable: list-card rendition of `image` (WebP, shorter side scaled to 360px), content-addressed under `events/thumbs/`; kept in sync by `save()` (regenerated when `image` changes, reused from another event with the same image, cleared with it). Generation failures leave it empty and the card falls back to the full image; `backfill_thumbnails` retries. Deleted with the event unless another event shares it |
 | `image_source_url` | Scraped events only (not editable): source URL `image` was downloaded from; the importer re-downloads when the scraped `image_url` differs (e.g. a venue replaces an "image coming soon" placeholder) |
 | `start_datetime` | Must be future on creation, max 1 year out |
 | `end_datetime` | Optional, must be after start |
@@ -345,6 +351,8 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `created_at`, `updated_at` | Auto timestamps |
 
 Constraint: `(title, start_datetime, venue_name)` is unique — dedupes the same event arriving from two scrapers (or a scraper and a manual submission) while letting generic titles recur at the same time in different venues. `EventForm.clean()` mirrors it with a friendly error.
+
+Properties: `display_image_url` (own image, else the publisher default in `DEFAULT_PUBLISHER_IMAGES`, else the logo; detail page, og:image, JSON-LD) and `display_thumbnail_url` (the event cards: `thumbnail`, else the full image, else the default's static thumbnail at `default_thumbnail_path()`, i.e. under a `thumbs/` directory; regenerate those when a default image changes).
 
 Method: `get_display_description()` returns the English description (`description_for("en")`) and prepends the scraped event disclaimer if `external_source` is set.
 
@@ -498,8 +506,8 @@ See `.env.example` for the full list. Key variables:
 ## Deployment
 
 - **Platform:** Railway. The production environment runs app services (deployed from this repo) plus a managed database:
-  - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
-  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers` (scrape + import, geocoding backfill, translation backfill, retention purge), `restartPolicyType = NEVER`
+  - **web-service** (`railway.toml`): gunicorn (`--workers 2 --threads 4`, see `Dockerfile` `CMD`), public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
+  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers` (scrape + import, geocoding backfill, translation backfill, thumbnail backfill, retention purge), `restartPolicyType = NEVER`
   - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
   - **digest-cron** (`railway.digest-cron.toml`): scheduled cron running `python manage.py weekly_digest`, `restartPolicyType = NEVER`. Set up manually per `deployment-notes.md` (not wired into `deploy-production.yml`, unlike the other two crons, since that requires a Railway service ID secret to be provisioned first)
   - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`

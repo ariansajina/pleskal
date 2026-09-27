@@ -37,6 +37,16 @@ DEFAULT_PUBLISHER_IMAGES = {
     "warehouse9": "images/defaults/warehouse9.webp",
 }
 DEFAULT_EVENT_IMAGE = "images/logo.png"
+# List-card sizes of the defaults above (see events.images.make_thumbnail),
+# at the same path under a thumbs/ directory. Regenerate them when a default
+# image changes; test_static_manifest checks they exist.
+DEFAULT_THUMBNAIL_DIR = "thumbs"
+
+
+def default_thumbnail_path(path: str) -> str:
+    """Static path of the list-card thumbnail of default image *path*."""
+    directory, _, filename = path.rpartition("/")
+    return f"{directory}/{DEFAULT_THUMBNAIL_DIR}/{filename}"
 
 
 def _ended_before(now, days) -> models.Q:
@@ -104,6 +114,14 @@ class Event(models.Model):
         upload_to="events/",
         blank=True,
         null=True,
+    )
+    # List-card rendition of `image`, kept in sync by save() (see
+    # _sync_thumbnail); content-addressed, so events sharing an image share it.
+    thumbnail = models.ImageField(
+        upload_to="events/thumbs/",
+        blank=True,
+        null=True,
+        editable=False,
     )
     # Scraped events only: the source URL `image` was downloaded from, so the
     # importer can tell when the venue swaps the image (e.g. replaces an
@@ -180,8 +198,19 @@ class Event(models.Model):
             models.Index(fields=["is_draft", "start_datetime"]),
         ]
 
+    # Storage name of `image` as last loaded from / saved to the database, so
+    # save() can tell when it changed. None when unknown (image deferred).
+    _saved_image_name: str | None = None
+
     def __str__(self):
         return self.title
+
+    @classmethod
+    def from_db(cls, db, field_names, values, *, fetch_mode=None):
+        instance = super().from_db(db, field_names, values, fetch_mode=fetch_mode)
+        if "image" in field_names:
+            instance._saved_image_name = instance.image.name or ""
+        return instance
 
     def get_absolute_url(self):
         from django.urls import reverse
@@ -252,9 +281,24 @@ class Event(models.Model):
         """
         if self.image:
             return self.image.url  # ty: ignore[unresolved-attribute]
+        return static(self._default_image_path())
+
+    @property
+    def display_thumbnail_url(self) -> str:
+        """Small rendition of display_image_url for the event list cards.
+
+        Falls back to the full image while its thumbnail hasn't been
+        generated yet (see the backfill_thumbnails command).
+        """
+        if self.thumbnail:
+            return self.thumbnail.url  # ty: ignore[unresolved-attribute]
+        if self.image:
+            return self.image.url  # ty: ignore[unresolved-attribute]
+        return static(default_thumbnail_path(self._default_image_path()))
+
+    def _default_image_path(self) -> str:
         source = str(self.external_source)
-        path = DEFAULT_PUBLISHER_IMAGES.get(source, DEFAULT_EVENT_IMAGE)
-        return static(path)
+        return DEFAULT_PUBLISHER_IMAGES.get(source, DEFAULT_EVENT_IMAGE)
 
     def _build_geocode_query(self) -> str:
         """Build the Nominatim query string for this event's venue.
@@ -311,7 +355,38 @@ class Event(models.Model):
         if not self.slug:
             self.slug = self._generate_unique_slug()
         self._maybe_geocode_venue()
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None or "image" in update_fields:
+            thumbnail_changed = self._sync_thumbnail()
+            if thumbnail_changed and update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "thumbnail"}
         super().save(*args, **kwargs)
+        self._saved_image_name = self.image.name or ""
+
+    def _sync_thumbnail(self) -> bool:
+        """Point `thumbnail` at a rendition of the current `image`.
+
+        Regenerates when the image changed, or is set without a thumbnail
+        (e.g. an earlier attempt failed); clears it when the image is removed.
+        Failures are logged and leave the thumbnail empty, so the list falls
+        back to the full image — they never block saving the event. Returns
+        True when `thumbnail` was changed.
+        """
+        image = self.image
+        if image and not image._committed:  # ty: ignore[unresolved-attribute]
+            # An upload assigned directly (e.g. through the admin) is only
+            # written to storage by Model.save(); write it now so it can be
+            # read back for the thumbnail. This is what FileField.pre_save
+            # would do.
+            image.save(image.name, image.file, save=False)  # ty: ignore[unresolved-attribute]
+        image_name = self.image.name or ""
+        changed = self._state.adding or (
+            self._saved_image_name is not None and image_name != self._saved_image_name
+        )
+        if not changed and bool(self.thumbnail) == bool(image_name):
+            return False
+        self.thumbnail = thumbnail_for_image(self.image) if image_name else None  # ty: ignore[invalid-assignment]
+        return True
 
     def _maybe_geocode_venue(self) -> None:
         """Populate latitude/longitude from Nominatim when the address changes.
@@ -362,6 +437,33 @@ class Event(models.Model):
             return
 
         self.latitude, self.longitude = result  # ty: ignore[invalid-assignment]
+
+
+def thumbnail_for_image(image_file) -> str | None:
+    """Storage name of the thumbnail for the stored *image_file*, or None.
+
+    Reuses the thumbnail of another event with the same image (the importer
+    shares one image file across a production's performances); otherwise
+    generates one. Failures are logged and return None.
+    """
+    existing = (
+        Event.objects.filter(image=image_file.name)
+        .exclude(thumbnail="")
+        .exclude(thumbnail__isnull=True)
+        .values_list("thumbnail", flat=True)
+        .first()
+    )
+    if existing:
+        return existing
+    from .images import store_thumbnail
+
+    try:
+        return store_thumbnail(image_file)
+    except Exception:
+        logger.warning(
+            "Could not generate a thumbnail for %s", image_file.name, exc_info=True
+        )
+        return None
 
 
 class FeedHit(models.Model):
