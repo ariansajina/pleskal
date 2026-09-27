@@ -79,7 +79,7 @@ accounts/
   forms.py           # CustomAuthenticationForm, ProfileForm (current password required to change email), AccountDeleteForm (password required), ClaimCodeForm, ClaimRegisterForm
   hashers.py         # HmacPepperedArgon2PasswordHasher
   validators.py      # ZxcvbnPasswordValidator
-  signals.py         # Admin notification on new signup; Resend CRM sync on email verification (removed again on account deletion); preserve claim-code emails on user delete
+  signals.py         # Admin notification on new signup; Resend CRM sync on email verification (old address removed on email change, all removed on account deletion); preserve claim-code emails on user delete
   urls.py            # Account URL patterns
   management/commands/
     generate_claim_codes.py     # Generate invite codes (--count, --expires, --created-by)

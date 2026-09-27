@@ -1,6 +1,6 @@
 import logging
 
-from allauth.account.signals import email_confirmed
+from allauth.account.signals import email_changed, email_confirmed
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
@@ -92,13 +92,32 @@ def preserve_claim_code_emails_on_user_delete(sender, instance, **kwargs):
     ClaimCode.objects.filter(claimed_by=instance).update(claimed_by_email=user_email)
 
 
+def _remove_resend_contacts_on_commit(api_key: str, emails: set[str]) -> None:
+    """Remove *emails* from the Resend contact list once the transaction commits.
+
+    Running after commit means a rolled-back change leaves the contacts alone.
+    Failures are logged without the address and never propagate.
+    """
+
+    def remove_contacts():
+        import resend
+
+        resend.api_key = api_key
+        for email in sorted(emails):
+            try:
+                resend.Contacts.remove(email=email)
+            except Exception:
+                logger.exception("Failed to remove an address from Resend contacts")
+
+    transaction.on_commit(remove_contacts)
+
+
 @receiver(pre_delete, sender=User)
 def remove_from_resend_contacts_on_user_delete(sender, instance, **kwargs):
     """Remove a deleted user from the Resend contact list.
 
     Only verified addresses were ever added (see add_to_resend_contacts), so
-    those are the ones removed. The API call runs after the deletion commits,
-    so a rolled-back deletion leaves the contact in place.
+    those are the ones removed.
     """
     api_key = getattr(settings, "RESEND_API_KEY", None)
     if not api_key or instance.is_system_account:
@@ -111,18 +130,24 @@ def remove_from_resend_contacts_on_user_delete(sender, instance, **kwargs):
             "email", flat=True
         )
     )
-    if not emails:
+    if emails:
+        _remove_resend_contacts_on_commit(api_key, emails)
+
+
+@receiver(email_changed)
+def remove_old_address_from_resend_contacts(
+    sender, request, user, from_email_address, to_email_address, **kwargs
+):
+    """Drop the old address from the Resend contact list after an email change.
+
+    The new address is added by add_to_resend_contacts when it is confirmed;
+    the old one was only ever added if it had been verified.
+    """
+    api_key = getattr(settings, "RESEND_API_KEY", None)
+    if not api_key or user.is_system_account:
         return
-
-    def remove_contacts():
-        import resend
-
-        resend.api_key = api_key
-        for email in sorted(emails):
-            try:
-                resend.Contacts.remove(email=email)
-            except Exception:
-                # No address in the log: the account is gone.
-                logger.exception("Failed to remove a deleted user from Resend contacts")
-
-    transaction.on_commit(remove_contacts)
+    if from_email_address is None or not from_email_address.verified:
+        return
+    if from_email_address.email.lower() == to_email_address.email.lower():
+        return
+    _remove_resend_contacts_on_commit(api_key, {from_email_address.email})

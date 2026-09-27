@@ -129,6 +129,90 @@ class TestResendContactRemovalOnDelete:
         assert not User.objects.filter(pk=user.pk).exists()
 
 
+@pytest.mark.django_db
+class TestResendContactOnEmailChange:
+    def _change_and_confirm(self, client, user, new_email):
+        from allauth.account.models import EmailAddress, EmailConfirmationHMAC
+
+        client.force_login(user)
+        response = client.post(
+            "/accounts/profile/edit/",
+            {
+                "display_name": user.display_name,
+                "email": new_email,
+                "current_password": "testpass123",
+            },
+        )
+        assert response.status_code == 302
+        pending = EmailAddress.objects.get(user=user, email=new_email)
+        key = EmailConfirmationHMAC(pending).key
+        return client.get(f"/accounts/confirm-email/{key}/")
+
+    def test_new_address_added_and_old_removed(
+        self, settings, django_capture_on_commit_callbacks
+    ):
+        from allauth.account.models import EmailAddress
+
+        settings.RESEND_API_KEY = "test-key"
+        user = UserFactory.create(email="old@example.com")
+        EmailAddress.objects.create(
+            user=user, email="old@example.com", verified=True, primary=True
+        )
+        mock_resend = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"resend": mock_resend}),
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            self._change_and_confirm(Client(), user, "new@example.com")
+
+        user.refresh_from_db()
+        assert user.email == "new@example.com"
+        created = mock_resend.Contacts.create.call_args.args[0]
+        assert created["email"] == "new@example.com"
+        mock_resend.Contacts.remove.assert_called_once_with(email="old@example.com")
+
+    def test_unverified_old_address_not_removed(
+        self, settings, django_capture_on_commit_callbacks
+    ):
+        from allauth.account.models import EmailAddress
+
+        settings.RESEND_API_KEY = "test-key"
+        user = UserFactory.create(email="old@example.com")
+        EmailAddress.objects.create(
+            user=user, email="old@example.com", verified=False, primary=True
+        )
+        mock_resend = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"resend": mock_resend}),
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            self._change_and_confirm(Client(), user, "new@example.com")
+
+        mock_resend.Contacts.remove.assert_not_called()
+
+    def test_skipped_without_api_key(
+        self, settings, django_capture_on_commit_callbacks
+    ):
+        from allauth.account.models import EmailAddress
+
+        settings.RESEND_API_KEY = None
+        user = UserFactory.create(email="old@example.com")
+        EmailAddress.objects.create(
+            user=user, email="old@example.com", verified=True, primary=True
+        )
+        mock_resend = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"resend": mock_resend}),
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            self._change_and_confirm(Client(), user, "new@example.com")
+
+        mock_resend.Contacts.remove.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # Admin signup notification signal
 # ---------------------------------------------------------------------------
