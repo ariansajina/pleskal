@@ -1,0 +1,27 @@
+# Keep the build context small and stop unrelated changes from invalidating
+# the `COPY . .` layer (and the collectstatic step after it).
+.git
+.github
+.claude
+.venv
+node_modules
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.coverage
+coverage.xml
+htmlcov
+staticfiles
+media
+db.sqlite3
+.env
+# Baked into the image by the Dockerfile; a local copy must not overwrite it.
+models
+**/tests
+conftest.py
+CLAUDE.md
+deployment-notes.md
+docker-compose.yml
+sonar-project.properties
+.pre-commit-config.yaml

@@ -1230,10 +1230,12 @@ class TestImportImageDeduplication:
         ):
             call_command("import_events", "dansehallerne", str(f))
 
-        stored_files = list((tmp_path / "events").iterdir())
+        stored_files = [p for p in (tmp_path / "events").iterdir() if p.is_file()]
         assert len(stored_files) == 1, (
             f"Expected 1 file in storage, found {len(stored_files)}: {stored_files}"
         )
+        # ...and one list-card thumbnail, shared the same way.
+        assert len(list((tmp_path / "events" / "thumbs").iterdir())) == 1
 
     def test_different_images_stored_as_separate_files(self, settings, tmp_path):
         settings.MEDIA_ROOT = tmp_path
@@ -1273,7 +1275,7 @@ class TestImportImageDeduplication:
         assert events[0].image.name != events[1].image.name, (
             "Events with different images must have different storage paths"
         )
-        stored_files = list((tmp_path / "events").iterdir())
+        stored_files = [p for p in (tmp_path / "events").iterdir() if p.is_file()]
         assert len(stored_files) == 2
 
     def test_shared_image_url_downloaded_once_per_run(self, settings, tmp_path):

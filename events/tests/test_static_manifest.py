@@ -14,7 +14,11 @@ import pytest
 from django.core.management import call_command
 from django.templatetags.static import static
 
-from events.models import DEFAULT_EVENT_IMAGE, DEFAULT_PUBLISHER_IMAGES
+from events.models import (
+    DEFAULT_EVENT_IMAGE,
+    DEFAULT_PUBLISHER_IMAGES,
+    default_thumbnail_path,
+)
 
 
 @pytest.mark.django_db
@@ -31,6 +35,6 @@ def test_default_images_resolve_under_manifest_storage(settings, tmp_path):
     # static() raises ValueError under the manifest's strict, case-sensitive
     # lookup if the path wasn't actually collected — this is what would have
     # caught the logo.PNG/logo.png mismatch.
-    static(DEFAULT_EVENT_IMAGE)
-    for path in DEFAULT_PUBLISHER_IMAGES.values():
+    for path in [DEFAULT_EVENT_IMAGE, *DEFAULT_PUBLISHER_IMAGES.values()]:
         static(path)
+        static(default_thumbnail_path(path))

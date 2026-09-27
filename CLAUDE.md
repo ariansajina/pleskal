@@ -51,11 +51,11 @@ events/
   views.py             # CRUD + list + map + subscribe views
   forms.py             # EventForm (markdownx)
   feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)
-  images.py            # WebP conversion, EXIF stripping, resize
+  images.py            # WebP conversion, EXIF stripping, resize; list-card thumbnails (make_thumbnail/store_thumbnail)
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
   translation.py       # Offline per-paragraph EN/DA detection (lingua) + Markdown-preserving da→en translation (CTranslate2)
   sharing.py           # Apple/Google calendar URL builders used by detail page
-  signals.py           # Event image cleanup: deletes the file on event delete and when an image is replaced/cleared (unless another event references it)
+  signals.py           # Event file cleanup: deletes image + thumbnail files on event delete and when an image is replaced/cleared (unless another event references them)
   context_processors.py  # Template context (MAP_VIEW_ENABLED for nav; site_origin = https://SITE_DOMAIN for canonical/og:url)
   structured_data.py   # SEO: schema.org Event JSON-LD + meta description for event detail pages
   sitemaps.py          # /sitemap.xml (events, publishers, static pages)
@@ -69,6 +69,7 @@ events/
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
     backfill_translations.py    # Detect language / translate scraped descriptions not yet processed (run by run_scrapers)
+    backfill_thumbnails.py      # Generate list-card thumbnails for images that have none yet (run by run_scrapers)
     purge_expired_events.py     # Delete past scraped events older than their retention period (run by run_scrapers)
     weekly_digest.py            # Weekly digest email (growth, feed hits, last 7 days of site traffic)
 
@@ -194,6 +195,10 @@ uv run python manage.py backfill_geocoding                  # all events without
 uv run python manage.py backfill_geocoding --dry-run        # print resolutions only
 uv run python manage.py backfill_geocoding --limit 50       # cap per-run size
 
+# List-card thumbnails for images saved before thumbnails existed (also runs daily as a step of run_scrapers)
+uv run python manage.py backfill_thumbnails --dry-run      # list images missing a thumbnail
+uv run python manage.py backfill_thumbnails --limit 100    # generate in batches
+
 # Description translation (also runs daily as a step of run_scrapers)
 uv run python scripts/download_translation_model.py         # one-time local model download (~80 MB, git-ignored models/)
 uv run python manage.py backfill_translations --dry-run     # print detected languages only
@@ -244,7 +249,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - Every color is a token in `:root` in `templates/base.html` with a matching dark value in the `@media (prefers-color-scheme: dark)` block; never hardcode hex/rgba in rules, inline styles or page `<style>` blocks (`500.html` is the standalone exception and carries its own copy)
 - `--blue` is lighter in dark mode, so text on a `--blue` fill uses `--on-blue` (not `--cream`); text on `--c-perf`/`--c-op` fills uses `--on-danger`
 - `<meta name="color-scheme" content="light dark">` stops browsers (Chrome/Samsung Internet "darken websites") from auto-darkening the page
-- Header logo swaps to `static/images/logo-dark.png` (cream recolor of `logo.png`) via `<picture>`; `--img-bg` gives the transparent fallback event image a cream backdrop in dark mode
+- Header logo swaps to `static/images/logo-header-dark.png` (cream recolor) via `<picture>`; the header uses 120px renditions (`logo-header*.png`, ~15 KB) of the 1024px `logo.png` / `logo-dark.png` sources, so regenerate them when the logo changes; `--img-bg` gives the transparent fallback event image a cream backdrop in dark mode
 
 ### Security
 
@@ -254,8 +259,8 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - Image uploads: Pillow-validated (not Content-Type), capped at `MAX_IMAGE_PIXELS` (50 MP, checked from the header before decoding; JPEGs measured after draft downscaling), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min lockout of the (email, client IP) pair; client IP resolved via `config.ratelimit.get_client_ip`, since `REMOTE_ADDR` is Railway's proxy). `AXES_DISABLE_ACCESS_LOG = True`: successful logins aren't recorded; failed attempts are dropped after the cool-off
 - Caching: `NoStoreForAuthenticatedMiddleware` marks logged-in responses `no-store`; the service worker never writes `no-store` responses to Cache Storage, so per-user pages (drafts, edit forms) don't outlive logout
-- Media is served from a public bucket, so replaced/cleared event images are deleted (`events/signals.py`) rather than left reachable at their old URL
-- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's `incr()` TTL behavior; limits per endpoint listed below
+- Media is served from a public bucket, so replaced/cleared event images and their thumbnails are deleted (`events/signals.py`) rather than left reachable at their old URL
+- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's TTL behavior; counted with a get-then-set (no `add()`/`incr()`, which cost twice the queries on DatabaseCache) and rejected requests don't write; limits per endpoint listed below
 - CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
@@ -327,6 +332,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `title` | Max 250 chars, min 3 chars |
 | `description` | Markdown |
 | `image` | Optional; WebP, max 10 MB, 1200px max dimension, EXIF stripped |
+| `thumbnail` | Not editable: list-card rendition of `image` (WebP, shorter side scaled to 360px), content-addressed under `events/thumbs/`; kept in sync by `save()` (regenerated when `image` changes, reused from another event with the same image, cleared with it). Generation failures leave it empty and the card falls back to the full image; `backfill_thumbnails` retries. Deleted with the event unless another event shares it |
 | `image_source_url` | Scraped events only (not editable): source URL `image` was downloaded from; the importer re-downloads when the scraped `image_url` differs (e.g. a venue replaces an "image coming soon" placeholder) |
 | `start_datetime` | Must be future on creation, max 1 year out |
 | `end_datetime` | Optional, must be after start |
@@ -349,6 +355,8 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `created_at`, `updated_at` | Auto timestamps |
 
 Constraint: `(title, start_datetime, venue_name)` is unique — dedupes the same event arriving from two scrapers (or a scraper and a manual submission) while letting generic titles recur at the same time in different venues. `EventForm.clean()` mirrors it with a friendly error.
+
+Properties: `display_image_url` (own image, else the publisher default in `DEFAULT_PUBLISHER_IMAGES`, else the logo; detail page, og:image, JSON-LD) and `display_thumbnail_url` (the event cards: `thumbnail`, else the full image, else the default's static thumbnail at `default_thumbnail_path()`, i.e. under a `thumbs/` directory; regenerate those when a default image changes).
 
 Method: `get_display_description()` returns the English description (`description_for("en")`) and prepends the scraped event disclaimer if `external_source` is set.
 
@@ -448,20 +456,13 @@ Because of this hook, **do not manually run `ruff format`, `ruff check`, `ty che
 
 ## CI / CD
 
-`.github/workflows/ci.yml` runs on push/PR to `main`:
+`.github/workflows/ci.yml` runs on push/PR to `main` as three parallel jobs (superseded PR runs are cancelled via `concurrency`; `setup-uv` caches the uv download cache and `UV_LOCKED=1` fails on a stale `uv.lock`):
 
-1. Checkout (full history)
-2. Install uv + Python 3.14
-3. `uv sync --dev`
-4. `npm ci` + `npm run css:build`
-5. `collectstatic --noinput`
-6. `ruff check .` (lint)
-7. `ruff format --check .` (format)
-8. `ty check .` (type checking)
-9. `pytest --cov --cov-report=term-missing --cov-report=xml --cov-branch --cov-fail-under=80 --create-db` (PostgreSQL 16)
-10. SonarQube scan
+- **lint**: `ruff check`, `ruff format --check`, `ty check`
+- **static**: `npm ci` + `npm run css:build` + `collectstatic --noinput` (catches broken static references before the Docker build)
+- **test**: `pytest -n auto --cov --cov-report=term-missing --cov-report=xml --cov-branch --cov-fail-under=80 --create-db` (PostgreSQL 16), then SonarQube scan (full-history checkout for blame). `-n auto` matches the runner's cores; the local default `-n 8` oversubscribes a 4-core runner
 
-`.github/workflows/deploy-production.yml` runs on git tag `v*`. It sets `APP_VERSION=<tag>` and runs `railway up` against three Railway services in turn (web, scrape-cron, backup-cron). `APP_VERSION` is forwarded to Sentry as the release tag.
+`.github/workflows/deploy-production.yml` runs on git tag `v*`. It sets `APP_VERSION=<tag>` and runs `railway up` against three Railway services in turn (web, scrape-cron, backup-cron); a `concurrency` group queues overlapping deploys instead of racing them. `.dockerignore` keeps tests, docs, `.git` and local caches/models out of the build context. `APP_VERSION` is forwarded to Sentry as the release tag.
 
 ## Environment Variables
 
@@ -473,6 +474,7 @@ See `.env.example` for the full list. Key variables:
 | `DEBUG` | `true`/`false` |
 | `ALLOWED_HOSTS` | Comma-separated hostnames |
 | `DATABASE_URL` | DB connection string (default: `sqlite:///db.sqlite3`) |
+| `CONN_MAX_AGE` | Seconds a worker keeps its DB connection open for reuse (default: 600; health-checked before each request) |
 | `PASSWORD_PEPPER` | 64-char hex string (32-byte key) for HMAC password hashing |
 | `R2_BUCKET_NAME` | Enables Cloudflare R2 storage when set |
 | `R2_ACCESS_KEY` | R2 access key |
@@ -508,8 +510,8 @@ See `.env.example` for the full list. Key variables:
 ## Deployment
 
 - **Platform:** Railway. The production environment runs app services (deployed from this repo) plus a managed database:
-  - **web-service** (`railway.toml`): gunicorn, public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
-  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers` (scrape + import, geocoding backfill, translation backfill, retention purge), `restartPolicyType = NEVER`
+  - **web-service** (`railway.toml`): gunicorn (`--workers 2 --threads 4`, see `Dockerfile` `CMD`), public domain `pleskal.dk`, `migrate --noinput && createcachetable` as preDeploy, `/health/` healthcheck, `restartPolicyType = ON_FAILURE`
+  - **scrape-cron** (`railway.scrape-cron.toml`): scheduled cron running `python manage.py run_scrapers` (scrape + import, geocoding backfill, translation backfill, thumbnail backfill, retention purge), `restartPolicyType = NEVER`
   - **backup-cron** (`railway.backup-cron.toml`): scheduled cron running `python scripts/backup_db.py`, `restartPolicyType = NEVER`
   - **digest-cron** (`railway.digest-cron.toml`): scheduled cron running `python manage.py weekly_digest`, `restartPolicyType = NEVER`. Set up manually per `deployment-notes.md` (not wired into `deploy-production.yml`, unlike the other two crons, since that requires a Railway service ID secret to be provisioned first)
   - **Postgres**: Railway managed PostgreSQL 16, backed by a persistent `postgres-volume`

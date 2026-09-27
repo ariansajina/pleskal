@@ -117,6 +117,12 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 
 DATABASES = {"default": env.db(default="sqlite:///db.sqlite3")}
+# Reuse each worker's connection across requests instead of opening a new one
+# (TCP + Postgres auth + backend startup) on every request. Health checks
+# discard a connection the server has dropped (e.g. after a Postgres restart)
+# before the request uses it.
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=600)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 # Auth
 

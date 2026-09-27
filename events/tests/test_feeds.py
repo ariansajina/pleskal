@@ -9,11 +9,11 @@ from events.models import Event, EventCategory, FeedHit
 from events.tests.factories import EventFactory
 
 
-def _past_event(**kwargs):
+def _past_event(days_ago=5, **kwargs):
     """Create an event with a past start_datetime (bypassing model clean)."""
     e = Event(
         title=kwargs.get("title", "Past Event"),
-        start_datetime=timezone.now() - timezone.timedelta(days=5),
+        start_datetime=timezone.now() - timezone.timedelta(days=days_ago),
         venue_name=kwargs.get("venue_name", "Old Hall"),
         category=kwargs.get("category", "social"),
     )
@@ -92,10 +92,22 @@ class TestICalFeed:
         resp = client.get(reverse("event_ical_feed"))
         assert str(event.title).encode() in resp.content
 
-    def test_ical_excludes_past_events(self, client):
-        _past_event(title="Past iCal Event")
+    def test_ical_excludes_events_older_than_retention_window(self, client):
+        _past_event(days_ago=31, title="Past iCal Event")
         resp = client.get(reverse("event_ical_feed"))
         assert b"Past iCal Event" not in resp.content
+
+    def test_ical_keeps_recently_ended_events(self, client):
+        _past_event(days_ago=29, title="Recent iCal Event")
+        resp = client.get(reverse("event_ical_feed"))
+        assert b"Recent iCal Event" in resp.content
+
+    def test_ical_window_counts_from_end_of_long_event(self, client):
+        e = _past_event(days_ago=60, title="Long Run")
+        e.end_datetime = timezone.now() - timezone.timedelta(days=10)
+        e.save()
+        resp = client.get(reverse("event_ical_feed"))
+        assert b"Long Run" in resp.content
 
     def test_ical_category_filter(self, client):
         workshop = EventFactory.create(category="workshop")
@@ -426,3 +438,85 @@ class TestSubscribeView:
         UserFactory.create(is_system_account=True)
         resp = client.get(reverse("subscribe"))
         assert resp.context["has_community_publishers"] is False
+
+
+@pytest.mark.django_db
+class TestFeedReviewFixes:
+    def _ongoing(self, title):
+        e = Event(
+            title=title,
+            start_datetime=timezone.now() - timezone.timedelta(days=1),
+            end_datetime=timezone.now() + timezone.timedelta(days=1),
+            venue_name="Festival Hall",
+            category="performance",
+        )
+        e.save()
+        return e
+
+    def test_ical_includes_ongoing_event(self, client):
+        self._ongoing("Running Festival")
+        resp = client.get(reverse("event_ical_feed"))
+        assert b"Running Festival" in resp.content
+
+    def test_rss_includes_ongoing_event(self, client):
+        self._ongoing("Running Festival")
+        resp = client.get(reverse("event_rss_feed"))
+        assert b"Running Festival" in resp.content
+
+    def test_rss_excludes_event_that_has_ended(self, client):
+        e = _past_event(title="Finished Run")
+        e.end_datetime = e.start_datetime + timezone.timedelta(hours=2)
+        e.save()
+        resp = client.get(reverse("event_rss_feed"))
+        assert b"Finished Run" not in resp.content
+
+    def test_community_filter_includes_events_of_deleted_users(self, client):
+        user = UserFactory.create()
+        orphan = EventFactory.create(submitted_by=user, title="Orphaned Jam")
+        user.delete()
+        orphan.refresh_from_db()
+        assert orphan.submitted_by is None
+        scraped = EventFactory.create(
+            submitted_by=UserFactory.create(is_system_account=True),
+            title="Scraped Show",
+        )
+        resp = client.get(reverse("event_ical_feed") + "?publisher=community")
+        assert b"Orphaned Jam" in resp.content
+        assert str(scraped.title).encode() not in resp.content
+
+    def test_ical_events_have_dtstamp(self, client):
+        from icalendar import Calendar
+
+        EventFactory.create()
+        EventFactory.create()
+        cal = Calendar.from_ical(client.get(reverse("event_ical_feed")).content)
+        vevents = cal.walk("VEVENT")
+        assert len(vevents) == 2
+        assert all("DTSTAMP" in v for v in vevents)
+
+    def test_single_event_ical_has_dtstamp(self, client):
+        event = EventFactory.create()
+        resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
+        assert b"DTSTAMP:" in resp.content
+
+    def test_ical_has_refresh_hints(self, client):
+        resp = client.get(reverse("event_ical_feed"))
+        assert b"REFRESH-INTERVAL;VALUE=DURATION:P1D" in resp.content
+        assert b"X-PUBLISHED-TTL:P1D" in resp.content
+
+
+@pytest.mark.django_db
+class TestSubscribeLinks:
+    def test_subscribe_links_use_webcal(self, client):
+        resp = client.get(reverse("subscribe"))
+        assert resp.context["ical_url"] == "http://testserver/feed/events.ics"
+        assert resp.context["ical_webcal_url"] == "webcal://testserver/feed/events.ics"
+        assert resp.context["ical_google_url"] == (
+            "https://calendar.google.com/calendar/r?"
+            "cid=webcal%3A%2F%2Ftestserver%2Ffeed%2Fevents.ics"
+        )
+        assert b'href="webcal://testserver/feed/events.ics"' in resp.content
+
+    def test_copy_does_not_recommend_import(self, client):
+        resp = client.get(reverse("subscribe"))
+        assert b"Import function" not in resp.content

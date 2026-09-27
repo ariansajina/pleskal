@@ -1,16 +1,19 @@
 import calendar
 import datetime
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
+from django.db.models import Count, Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.functional import cached_property
 from django.views.generic import CreateView, DeleteView, TemplateView, UpdateView, View
 from django.views.generic.detail import DetailView
 
@@ -117,13 +120,10 @@ def _attach_processed_image(form, event, image_file) -> bool:
     return True
 
 
-def _publisher_ids_with_events():
-    """User ids with at least one published (non-draft) event — past or present."""
-    return (
-        Event.objects.filter(is_draft=False, submitted_by__isnull=False)
-        .values_list("submitted_by_id", flat=True)
-        .distinct()
-    )
+def _has_published_event():
+    """Exists() test for a user with at least one published (non-draft) event,
+    past or present; filter a User queryset with it."""
+    return Exists(Event.objects.filter(submitted_by=OuterRef("pk"), is_draft=False))
 
 
 def _has_community_publishers():
@@ -132,11 +132,8 @@ def _has_community_publishers():
     Gates the catch-all "Other"/community badge on both pages: it only makes
     sense to subscribe to or filter by community events when some exist.
     """
-    from django.contrib.auth import get_user_model
-
-    User = get_user_model()
-    return User.objects.filter(
-        is_system_account=False, pk__in=_publisher_ids_with_events()
+    return Event.objects.filter(
+        is_draft=False, submitted_by__is_system_account=False
     ).exists()
 
 
@@ -152,7 +149,7 @@ def _list_filter_publishers():
 
     User = get_user_model()
     system_publishers = User.objects.filter(
-        is_system_account=True, pk__in=_publisher_ids_with_events()
+        _has_published_event(), is_system_account=True
     ).order_by("display_name")
     return system_publishers, _has_community_publishers()
 
@@ -295,6 +292,19 @@ def _parse_date_safe(value):
         return None
 
 
+# Date filters are clamped to this range: it covers every event, and keeps
+# extreme user input (0001-01-01, 9999-12-31) from overflowing datetime
+# arithmetic or the UTC conversion.
+_MIN_FILTER_DATE = datetime.date(1900, 1, 1)
+_MAX_FILTER_DATE = datetime.date(9000, 1, 1)
+
+
+def _local_midnight(day: datetime.date) -> datetime.datetime:
+    """Start of *day* in the current timezone, as an aware datetime."""
+    day = min(max(day, _MIN_FILTER_DATE), _MAX_FILTER_DATE)
+    return timezone.make_aware(datetime.datetime.combine(day, datetime.time.min))
+
+
 def _filtered_event_queryset(request):
     """Return `(queryset, filter_state)` for the shared event filter UI.
 
@@ -306,7 +316,6 @@ def _filtered_event_queryset(request):
     upcoming/past toggle and ordering.
     """
     from django.contrib.auth import get_user_model
-    from django.db.models import Q
 
     User = get_user_model()
     qs = (
@@ -348,14 +357,21 @@ def _filtered_event_queryset(request):
     # date_from is something other than today's date.
     date_range_active = bool(date_to or (date_from and date_from != today_str))
 
+    # Compared as local-midnight datetimes rather than with __date, which
+    # wraps the column in a timezone conversion + cast and so can't use the
+    # start_datetime index.
     if date_from:
         d = _parse_date_safe(date_from)
         if d:
-            qs = qs.filter(start_datetime__date__gte=d)
+            qs = qs.filter(start_datetime__gte=_local_midnight(d))
     if date_to:
         d = _parse_date_safe(date_to)
         if d:
-            qs = qs.filter(start_datetime__date__lte=d)
+            qs = qs.filter(
+                start_datetime__lt=_local_midnight(
+                    min(d, _MAX_FILTER_DATE) + datetime.timedelta(days=1)
+                )
+            )
 
     # --- Filter: free / wheelchair accessible ---
     if request.GET.get("is_free") == "1":
@@ -391,6 +407,9 @@ def _filter_panel_context(request, filter_state):
     Builds the quick date ranges, publisher badges, and selected-filter
     state consumed by ``events/partials/event_filter_panel.html`` on both
     pages, from the ``filter_state`` returned by ``_filtered_event_queryset``.
+
+    HTMX requests only re-render the results partial, which has no publisher
+    badges, so their queries are skipped there.
     """
     categories = filter_state["categories"]
     publisher_slugs = filter_state["publisher_slugs"]
@@ -401,16 +420,13 @@ def _filter_panel_context(request, filter_state):
     today = datetime.date.today()
     week_start = today - datetime.timedelta(days=today.weekday())
     week_end = week_start + datetime.timedelta(days=6)
-    system_publishers, has_community_publishers = _list_filter_publishers()
     quick_date_ranges = _get_quick_date_ranges()
     is_free = request.GET.get("is_free") == "1"
     is_wheelchair_accessible = request.GET.get("is_wheelchair_accessible") == "1"
 
-    return {
+    ctx = {
         "category_choices": EventCategory.choices,
         "selected_categories": categories,
-        "system_publishers": system_publishers,
-        "has_community_publishers": has_community_publishers,
         "selected_publishers": publisher_slugs,
         "date_from": date_from or "",
         "date_to": date_to or "",
@@ -433,6 +449,28 @@ def _filter_panel_context(request, filter_state):
             quick_date_ranges=quick_date_ranges,
         ),
     }
+    if not request.headers.get("HX-Request"):
+        system_publishers, has_community_publishers = _list_filter_publishers()
+        ctx["system_publishers"] = system_publishers
+        ctx["has_community_publishers"] = has_community_publishers
+    return ctx
+
+
+class _KnownCountPaginator(Paginator):
+    """Paginator whose total is already known, saving its COUNT(*) query."""
+
+    def __init__(self, object_list, per_page, *, count):
+        super().__init__(object_list, per_page)
+        self._known_count = count
+
+    @cached_property
+    def count(self):
+        return self._known_count
+
+
+# Columns the list/map templates never read; deferring them keeps the
+# (up to 4000-char) descriptions and their translations off the wire.
+_UNUSED_LISTING_FIELDS = ("description", "description_da", "description_en")
 
 
 class EventListView(RateLimitMixin, View):
@@ -451,9 +489,16 @@ class EventListView(RateLimitMixin, View):
         date_range_active = filter_state["date_range_active"]
 
         # --- Counts for upcoming/past toggle (computed after other filters) ---
+        # One aggregate for both; the paginator reuses it instead of running
+        # its own COUNT(*), so the (possibly search-filtered) set is scanned
+        # once rather than three times.
         now = timezone.now()
-        upcoming_count = qs.filter(start_datetime__gte=now).count()
-        past_count = qs.filter(start_datetime__lt=now).count()
+        counts = qs.aggregate(
+            upcoming=Count("pk", filter=Q(start_datetime__gte=now)),
+            past=Count("pk", filter=Q(start_datetime__lt=now)),
+        )
+        upcoming_count = counts["upcoming"]
+        past_count = counts["past"]
 
         # --- Filter: upcoming vs past ---
         # When a date range is explicitly set, bypass the toggle — the user has
@@ -462,13 +507,17 @@ class EventListView(RateLimitMixin, View):
         show_past = request.GET.get("past") == "1"
         if date_range_active:
             qs = qs.order_by("start_datetime", "id")
+            total = upcoming_count + past_count
         elif show_past:
             qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime", "-id")
+            total = past_count
         else:
             qs = qs.filter(start_datetime__gte=now).order_by("start_datetime", "id")
+            total = upcoming_count
 
         # --- Pagination ---
-        paginator = Paginator(qs, EVENTS_PER_PAGE)
+        qs = qs.defer(*_UNUSED_LISTING_FIELDS)
+        paginator = _KnownCountPaginator(qs, EVENTS_PER_PAGE, count=total)
         page_number = request.GET.get("page", 1)
         page_obj = paginator.get_page(page_number)
 
@@ -526,13 +575,22 @@ class EventMapView(RateLimitMixin, View):
         # Map view shows upcoming events only, unless an explicit date range is
         # set — same override as the list view's "past" toggle, so a range that
         # includes past dates isn't silently emptied out.
-        if filter_state["date_range_active"]:
-            events = list(qs.order_by("start_datetime", "id"))
-        else:
-            now = timezone.now()
-            events = list(
-                qs.filter(start_datetime__gte=now).order_by("start_datetime", "id")
+        if not filter_state["date_range_active"]:
+            qs = qs.filter(start_datetime__gte=timezone.now())
+        # Pins and the venue index only need these columns (and no submitter).
+        events = list(
+            qs.select_related(None)
+            .only(
+                "slug",
+                "title",
+                "venue_name",
+                "category",
+                "start_datetime",
+                "latitude",
+                "longitude",
             )
+            .order_by("start_datetime", "id")
+        )
 
         with_coords = [e for e in events if e.has_map_location]
         without_coords = [e for e in events if not e.has_map_location]
@@ -592,7 +650,9 @@ class EventDetailView(DetailView):
     slug_url_kwarg = "slug"
 
     def get_object(self, queryset=None):
-        event = get_object_or_404(Event, slug=self.kwargs["slug"])
+        event = get_object_or_404(
+            Event.objects.select_related("submitted_by"), slug=self.kwargs["slug"]
+        )
         if event.is_draft:
             user = self.request.user
             if not user.is_authenticated or user != event.submitted_by:
@@ -780,6 +840,23 @@ class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
         return redirect("event_detail", slug=event.slug)
 
 
+def _webcal_url(url: str) -> str:
+    """``webcal://`` form of an http(s) feed URL.
+
+    Calendar apps (Apple Calendar, Outlook, Thunderbird) treat a webcal link
+    as "subscribe to this calendar", whereas following the plain https URL
+    downloads a one-off ``.ics`` that gets imported once and never updates.
+    """
+    return "webcal://" + url.split("://", 1)[1]
+
+
+def _google_subscribe_url(url: str) -> str:
+    """Google Calendar "add by URL" link for a feed URL."""
+    return "https://calendar.google.com/calendar/r?" + urlencode(
+        {"cid": _webcal_url(url)}
+    )
+
+
 class SubscribeView(TemplateView):
     template_name = "events/subscribe.html"
 
@@ -789,6 +866,11 @@ class SubscribeView(TemplateView):
         publishers, has_community_publishers = _subscribe_publishers()
         ctx["publishers"] = publishers
         ctx["has_community_publishers"] = has_community_publishers
+        ical_url = self.request.build_absolute_uri(reverse("event_ical_feed"))
+        ctx["ical_url"] = ical_url
+        ctx["ical_webcal_url"] = _webcal_url(ical_url)
+        ctx["ical_google_url"] = _google_subscribe_url(ical_url)
+        ctx["rss_url"] = self.request.build_absolute_uri(reverse("event_rss_feed"))
         return ctx
 
 

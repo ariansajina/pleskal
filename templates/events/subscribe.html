@@ -14,7 +14,7 @@
 
 <div class="content-wrap">
   <p class="text-base text-muted" style="line-height:1.8;margin-bottom:var(--space-8);">
-    You can automatically stay updated with events in pleskal by subscribing to "feeds". These are data sources that can be added to your calendar by copy-pasting their URL into the Import function of your calendar. By subscribing to feeds, you will see pleskal events directly in your calendar as a layer that can be switched on and off. New events will automatically be pulled in, but changes to existing events will also be visible — for instance date, time, description and location.
+    You can automatically stay updated with events in pleskal by subscribing to "feeds". These are data sources that your calendar keeps in sync: use a "Subscribe" button below, or copy the feed URL and paste it into your calendar's "Subscribe to calendar" / "Add calendar from URL" option. (Don't use "Import" — that only copies today's events once and never updates.) By subscribing to feeds, you will see pleskal events directly in your calendar as a layer that can be switched on and off. New events will automatically be pulled in, but changes to existing events will also be visible — for instance date, time, description and location.
   </p>
   <p class="text-base text-muted" style="line-height:1.8;margin-bottom:var(--space-8);">
     <strong>How often to update?</strong> I recommend that you configure your calendar app to auto-refresh every week or every day, but not more frequently than that.
@@ -23,8 +23,8 @@
   <div class="section-rule">Filter your feed</div>
 
   <div id="subscribe-filters"
-       data-ical-base="{{ request.scheme }}://{{ request.get_host }}{% url 'event_ical_feed' %}"
-       data-rss-base="{{ request.scheme }}://{{ request.get_host }}{% url 'event_rss_feed' %}">
+       data-ical-base="{{ ical_url }}"
+       data-rss-base="{{ rss_url }}">
 
     <div class="filter-panel" style="margin-top:var(--space-4);">
 
@@ -71,20 +71,23 @@
       <div class="form-label" style="margin-bottom:var(--space-2);">iCal Feed</div>
       <div class="text-base text-muted" style="margin-bottom:var(--space-3);">Works with Apple Calendar, Google Calendar, Outlook, and most calendar apps.</div>
       <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
-        <a id="ical-open-link" href="{% url 'event_ical_feed' %}" class="btn btn--sm">Open feed</a>
+        <a id="ical-webcal-link" href="{{ ical_webcal_url }}" class="btn btn--sm">Subscribe</a>
+        <a id="ical-google-link" href="{{ ical_google_url }}" class="btn btn--sm btn--ghost" target="_blank" rel="noopener">Add to Google Calendar</a>
         <button type="button" id="ical-copy-btn" class="btn btn--sm btn--ghost">Copy URL</button>
+        <span id="ical-copy-status" class="text-sm text-muted" role="status" aria-live="polite"></span>
       </div>
-      <code id="ical-url-display" class="text-sm text-muted" style="word-break:break-all;">{{ request.scheme }}://{{ request.get_host }}{% url 'event_ical_feed' %}</code>
+      <code id="ical-url-display" class="text-sm text-muted" style="word-break:break-all;">{{ ical_url }}</code>
     </div>
 
     <div class="card-panel">
       <div class="form-label" style="margin-bottom:var(--space-2);">RSS Feed</div>
       <div class="text-base text-muted" style="margin-bottom:var(--space-3);">Works with RSS readers and news aggregators.</div>
       <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3);">
-        <a id="rss-open-link" href="{% url 'event_rss_feed' %}" class="btn btn--sm">Open feed</a>
+        <a id="rss-open-link" href="{{ rss_url }}" class="btn btn--sm">Open feed</a>
         <button type="button" id="rss-copy-btn" class="btn btn--sm btn--ghost">Copy URL</button>
+        <span id="rss-copy-status" class="text-sm text-muted" role="status" aria-live="polite"></span>
       </div>
-      <code id="rss-url-display" class="text-sm text-muted" style="word-break:break-all;">{{ request.scheme }}://{{ request.get_host }}{% url 'event_rss_feed' %}</code>
+      <code id="rss-url-display" class="text-sm text-muted" style="word-break:break-all;">{{ rss_url }}</code>
     </div>
 
   </div>

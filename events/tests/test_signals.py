@@ -98,6 +98,8 @@ class TestDeleteReplacedEventImageSignal:
     ):
         settings.MEDIA_ROOT = tmp_path
         event, old_name, storage = self._event_with_image()
+        old_thumbnail = event.thumbnail.name
+        assert old_thumbnail and storage.exists(old_thumbnail)
 
         with django_capture_on_commit_callbacks(execute=True):
             cast(ImageFieldFile, event.image).save(
@@ -108,18 +110,23 @@ class TestDeleteReplacedEventImageSignal:
         assert new_name != old_name
         assert not storage.exists(old_name)
         assert storage.exists(new_name)
+        assert event.thumbnail.name != old_thumbnail
+        assert not storage.exists(old_thumbnail)
+        assert storage.exists(event.thumbnail.name)
 
     def test_clearing_image_deletes_old_file(
         self, settings, tmp_path, django_capture_on_commit_callbacks
     ):
         settings.MEDIA_ROOT = tmp_path
         event, old_name, storage = self._event_with_image()
+        old_thumbnail = event.thumbnail.name
 
         with django_capture_on_commit_callbacks(execute=True):
             event.image = None
             event.save()
 
         assert not storage.exists(old_name)
+        assert not storage.exists(old_thumbnail)
 
     def test_saving_without_image_change_keeps_file(
         self, settings, tmp_path, django_capture_on_commit_callbacks
@@ -144,8 +151,13 @@ class TestDeleteReplacedEventImageSignal:
         cast(ImageFieldFile, event_b.image).name = shared_name
         event_b.save(update_fields=["image"])
 
+        event_b.refresh_from_db()
+        shared_thumbnail = cast(ImageFieldFile, event_b.thumbnail).name
+        assert shared_thumbnail == event_a.thumbnail.name
+
         with django_capture_on_commit_callbacks(execute=True):
             event_a.image = None
             event_a.save()
 
         assert storage.exists(shared_name)
+        assert storage.exists(shared_thumbnail)

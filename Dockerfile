@@ -62,4 +62,7 @@ RUN uv sync --frozen --no-dev && \
 # Ensure the venv is in PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["/bin/bash", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2"]
+# 2 processes x 4 threads: requests waiting on I/O (Postgres, R2, Nominatim
+# geocoding on event save) no longer block a whole worker. Each thread keeps
+# its own persistent DB connection (CONN_MAX_AGE), so up to 8 in total.
+CMD ["/bin/bash", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4"]

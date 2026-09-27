@@ -251,6 +251,23 @@ class Command(BaseCommand):
                     )
                 )
 
+        # ── Thumbnail backfill ────────────────────────────────────────────
+        # The importer's saves generate thumbnails for new and changed images;
+        # this catches events that predate thumbnails or whose generation
+        # failed. Failures are reported but never fail the run.
+        if not skip_images:
+            self.stdout.write("")
+            self.stdout.write(self.style.HTTP_INFO("Backfilling thumbnails..."))
+            try:
+                call_command("backfill_thumbnails", dry_run=dry_run)
+            except Exception as exc:
+                self._report_to_sentry(exc, "backfill_thumbnails")
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"backfill_thumbnails FAILED:\n{traceback.format_exc()}"
+                    )
+                )
+
         # ── Retention ─────────────────────────────────────────────────────
         # Delete past scraped events older than SCRAPED_EVENT_RETENTION_DAYS
         # (user-published events are never deleted). Piggybacks on this daily
