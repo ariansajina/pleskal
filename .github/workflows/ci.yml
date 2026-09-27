@@ -9,9 +9,72 @@ on:
 permissions:
   contents: read
 
+# Superseded PR runs are cancelled; runs on main always finish.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DJANGO_SETTINGS_MODULE: config.settings
+  SECRET_KEY: test-secret-key-for-ci-only
+  DEBUG: "false"
+  ALLOWED_HOSTS: localhost
+  PASSWORD_PEPPER: "abababababababababababababababababababababababababababababababababab"
+  UV_LOCKED: "1"
+
 jobs:
-  lint-and-test:
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Install Python dependencies
+        run: uv sync --dev
+
+      - name: Ruff check
+        run: uv run ruff check --output-format=github .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run ty check .
+
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Python dependencies
+        run: uv sync --no-dev
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build CSS
+        run: npm run css:build
+
+      # Catches broken static references before they fail the Docker build.
+      - name: Collect static files
+        run: uv run python manage.py collectstatic --noinput
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -24,52 +87,29 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
+          --health-interval 2s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 15
 
     env:
-      DJANGO_SETTINGS_MODULE: config.settings
-      SECRET_KEY: test-secret-key-for-ci-only
-      DEBUG: "false"
       DATABASE_URL: postgres://test:test@localhost:5432/test_db
-      ALLOWED_HOSTS: localhost
-      PASSWORD_PEPPER: "abababababababababababababababababababababababababababababababababab"
 
     steps:
       - uses: actions/checkout@v7
         with:
+          # Full history for SonarQube blame data.
           fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
 
-      - name: Set up Python
-        run: uv python install
-
       - name: Install Python dependencies
         run: uv sync --dev
 
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: Build CSS
-        run: npm run css:build
-
-      - name: Collect static files
-        run: uv run python manage.py collectstatic --noinput
-
-      - name: Ruff check
-        run: uv run ruff check .
-
-      - name: Ruff format check
-        run: uv run ruff format --check .
-
-      - name: Type check
-        run: uv run ty check .
-
+      # -n auto matches workers to the runner's cores; the local default of
+      # -n 8 oversubscribes the 4-core runners and is slower.
       - name: Run tests with coverage
-        run: uv run pytest --cov --cov-report=term-missing --cov-report=xml --cov-branch --cov-fail-under=80 --create-db
+        run: uv run pytest -n auto --cov --cov-report=term-missing --cov-report=xml --cov-branch --cov-fail-under=80 --create-db
 
       - name: SonarQube Scan
         if: github.actor != 'dependabot[bot]'

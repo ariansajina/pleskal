@@ -444,20 +444,13 @@ Because of this hook, **do not manually run `ruff format`, `ruff check`, `ty che
 
 ## CI / CD
 
-`.github/workflows/ci.yml` runs on push/PR to `main`:
+`.github/workflows/ci.yml` runs on push/PR to `main` as three parallel jobs (superseded PR runs are cancelled via `concurrency`; `setup-uv` caches the uv download cache and `UV_LOCKED=1` fails on a stale `uv.lock`):
 
-1. Checkout (full history)
-2. Install uv + Python 3.14
-3. `uv sync --dev`
-4. `npm ci` + `npm run css:build`
-5. `collectstatic --noinput`
-6. `ruff check .` (lint)
-7. `ruff format --check .` (format)
-8. `ty check .` (type checking)
-9. `pytest --cov --cov-report=term-missing --cov-report=xml --cov-branch --cov-fail-under=80 --create-db` (PostgreSQL 16)
-10. SonarQube scan
+- **lint**: `ruff check`, `ruff format --check`, `ty check`
+- **static**: `npm ci` + `npm run css:build` + `collectstatic --noinput` (catches broken static references before the Docker build)
+- **test**: `pytest -n auto --cov --cov-report=term-missing --cov-report=xml --cov-branch --cov-fail-under=80 --create-db` (PostgreSQL 16), then SonarQube scan (full-history checkout for blame). `-n auto` matches the runner's cores; the local default `-n 8` oversubscribes a 4-core runner
 
-`.github/workflows/deploy-production.yml` runs on git tag `v*`. It sets `APP_VERSION=<tag>` and runs `railway up` against three Railway services in turn (web, scrape-cron, backup-cron). `APP_VERSION` is forwarded to Sentry as the release tag.
+`.github/workflows/deploy-production.yml` runs on git tag `v*`. It sets `APP_VERSION=<tag>` and runs `railway up` against three Railway services in turn (web, scrape-cron, backup-cron); a `concurrency` group queues overlapping deploys instead of racing them. `.dockerignore` keeps tests, docs, `.git` and local caches/models out of the build context. `APP_VERSION` is forwarded to Sentry as the release tag.
 
 ## Environment Variables
 
