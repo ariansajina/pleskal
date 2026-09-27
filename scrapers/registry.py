@@ -106,7 +106,8 @@ _ALL_SOURCES = [
         scrape_kwargs={"delay": 1.5},
         external_source="kbhdanser",
         default_venue_name="Østre Gasværk Teater",
-        allowed_image_domains=frozenset({"kbhdanser.dk"}),
+        # Uploads are served from One.com's CDN (usercontent.one/wp/kbhdanser.dk/).
+        allowed_image_domains=frozenset({"kbhdanser.dk", "usercontent.one"}),
     ),
     ScraperSource(
         name="sort_hvid",

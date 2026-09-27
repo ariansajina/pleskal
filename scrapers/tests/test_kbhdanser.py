@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 from scrapers.kbhdanser import (
     _extract_description,
+    _extract_image,
     _extract_performances,
     _find_english_url,
     _parse_danish_dates,
@@ -340,6 +341,101 @@ def test_collect_event_cards_real_image_skips_svg_placeholder():
     assert "svg" not in afanador["image_url"]
 
 
+def test_collect_event_cards_lazy_loaded_cdn_image():
+    html = """
+    <html><body>
+      <a href="https://kbhdanser.dk/sonoma">
+        <img src="data:image/svg+xml,..."
+             data-lazy-src="https://usercontent.one/wp/kbhdanser.dk/wp-content/uploads/sonoma.webp">
+        <h1>SONOMA</h1>
+      </a>
+    </body></html>
+    """
+    (card,) = collect_event_cards(_soup(html))
+    assert card["image_url"] == (
+        "https://usercontent.one/wp/kbhdanser.dk/wp-content/uploads/sonoma.webp"
+    )
+
+
+# ── _extract_image ────────────────────────────────────────────────────────────
+
+_CDN = "https://usercontent.one/wp/kbhdanser.dk/wp-content/uploads"
+
+# Trimmed from a live detail page: SVG logo and ornaments, a tracking pixel,
+# lazy-loaded <img> tags, a video poster, then several photos.
+_DETAIL_IMAGES_HTML = f"""
+<html><head>
+  <meta property="og:image" content="{_CDN}/anaccidentalife_SusanHay-scaled.jpg">
+</head><body>
+  <img src="{_CDN}/kbhd-logo-0.svg">
+  <img src="data:image/svg+xml,..." data-lazy-src="{_CDN}/corn-top.svg">
+  <img src="https://www.facebook.com/tr?id=1&ev=PageView&noscript=1">
+  <video src="{_CDN}/an-accident-WIDE.mp4" poster="{_CDN}/an-accident-WIDE-poster.webp"></video>
+  <img src="data:image/svg+xml,..." data-lazy-src="{_CDN}/marc-bw.webp">
+  <img src="{_CDN}/sidi-bw.webp">
+</body></html>
+"""
+
+
+def test_extract_image_prefers_og_image():
+    assert _extract_image(_soup(_DETAIL_IMAGES_HTML)) == (
+        f"{_CDN}/anaccidentalife_SusanHay-scaled.jpg"
+    )
+
+
+def test_extract_image_falls_back_to_first_photo():
+    html = _DETAIL_IMAGES_HTML.replace('property="og:image"', 'property="og:x"')
+    assert _extract_image(_soup(html)) == f"{_CDN}/an-accident-WIDE-poster.webp"
+
+
+def test_extract_image_first_lazy_loaded_img():
+    html = f"""
+    <html><body>
+      <img src="{_CDN}/kbhd-logo-0.svg">
+      <img src="data:image/svg+xml,..." data-lazy-src="{_CDN}/first.webp">
+      <img src="{_CDN}/second.jpg">
+    </body></html>
+    """
+    assert _extract_image(_soup(html)) == f"{_CDN}/first.webp"
+
+
+def test_extract_image_ignores_offsite_og_image():
+    html = f"""
+    <html><head>
+      <meta property="og:image" content="https://example.com/wp-content/uploads/x.jpg">
+    </head><body><img src="{_CDN}/photo.jpg"></body></html>
+    """
+    assert _extract_image(_soup(html)) == f"{_CDN}/photo.jpg"
+
+
+def test_extract_image_percent_encodes_non_ascii():
+    html = f"""
+    <html><head>
+      <meta property="og:image" content="{_CDN}/GONE-NDT-1-©Rahi-Rezvani_hero.webp">
+    </head></html>
+    """
+    assert _extract_image(_soup(html)) == (
+        f"{_CDN}/GONE-NDT-1-%C2%A9Rahi-Rezvani_hero.webp"
+    )
+
+
+def test_extract_image_keeps_encoded_url():
+    url = f"{_CDN}/%C2%A9Camille-Leprince-1.webp"
+    html = f'<html><body><img src="{url}"></body></html>'
+    assert _extract_image(_soup(html)) == url
+
+
+def test_extract_image_none_returns_empty():
+    html = f'<html><body><img src="{_CDN}/kbhd-logo-0.svg"></body></html>'
+    assert _extract_image(_soup(html)) == ""
+
+
+def test_registry_allows_cdn_image_domain():
+    from scrapers.registry import SOURCES
+
+    assert "usercontent.one" in SOURCES["kbhdanser"].allowed_image_domains
+
+
 # ── _find_english_url ─────────────────────────────────────────────────────────
 
 
@@ -535,6 +631,10 @@ def test_scrape_detail_returns_records(mock_dt):
     assert r["is_free"] is False
     assert r["is_wheelchair_accessible"] is False
     assert r["source_url"] == "https://kbhdanser.dk/chroniques/"
+    # The detail page's own image wins over the card thumbnail
+    assert (
+        r["image_url"] == "https://kbhdanser.dk/wp-content/uploads/chroniques-hero.webp"
+    )
 
 
 @patch("scrapers.kbhdanser.datetime")
@@ -568,11 +668,8 @@ def test_scrape_detail_prefers_english_page(mock_dt):
     resp_en = MagicMock()
     resp_en.text = english_html
     resp_en.raise_for_status.return_value = None
-    resp_press = MagicMock()
-    resp_press.text = "<html></html>"
-    resp_press.raise_for_status.return_value = None
-    # First call returns Danish, second call returns English, third returns empty press page
-    session.get.side_effect = [resp_da, resp_en, resp_press]
+    # First call returns Danish, second call returns English
+    session.get.side_effect = [resp_da, resp_en]
 
     card = {
         "title": "Chroniques",
@@ -684,11 +781,8 @@ def test_scrape_detail_en_page_fetch_error_falls_back_to_danish(mock_dt):
     resp_ok.raise_for_status.return_value = None
     resp_err = MagicMock()
     resp_err.raise_for_status.side_effect = requests.HTTPError("503")
-    resp_press = MagicMock()
-    resp_press.text = "<html></html>"
-    resp_press.raise_for_status.return_value = None
-    # First call (Danish page) succeeds; second (EN page) fails; third (press page) succeeds
-    session.get.side_effect = [resp_ok, resp_err, resp_press]
+    # First call (Danish page) succeeds; second (EN page) fails
+    session.get.side_effect = [resp_ok, resp_err]
 
     card = {
         "title": "Show",

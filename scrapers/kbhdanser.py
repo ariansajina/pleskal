@@ -319,12 +319,50 @@ def make_dt(d: datetime.date, t: datetime.time | None) -> datetime.datetime:
 # ── Homepage scraping ─────────────────────────────────────────────────────────
 
 
-def _real_img_src(tag: Tag) -> str:
-    """Return the first non-SVG src from an <img> tag."""
-    for img in tag.find_all("img"):
-        src = str(img.get("src", ""))
-        if src.startswith("https://"):
-            return src
+# Uploads are served from One.com's CDN (usercontent.one/wp/kbhdanser.dk/...),
+# not from kbhdanser.dk itself.
+_UPLOAD_URL_RE = re.compile(
+    r"^https://(?:(?:www\.)?kbhdanser\.dk|usercontent\.one/wp/kbhdanser\.dk)"
+    r"/wp-content/uploads/",
+)
+_PHOTO_EXT_RE = re.compile(r"\.(?:jpe?g|png|webp|heic|heif)$", re.IGNORECASE)
+
+
+def _is_photo_url(url: str) -> bool:
+    """True for a kbhdanser upload in a raster format (not an SVG ornament)."""
+    return bool(_UPLOAD_URL_RE.match(url)) and bool(
+        _PHOTO_EXT_RE.search(urllib.parse.urlsplit(url).path)
+    )
+
+
+def _encode_url(url: str) -> str:
+    """Percent-encode non-ASCII path characters ("©" in photo credits).
+
+    The importer downloads with urllib, which rejects non-ASCII URLs.
+    Already-encoded sequences are left alone.
+    """
+    parts = urllib.parse.urlsplit(url)
+    return urllib.parse.urlunsplit(
+        parts._replace(path=urllib.parse.quote(parts.path, safe="/%"))
+    )
+
+
+def _first_photo(tag: Tag) -> str:
+    """Return the first photo URL among the ``<img>``/``<video>`` tags in *tag*.
+
+    Lazy-loaded ``<img>`` tags carry an SVG placeholder in ``src`` and the real
+    URL in ``data-lazy-src``; the header logo and section ornaments are SVGs
+    and the tracking pixels are off-site, so only raster uploads count.
+    """
+    for el in tag.find_all(["img", "video"]):
+        if el.name == "video":
+            candidates = [el.get("poster")]
+        else:
+            candidates = [el.get("data-lazy-src"), el.get("src")]
+        for candidate in candidates:
+            url = str(candidate or "").strip()
+            if _is_photo_url(url):
+                return _encode_url(url)
     return ""
 
 
@@ -363,7 +401,7 @@ def collect_event_cards(soup: BeautifulSoup) -> list[dict]:
         h2 = a.find("h2")
         artists = h2.get_text(strip=True) if h2 else ""
 
-        image_url = _real_img_src(a)
+        image_url = _first_photo(a)
 
         seen_urls.add(href)
         cards.append(
@@ -535,28 +573,18 @@ def _extract_performances(soup: BeautifulSoup) -> list[dict]:
     return performances
 
 
-def _fetch_press_image(slug: str, session: requests.Session) -> str:
+def _extract_image(soup: BeautifulSoup) -> str:
+    """Return the event's image URL from a detail page, or "".
+
+    Uses the page's ``og:image`` (the event's featured image) when present,
+    otherwise the first photo on the page.
     """
-    Fetch the first image URL from the pressemateriale page for *slug*.
-
-    URL pattern: https://kbhdanser.dk/<slug>-pressemateriale/
-    Returns an empty string if the page is unavailable or has no image.
-    """
-    press_url = f"{BASE_URL}/{slug}-pressemateriale/"
-    try:
-        press_soup = get_soup(press_url, session)
-    except requests.HTTPError:
-        return ""
-    for a in press_soup.find_all("a", href=True):
-        if a.get("download") is not None:
-            return str(a["href"])
-    return ""
-
-
-def _slug_from_url(url: str) -> str:
-    """Extract the event slug from a detail URL (Danish or English variant)."""
-    path = url.rstrip("/").split("/")
-    return path[-1] if path else ""
+    og = soup.find("meta", property="og:image")
+    if og:
+        url = str(og.get("content", "")).strip()
+        if _is_photo_url(url):
+            return _encode_url(url)
+    return _first_photo(soup)
 
 
 def scrape_detail(
@@ -595,19 +623,8 @@ def scrape_detail(
     # Description
     description = _extract_description(soup)
 
-    # Image — try the pressemateriale page first (highest quality),
-    # fall back to a hero image on the detail page, then the card thumbnail.
-    slug = _slug_from_url(detail_url)
-    time.sleep(delay)
-    image_url = _fetch_press_image(slug, session)
-    if not image_url:
-        hero_img = soup.find("img", src=re.compile(r"^https://"))
-        if hero_img:
-            src = str(hero_img.get("src", ""))
-            if src.startswith("https://") and "kbhdanser.dk" in src:
-                image_url = src
-    if not image_url:
-        image_url = card.get("image_url", "")
+    # Image — the detail page's own image, falling back to the card thumbnail.
+    image_url = _extract_image(soup) or card.get("image_url", "")
 
     # Performances
     performances = _extract_performances(soup)
