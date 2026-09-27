@@ -245,11 +245,11 @@
     .theme-toggle {
       display: inline-flex; align-items: center; justify-content: center;
       width: 34px; height: 34px; flex-shrink: 0; order: 3;
-      border: 1.5px solid var(--blue); color: var(--blue); background: transparent;
-      cursor: pointer; transition: background 0.15s, color 0.15s;
+      border: none; color: var(--blue); background: transparent;
+      cursor: pointer; transition: color 0.15s;
     }
     .theme-toggle[hidden] { display: none; }
-    .theme-toggle:hover { background: var(--blue); color: var(--on-blue); }
+    .theme-toggle:hover { color: var(--blue-dark); }
     .theme-toggle svg { width: 18px; height: 18px; display: block; }
     .site-logo .logo--dark, .theme-toggle .icon--sun { display: none; }
     :root[data-theme="dark"] .site-logo .logo--light,
