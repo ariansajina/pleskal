@@ -215,7 +215,7 @@ scheduled Cron Job service in the **production** environment only.
    `SCRAPED_EVENT_RETENTION_DAYS` (default 90). This cron is the only thing
    enforcing that, so set the variable on this service if you override it.
    User-published events are never deleted; the web service hides them from
-   the event list/map after `USER_EVENT_HIDE_AFTER_DAYS` (default 730).
+   the event list after `USER_EVENT_HIDE_AFTER_DAYS` (default 730).
 
 4. Under **Variables**, reference the same environment variables as the web
    service. Required: `DATABASE_URL`, `SECRET_KEY`, `PASSWORD_PEPPER`.

@@ -105,7 +105,6 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "django.template.context_processors.csp",
-                "events.context_processors.feature_flags",
                 "events.context_processors.site_origin",
             ],
         },
@@ -214,7 +213,7 @@ IMAGE_WEBP_QUALITY = 70
 # Scraped events are only a copy of the source's own listing, so they are
 # deleted after SCRAPED_EVENT_RETENTION_DAYS by `purge_expired_events` (run at
 # the end of run_scrapers). User-published events are pleskal's own archive and
-# are never deleted; they only drop out of the event list/map after
+# are never deleted; they only drop out of the event list after
 # USER_EVENT_HIDE_AFTER_DAYS (their detail pages stay reachable).
 SCRAPED_EVENT_RETENTION_DAYS = env.int("SCRAPED_EVENT_RETENTION_DAYS", default=90)
 USER_EVENT_HIDE_AFTER_DAYS = env.int("USER_EVENT_HIDE_AFTER_DAYS", default=730)
@@ -243,10 +242,6 @@ TRANSLATION_MODEL_DIR = env.str(
 )
 # Minimum lingua confidence for a paragraph's language to count as detected.
 TRANSLATION_MIN_CONFIDENCE = env.float("TRANSLATION_MIN_CONFIDENCE", default=0.9)
-
-# Map discovery view (/map/). Off by default; enable via env once the feature
-# is ready to surface.
-MAP_VIEW_ENABLED = env.bool("MAP_VIEW_ENABLED", default=False)
 
 # Server-side, cookieless analytics (analytics/middleware.py). Staff can view
 # the numbers at /stats/; the weekly digest emails a summary to ADMINS.
@@ -282,9 +277,8 @@ if env("R2_BUCKET_NAME", default=None):
 # base.html. Dropping it requires moving those into stylesheets first.
 
 _KOFI_HOST = "https://storage.ko-fi.com"
-_TILE_HOST = "https://tile.openstreetmap.org"
 
-_img_src = [CSP.SELF, "data:", _TILE_HOST, _KOFI_HOST]
+_img_src = [CSP.SELF, "data:", _KOFI_HOST]
 if _r2_domain := globals().get("AWS_S3_CUSTOM_DOMAIN"):
     _img_src.append(f"https://{_r2_domain}")
 
@@ -294,7 +288,7 @@ SECURE_CSP = {
     "style-src": [CSP.SELF, CSP.UNSAFE_INLINE, _KOFI_HOST],
     "img-src": _img_src,
     "font-src": [CSP.SELF],
-    "connect-src": [CSP.SELF, _TILE_HOST, _KOFI_HOST, "https://ko-fi.com"],
+    "connect-src": [CSP.SELF, _KOFI_HOST, "https://ko-fi.com"],
     "frame-ancestors": [CSP.NONE],
     "frame-src": ["https://www.openstreetmap.org", "https://ko-fi.com"],
     "base-uri": [CSP.SELF],

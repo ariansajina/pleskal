@@ -238,10 +238,6 @@ class TestSearches:
         key = DailyCount.objects.get(kind=DailyCount.SEARCH).key
         assert len(key) == middleware.SEARCH_KEY_MAX_LENGTH
 
-    def test_map_searches_counted(self, browser):
-        browser.get("/map/?q=butoh")
-        assert _count(DailyCount.SEARCH, "butoh") == 1
-
     def test_other_pages_ignore_q(self, browser):
         browser.get("/about/?q=butoh")
         assert not DailyCount.objects.filter(kind=DailyCount.SEARCH).exists()
@@ -283,5 +279,5 @@ class TestFilters:
         assert _count(DailyCount.FILTER, "is_free") == 1
 
     def test_current_url_on_other_page_is_ignored(self, browser):
-        browser.get("/?is_free=1", **_htmx("/map/?is_free=1"))
+        browser.get("/?is_free=1", **_htmx("/about/?is_free=1"))
         assert _count(DailyCount.FILTER, "is_free") == 1

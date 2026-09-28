@@ -31,13 +31,13 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 ```
 config/          # Django project settings (incl. SECURE_CSP), URLs, rate limiting, PWA endpoints
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
-events/          # Dance events app (CRUD, feeds, image processing, geocoding, map view, sharing)
+events/          # Dance events app (CRUD, feeds, image processing, geocoding, sharing)
 analytics/       # Cookieless server-side analytics (daily counters, staff /stats/ dashboard)
 scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9)
 templates/       # Global Django templates (base, accounts, events, partials)
-static/          # Static assets (Tailwind input CSS, vendored HTMX + Leaflet, PWA icons, JS shims)
+static/          # Static assets (Tailwind input CSS, vendored HTMX, PWA icons, JS shims)
 scripts/         # Standalone scripts (backup_db.py for the backup cron; download_translation_model.py, run at Docker build time)
-conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, translation off, MAP_VIEW_ENABLED on, ANALYTICS_ENABLED off)
+conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, translation off, ANALYTICS_ENABLED off)
 deployment-notes.md  # Production deployment guidance
 docker-compose.yml   # Local PostgreSQL for development
 ```
@@ -48,7 +48,7 @@ docker-compose.yml   # Local PostgreSQL for development
 events/
   models.py            # Event, EventCategory, FeedHit models
   limits.py            # Field length limits (Django-free, so scrapers run standalone)
-  views.py             # CRUD + list + map + subscribe views
+  views.py             # CRUD + list + subscribe views
   forms.py             # EventForm (markdownx)
   feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)
   images.py            # WebP conversion, EXIF stripping, resize; list-card thumbnails (make_thumbnail/store_thumbnail)
@@ -56,7 +56,7 @@ events/
   translation.py       # Offline per-paragraph EN/DA detection (lingua) + Markdown-preserving da→en translation (CTranslate2)
   sharing.py           # Apple/Google calendar URL builders used by detail page
   signals.py           # Event file cleanup: deletes image + thumbnail files on event delete and when an image is replaced/cleared (unless another event references them)
-  context_processors.py  # Template context (MAP_VIEW_ENABLED for nav; site_origin = https://SITE_DOMAIN for canonical/og:url)
+  context_processors.py  # Template context (site_origin = https://SITE_DOMAIN for canonical/og:url)
   structured_data.py   # SEO: schema.org Event JSON-LD + meta description for event detail pages
   sitemaps.py          # /sitemap.xml (events, publishers, static pages)
   validators.py        # URL scheme validator (image format/size validation lives in images.py)
@@ -277,7 +277,6 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 | Password reset | POST | 5 req/hr | per IP |
 | Claim code | POST | 5 req/hr | per IP |
 | Event list/search | GET | 120 req/min | per IP |
-| Event map | GET | 120 req/min | per IP |
 | Event create | POST | 20 req/hr | per user |
 | Event update | POST | 20 req/min | per user |
 | Event duplicate | POST | 20 req/min | per user |
@@ -285,7 +284,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 
 - `EventDeleteView` is **not** rate-limited (owner-only + confirmation step).
 - Event toggle draft shares the `event_update` cache key, so it draws from the same per-user counter as Event update.
-- Default `rate_limit_methods` is `["POST"]`; the list/map views override it to `["GET"]` (limit `PUBLIC_BROWSE_RATE_LIMIT` in `events/views.py`).
+- Default `rate_limit_methods` is `["POST"]`; the list view overrides it to `["GET"]` (limit `PUBLIC_BROWSE_RATE_LIMIT` in `events/views.py`).
 - HTMX doesn't swap 4xx/5xx responses; `static/js/htmx-errors.js` shows a banner (`#htmx-error` in `base.html`) on 429s and other failed partial requests.
 
 ## Models
@@ -365,7 +364,7 @@ Method: `get_display_description()` returns the English description (`descriptio
 
 Translation: `description` always keeps the scraped original. `events.translation.process_description` detects each paragraph's language offline (lingua, EN/DA only, capitalized words/names stripped first) and: English → nothing stored; Danish → machine translation in `description_en`; both with a substantial English part (≥300 chars) → split into `description_da`/`description_en`. `description_for(lang)` is the accessor for a future bilingual site; `is_machine_translated` drives the "Automatically translated from Danish" note on the detail page. Feeds, JSON-LD, meta description and search use the English text. Failures leave the event unprocessed (blank `description_language`) so `backfill_translations` retries; the importer resets the fields when a description changes without being re-processed. Scope: scraped descriptions only (not titles or user events). Input to the model is Moses punctuation-normalized and HTML-entity-escaped (`MosesPunctNormalizer` + `escape=True`), matching its training data; without that, quotes and dashes come out as `â ¢` mojibake.
 
-Retention: past events are counted from `end_datetime` (or `start_datetime` when there is no end). **Scraped** events (non-blank `external_source`) are deleted `SCRAPED_EVENT_RETENTION_DAYS` (default 90) after they end: `expired_events_q()` in `events/models.py` matches them and `purge_expired_events` deletes them daily (as a step of `run_scrapers`). **User-published** events, drafts included, are **never deleted**; `hidden_events_q()` drops them from the event list/map `USER_EVENT_HIDE_AFTER_DAYS` (default 730) after they end, and also hides expired scraped events before the purge runs. Detail pages stay reachable. The importer's stale deletion only touches **upcoming** events, since scrapers list only what's coming up and past events would otherwise vanish on every run.
+Retention: past events are counted from `end_datetime` (or `start_datetime` when there is no end). **Scraped** events (non-blank `external_source`) are deleted `SCRAPED_EVENT_RETENTION_DAYS` (default 90) after they end: `expired_events_q()` in `events/models.py` matches them and `purge_expired_events` deletes them daily (as a step of `run_scrapers`). **User-published** events, drafts included, are **never deleted**; `hidden_events_q()` drops them from the event list `USER_EVENT_HIDE_AFTER_DAYS` (default 730) after they end, and also hides expired scraped events before the purge runs. Detail pages stay reachable. The importer's stale deletion only touches **upcoming** events, since scrapers list only what's coming up and past events would otherwise vanish on every run.
 
 Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`. Results (including definitive "no result" answers) are cached in the shared Django cache, so repeat venues skip the network call.
 
@@ -385,7 +384,7 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 
 ### Analytics (`analytics/models.py`)
 
-Cookieless, server-side analytics: nothing is stored on or read from the visitor's device, so no consent banner is needed. `AnalyticsMiddleware` counts successful GET HTML responses after the view runs; it skips bots (User-Agent regex), prefetches, staff users, infrastructure URLs (`/health/`, PWA, robots, sitemap, `/stats/`), the admin, and non-200s. HTMX partials are not page views, but on `event_list`/`event_map` they feed search and filter counts, diffed against `HX-Current-URL` so each newly applied filter counts once and incremental typing counts only the final search term. Recording failures are logged and never break the response.
+Cookieless, server-side analytics: nothing is stored on or read from the visitor's device, so no consent banner is needed. `AnalyticsMiddleware` counts successful GET HTML responses after the view runs; it skips bots (User-Agent regex), prefetches, staff users, infrastructure URLs (`/health/`, PWA, robots, sitemap, `/stats/`), the admin, and non-200s. HTMX partials are not page views, but on `event_list` they feed search and filter counts, diffed against `HX-Current-URL` so each newly applied filter counts once and incremental typing counts only the final search term. Recording failures are logged and never break the response.
 
 - `DailyCount(date, kind, key, count)`: kinds `page` (key = path), `visitors` (key blank), `referrer` (external host), `search` (normalized term), `filter` (e.g. `category:workshop`, `is_free`), `calendar` (single-event `.ics` path). Unique `(date, kind, key)`; `increment()`/`decrement()` use `F()` updates.
 - `DailySalt` / `VisitorHash`: unique visitors per day = SHA-256 of today's random salt + client IP + User-Agent. The first request of a new day creates a new salt and deletes older salts and hashes, so no IP is stored and days can't be linked. Skipped when the browser sends `Sec-GPC: 1` or `DNT: 1`.
@@ -397,7 +396,6 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | View | URL | Auth |
 |---|---|---|
 | `EventListView` | `/` | Public |
-| `EventMapView` | `/map/` | Public (gated by `MAP_VIEW_ENABLED`) |
 | `EventDetailView` | `/events/<slug>/` | Public |
 | `EventCreateView` | `/events/submit/` | Login required |
 | `EventUpdateView` | `/events/<slug>/edit/` | Owner only |
@@ -412,11 +410,10 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `EventICalSingleView` | `/events/<slug>/calendar.ics` | Public |
 
 - Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity
-- Event list and map share `_filtered_event_queryset` and the same filter partial; both support: category (multi-value), date range, is_free, is_wheelchair_accessible, search (title/venue/description/submitter)
+- Event list filters (`_filtered_event_queryset` + `events/partials/event_filter_panel.html`) support: category (multi-value), date range, is_free, is_wheelchair_accessible, search (title/venue/description/submitter)
 - Quick date filters: this_week, next_week, this_month, next_month
-- Map view (Leaflet, vendored under `static/vendor/leaflet/`) clusters co-located events; only renders events with `has_map_location` truthy
 - Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting)
-- Draft events are hidden from public list/detail/map; only visible to the owner
+- Draft events are hidden from public list/detail; only visible to the owner
 
 ### Project-level (config/urls.py)
 
@@ -498,7 +495,6 @@ See `.env.example` for the full list. Key variables:
 | `SITE_NAME` | Site name for allauth |
 | `RAILWAY_PUBLIC_DOMAIN` | Auto-set by Railway |
 | `ANALYTICS_ENABLED` | Toggle cookieless page-view counting (default: `true`; `conftest.py` disables it, `analytics/tests/` re-enable it) |
-| `MAP_VIEW_ENABLED` | Toggle the `/map/` route and nav entry (default: `false`; `conftest.py` enables it for tests) |
 | `GEOCODING_ENABLED` | Toggle Nominatim calls in `Event.save()` (default: `false` in DEBUG, `true` otherwise) |
 | `GEOCODING_USER_AGENT` | User-Agent string sent to Nominatim (required by their policy) |
 | `TRANSLATION_ENABLED` | Toggle language detection + translation of scraped descriptions (default: `false` in DEBUG, `true` otherwise; `conftest.py` disables it) |
@@ -510,7 +506,7 @@ See `.env.example` for the full list. Key variables:
 | `DB_BACKUP_RETENTION_DAYS` | Retention for `scripts/backup_db.py` uploads to R2 (default: 30) |
 | `SCRAPER_<NAME>_ENABLED` | Per-scraper kill switch consulted by `run_scrapers` |
 | `SCRAPED_EVENT_RETENTION_DAYS` | Days after a scraped event ends before `purge_expired_events` deletes it (default: 90) |
-| `USER_EVENT_HIDE_AFTER_DAYS` | Days after a user-published event ends before it drops out of the event list/map; user events are never deleted (default: 730) |
+| `USER_EVENT_HIDE_AFTER_DAYS` | Days after a user-published event ends before it drops out of the event list; user events are never deleted (default: 730) |
 
 ## Deployment
 

@@ -3,13 +3,6 @@
 from django.conf import settings
 
 
-def feature_flags(_request):
-    """Expose user-facing feature flags to all templates."""
-    return {
-        "map_view_enabled": getattr(settings, "MAP_VIEW_ENABLED", False),
-    }
-
-
 def site_origin(_request):
     """Expose the production origin (e.g. ``https://pleskal.dk``) to templates.
 

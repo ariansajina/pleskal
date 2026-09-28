@@ -14,8 +14,6 @@ def test_settings(settings):
     # Translation loads a local model; tests that exercise it enable it and
     # patch the model (see events/tests/test_translation.py).
     settings.TRANSLATION_ENABLED = False
-    # Map discovery view is off in production by default; tests assume on.
-    settings.MAP_VIEW_ENABLED = True
     # Analytics writes counters on every page view; tests that exercise it
     # enable it explicitly (see analytics/tests/).
     settings.ANALYTICS_ENABLED = False

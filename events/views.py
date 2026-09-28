@@ -29,7 +29,7 @@ EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
 MAX_UPCOMING_EVENTS_PER_USER = settings.MAX_UPCOMING_EVENTS_PER_USER
 SEARCH_QUERY_MAX_LENGTH = 200
-# GET limit for the public list and map pages. Every filter change, debounced
+# GET limit for the public event list page. Every filter change, debounced
 # search keystroke and page click is a request, and visitors behind a shared
 # address (mobile carrier NAT, a studio's wifi) share one counter, so this has
 # to sit well above what a single person clicking around produces; it is only
@@ -100,15 +100,6 @@ def _advanced_filters_open(
     return False
 
 
-def _format_event_start(start_datetime) -> str:
-    """Human-readable start time matching the event card's date formatting."""
-    from django.utils.dateformat import format as date_format
-
-    if start_datetime.time() == datetime.time(0, 0):
-        return date_format(start_datetime, "l, j F")
-    return date_format(start_datetime, "l, j F · H:i")
-
-
 def _attach_processed_image(form, event, image_file) -> bool:
     """Process the upload onto event.image; on invalid image, add a form error."""
     try:
@@ -138,7 +129,7 @@ def _has_community_publishers():
 
 
 def _list_filter_publishers():
-    """Publisher badges for the event list / map filters.
+    """Publisher badges for the event list filters.
 
     The filter narrows the *visible* event set, so only system publishers that
     actually have events (past or present) get a badge — a publisher with no
@@ -402,7 +393,7 @@ def _filtered_event_queryset(request):
 
 
 def _filter_panel_context(request, filter_state):
-    """Shared filter-panel context for the event list and map views.
+    """Filter-panel context for the event list view.
 
     Builds the quick date ranges, publisher badges, and selected-filter
     state consumed by ``events/partials/event_filter_panel.html`` on both
@@ -468,7 +459,7 @@ class _KnownCountPaginator(Paginator):
         return self._known_count
 
 
-# Columns the list/map templates never read; deferring them keeps the
+# Columns the list templates never read; deferring them keeps the
 # (up to 4000-char) descriptions and their translations off the wire.
 _UNUSED_LISTING_FIELDS = ("description", "description_da", "description_en")
 
@@ -541,105 +532,6 @@ class EventListView(RateLimitMixin, View):
         if request.headers.get("HX-Request"):
             return render(request, self.partial_template_name, ctx)
 
-        return render(request, self.template_name, ctx)
-
-
-class EventMapView(RateLimitMixin, View):
-    rate_limit_key = "event_map"
-    rate_limit_limit = PUBLIC_BROWSE_RATE_LIMIT
-    rate_limit_window = 60  # per minute per IP
-    rate_limit_methods = ["GET"]
-
-    template_name = "events/event_map.html"
-    partial_template_name = "events/partials/event_map_results.html"
-
-    # ~1m precision; events sharing an address geocode to identical floats and
-    # collapse to one marker, but coordinates that differ by more than a metre
-    # stay on separate pins.
-    LOCATION_GROUP_PRECISION = 5
-
-    def dispatch(self, request, *args, **kwargs):
-        if not getattr(settings, "MAP_VIEW_ENABLED", False):
-            from django.http import Http404
-
-            raise Http404("Map view is disabled")
-        return super().dispatch(request, *args, **kwargs)
-
-    def get(self, request):
-        from collections import OrderedDict
-
-        from django.shortcuts import render
-
-        qs, filter_state = _filtered_event_queryset(request)
-
-        # Map view shows upcoming events only, unless an explicit date range is
-        # set — same override as the list view's "past" toggle, so a range that
-        # includes past dates isn't silently emptied out.
-        if not filter_state["date_range_active"]:
-            qs = qs.filter(start_datetime__gte=timezone.now())
-        # Pins and the venue index only need these columns (and no submitter).
-        events = list(
-            qs.select_related(None)
-            .only(
-                "slug",
-                "title",
-                "venue_name",
-                "category",
-                "start_datetime",
-                "latitude",
-                "longitude",
-            )
-            .order_by("start_datetime", "id")
-        )
-
-        with_coords = [e for e in events if e.has_map_location]
-        without_coords = [e for e in events if not e.has_map_location]
-
-        groups: OrderedDict[tuple[float, float], list[dict]] = OrderedDict()
-        group_meta: dict[tuple[float, float], dict] = {}
-        for event in with_coords:
-            lat = float(event.latitude)
-            lng = float(event.longitude)
-            key = (
-                round(lat, self.LOCATION_GROUP_PRECISION),
-                round(lng, self.LOCATION_GROUP_PRECISION),
-            )
-            if key not in groups:
-                groups[key] = []
-                group_meta[key] = {
-                    "lat": lat,
-                    "lng": lng,
-                    "venue_name": event.venue_name,
-                }
-            groups[key].append(
-                {
-                    "slug": event.slug,
-                    "title": event.title,
-                    "venue_name": event.venue_name,
-                    "category": event.category,
-                    "category_display": event.get_category_display(),
-                    "start_datetime": event.start_datetime.isoformat(),
-                    "start_display": _format_event_start(event.start_datetime),
-                    "url": reverse("event_detail", args=[event.slug]),
-                }
-            )
-        pin_data = [
-            {**group_meta[key], "events": events} for key, events in groups.items()
-        ]
-
-        params = request.GET.copy()
-        base_query_string = params.urlencode()
-
-        ctx = {
-            "events_with_coords": with_coords,
-            "events_without_coords": without_coords,
-            "pin_data": pin_data,
-            "base_query_string": base_query_string,
-        }
-        ctx.update(_filter_panel_context(request, filter_state))
-
-        if request.headers.get("HX-Request"):
-            return render(request, self.partial_template_name, ctx)
         return render(request, self.template_name, ctx)
 
 
