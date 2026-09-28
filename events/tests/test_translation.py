@@ -202,6 +202,25 @@ class TestTranslateSentences:
             assert translation._translate_sentences([]) == []
         model.assert_not_called()
 
+    def test_model_loads_from_model_dir(self, settings, tmp_path):
+        (tmp_path / "model").mkdir()
+        (tmp_path / "model" / "model.bin").write_bytes(b"")
+        (tmp_path / "bpe.model").write_text(
+            "#version: 0.2\ne j</w>\nh ej</w>\n", encoding="utf-8"
+        )
+        settings.TRANSLATION_MODEL_DIR = str(tmp_path)
+        translation._model.cache_clear()
+        try:
+            with patch("ctranslate2.Translator") as translator:
+                model = translation._model()
+            translator.assert_called_once_with(
+                str(tmp_path / "model"), device="cpu", compute_type="int8"
+            )
+            assert model.normalizer.normalize("”Hej” – dig") == '"Hej" - dig'  # ty: ignore[unresolved-attribute]
+            assert model.bpe.process_line("hej") == "hej"  # ty: ignore[unresolved-attribute]
+        finally:
+            translation._model.cache_clear()
+
     def test_missing_model_raises(self, settings, tmp_path):
         settings.TRANSLATION_MODEL_DIR = str(tmp_path)
         translation._model.cache_clear()
