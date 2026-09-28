@@ -167,6 +167,7 @@ class TranslationUnavailableError(RuntimeError):
 class _Model:
     translator: object
     bpe: object
+    normalizer: object
     tokenizer: object
     detokenizer: object
 
@@ -180,7 +181,7 @@ def _model() -> _Model:
             "`manage.py download_translation_model`."
         )
     import ctranslate2
-    from sacremoses import MosesDetokenizer, MosesTokenizer
+    from sacremoses import MosesDetokenizer, MosesPunctNormalizer, MosesTokenizer
     from subword_nmt.apply_bpe import BPE
 
     with open(model_dir / "bpe.model", encoding="utf-8") as codes:
@@ -190,19 +191,31 @@ def _model() -> _Model:
             str(model_dir / "model"), device="cpu", compute_type="int8"
         ),
         bpe=bpe,
+        normalizer=MosesPunctNormalizer(lang="da"),
         tokenizer=MosesTokenizer(lang="da"),
         detokenizer=MosesDetokenizer(lang="en"),
     )
 
 
 def _translate_sentences(sentences: list[str]) -> list[str]:
-    """Translate a batch of plain-text sentences from Danish to English."""
+    """Translate a batch of plain-text sentences from Danish to English.
+
+    The model was trained on Moses-preprocessed text: ASCII punctuation, with
+    ``"``, ``'``, ``&``, ``<``, ``>``, ``[`` and ``]`` escaped as HTML entities.
+    Its vocabulary has no typographic quotes or dashes, and an unescaped ``"``
+    or a ``–`` comes out as the mojibake ``â ¢``, so input is punctuation-
+    normalized and escaped the same way; the detokenizer unescapes the output.
+    """
     if not sentences:
         return []
     model = _model()
     tokenized = [
         model.bpe.process_line(  # ty: ignore[unresolved-attribute]
-            model.tokenizer.tokenize(s, return_str=True, escape=False)  # ty: ignore[unresolved-attribute]
+            model.tokenizer.tokenize(  # ty: ignore[unresolved-attribute]
+                model.normalizer.normalize(s),  # ty: ignore[unresolved-attribute]
+                return_str=True,
+                escape=True,
+            )
         ).split()
         for s in sentences
     ]
