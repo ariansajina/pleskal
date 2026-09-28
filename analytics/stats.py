@@ -13,7 +13,6 @@ from .models import DailyCount
 
 PAGE_LABELS = {
     "event_list": "Event list (home)",
-    "event_map": "Map",
     "subscribe": "Subscribe",
     "about": "About",
     "guide": "Guide",

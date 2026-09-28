@@ -75,7 +75,7 @@ def expired_events_q(now=None) -> models.Q:
 
 
 def hidden_events_q(now=None) -> models.Q:
-    """Past events too old to show in the event list and map.
+    """Past events too old to show in the event list.
 
     Expired scraped events (hidden before the daily purge gets to them) and
     user-published events that ended more than USER_EVENT_HIDE_AFTER_DAYS ago.

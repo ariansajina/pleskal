@@ -42,7 +42,7 @@ EXCLUDED_URL_NAMES = {
 }
 EXCLUDED_NAMESPACES = {"admin", "djdt"}
 
-FILTERABLE_URL_NAMES = {"event_list", "event_map"}
+FILTERABLE_URL_NAMES = {"event_list"}
 SEARCH_KEY_MAX_LENGTH = 100
 KEY_MAX_LENGTH = 255
 

@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
@@ -27,10 +26,7 @@ class StaticViewSitemap(Sitemap):
     priority = 0.5
 
     def items(self):
-        names = ["event_list", "publisher_list", "subscribe", "about", "guide"]
-        if getattr(settings, "MAP_VIEW_ENABLED", False):
-            names.append("event_map")
-        return names
+        return ["event_list", "publisher_list", "subscribe", "about", "guide"]
 
     def location(self, item):
         return reverse(item)

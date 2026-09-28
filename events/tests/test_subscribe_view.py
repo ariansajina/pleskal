@@ -1,7 +1,7 @@
 """Tests for the /subscribe/ page, including a CSS regression guard.
 
 Regression: `.filter-panel` is used by two unrelated UIs — the collapsible
-"More filters" panel in the event list/map quickbar (hidden until the
+"More filters" panel in the event list quickbar (hidden until the
 <details> disclosure opens) and the always-visible "Filter your feed" block
 on this page (no <details> involved at all). A CSS rule like
 `.filter-panel { display: none; }` with no ancestor scope hides both,
@@ -56,7 +56,7 @@ class TestSubscribeView:
     def test_filter_panel_is_not_inside_the_quickbar_disclosure(self, client):
         """Structural precondition the CSS scoping fix relies on: this
         page's .filter-panel must never be nested under .filter-quickbar
-        (that component is specific to the event list/map filter UI), or
+        (that component is specific to the event list filter UI), or
         the collapsible hide/show rule would apply here too."""
         resp = client.get(reverse("subscribe"))
         # Search for the class as an HTML attribute value, not a bare
