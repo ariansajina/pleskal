@@ -159,6 +159,7 @@ class TestTranslateMarkdown:
 class TestTranslateSentences:
     def test_runs_tokenize_bpe_translate_detokenize(self):
         model = SimpleNamespace(
+            normalizer=SimpleNamespace(normalize=lambda s: s),
             tokenizer=SimpleNamespace(tokenize=lambda s, **kw: s.lower()),
             bpe=SimpleNamespace(process_line=lambda s: s.replace("hej", "h@@ ej")),
             translator=SimpleNamespace(
@@ -171,6 +172,30 @@ class TestTranslateSentences:
         )
         with patch.object(translation, "_model", return_value=model):
             assert translation._translate_sentences(["Hej verden"]) == ["hello|world"]
+
+    def test_normalizes_and_escapes_punctuation(self):
+        """Typographic punctuation is normalized and escaped Moses-style.
+
+        The model only knows ASCII punctuation as HTML entities; anything else
+        came out as ``â ¢`` mojibake (issue #165).
+        """
+        from sacremoses import MosesPunctNormalizer, MosesTokenizer
+
+        seen = []
+        model = SimpleNamespace(
+            normalizer=MosesPunctNormalizer(lang="da"),
+            tokenizer=MosesTokenizer(lang="da"),
+            bpe=SimpleNamespace(process_line=lambda s: seen.append(s) or s),
+            translator=SimpleNamespace(
+                translate_batch=lambda batch, **kw: [
+                    SimpleNamespace(hypotheses=[["x"]]) for _ in batch
+                ]
+            ),
+            detokenizer=SimpleNamespace(detokenize=" ".join),
+        )
+        with patch.object(translation, "_model", return_value=model):
+            translation._translate_sentences(["”Modigt.” – Aleksej"])
+        assert seen == ["&quot; Modigt . &quot; - Aleksej"]
 
     def test_empty_batch_skips_model(self):
         with patch.object(translation, "_model") as model:
