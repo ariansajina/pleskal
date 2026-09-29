@@ -16,9 +16,11 @@ from scrapers.teaterbilletter import (
     ShowOverrides,
     TeaterbilletterVenue,
     build_records,
+    credits,
     description,
     event_page_url,
     fetch_events,
+    html_markdown,
     image_url,
     listing_enricher,
     matches_filter,
@@ -248,6 +250,102 @@ class TestDescription:
     def test_empty(self):
         assert description({"teaser": None, "description": ""}) == ""
 
+    def test_credits_end_the_description(self):
+        event = {**EVENT, "accreditations": ACCREDITATIONS}
+        paragraphs = description(event).split("\n\n")
+        assert paragraphs[-2] == "Tredje afsnit."
+        assert paragraphs[-1] == credits(event)
+        assert paragraphs[-1].startswith("**Instruktør** Saga Gärde")
+
+
+# Trimmed from the API's HUN ER VRED, plus a duplicate and blank entries.
+ACCREDITATIONS = [
+    {
+        "positionTypeName": "Cast",
+        "firstName": "Uma",
+        "lastName": "Feed",
+        "positionName": "Medvirkende",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "Saga",
+        "lastName": "Gärde",
+        "positionName": "Instruktør",
+    },
+    {
+        "positionTypeName": "Cast",
+        "firstName": "Daniel  Jeremiah",
+        "lastName": "Persson",
+        "positionName": "Medvirkende",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "Ellen",
+        "lastName": "Ruge",
+        "positionName": "Lysdesigner",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "Saga",
+        "lastName": "Gärde",
+        "positionName": "Instruktør",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "",
+        "lastName": "Rodrigo y Gabriela",
+        "positionName": "Komponist",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "",
+        "lastName": "",
+        "positionName": "Scenograf",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "Nobody",
+        "lastName": "",
+        "positionName": "",
+    },
+    None,
+]
+
+
+class TestCredits:
+    def test_one_line_per_role_crew_before_cast(self):
+        event = {
+            "accreditations": ACCREDITATIONS,
+            "producer": {"code": "OR1", "name": "AMFI "},
+            "organizer": {"code": "OR2", "name": "Blaagaard Teater"},
+        }
+        assert credits(event) == (
+            "**Instruktør** Saga Gärde  \n"
+            "**Lysdesigner** Ellen Ruge  \n"
+            "**Komponist** Rodrigo y Gabriela  \n"
+            "**Medvirkende** Uma Feed, Daniel Jeremiah Persson  \n"
+            "**Produktion** AMFI"
+        )
+
+    def test_venue_producing_itself_is_not_repeated(self):
+        venue = {"code": "OR2", "name": "Blaagaard Teater"}
+        event = {"accreditations": [], "producer": venue, "organizer": venue}
+        assert credits(event) == ""
+
+    def test_no_credits(self):
+        assert credits({}) == ""
+
+
+def test_html_markdown_drops_images_and_blank_paragraphs():
+    html = (
+        '<div><p>Tekst.</p><p>&nbsp;</p><p><img src="a.jpg"></p>'
+        '<figure><img src="b.jpg"><figcaption>Foto</figcaption></figure>'
+        "<p><strong>Instruktion</strong> X<br><strong>Lys</strong> Y</p></div>"
+    )
+    div = BeautifulSoup(html, "lxml").select_one("div")
+    assert html_markdown(div) == "Tekst.\n\n**Instruktion** X  \n**Lys** Y"
+    assert html_markdown(None) == ""
+
 
 def test_image_url_prefers_largest_landscape():
     assert image_url(EVENT) == "https://www.tereba.dk/medias/wide.jpg"
@@ -312,6 +410,11 @@ class TestBuildRecords:
         assert rec["source_url"] == "https://blaagaardteater.dk/program/hun-er-vred"
         assert rec["end_datetime"] == "2026-12-10T20:35:00+01:00"
 
+    def test_page_description_replaces_the_apis(self):
+        overrides = ShowOverrides(description="Fra teatrets side.")
+        (rec, _) = build_records(EVENT, VENUE, overrides, now=NOW)
+        assert rec["description"] == "Fra teatrets side."
+
     def test_api_duration_wins_over_override(self):
         overrides = ShowOverrides(duration=datetime.timedelta(minutes=35))
         (rec, _) = build_records(EVENT, VENUE, overrides, now=NOW)
@@ -370,9 +473,16 @@ def test_ticket_links_maps_ticket_numbers_to_absolute_pages():
 class TestListingEnricher:
     URL = "https://blaagaardteater.dk/program"
 
-    def _enrich(self, events, fake_get_soup, duration_from_page=None):
+    def _enrich(
+        self, events, fake_get_soup, duration_from_page=None, description_from_page=None
+    ):
         hook = listing_enricher(
-            self.URL, ".card", "h2 a[href]", duration_from_page, delay=0
+            self.URL,
+            ".card",
+            "h2 a[href]",
+            description_from_page=description_from_page,
+            duration_from_page=duration_from_page,
+            delay=0,
         )
         with (
             patch("scrapers.teaterbilletter.get_soup", side_effect=fake_get_soup),
@@ -408,6 +518,47 @@ class TestListingEnricher:
             "146534": ShowOverrides(source_url=f"{self.URL}/myac"),
         }
         assert pages == ["page"]
+
+    def test_page_description_replaces_the_apis_with_one_retry(self):
+        fetched: list[str] = []
+        challenged: set[str] = set()
+
+        def fake_get_soup(url, session):
+            fetched.append(url)
+            if url == self.URL:
+                return _soup(LISTING_HTML)
+            if url.endswith("/myac"):
+                raise requests.HTTPError("503")
+            if url not in challenged:  # first request gets the bot challenge
+                challenged.add(url)
+                return _soup(CHALLENGE_HTML)
+            return _soup("<div class='text'>Beskrivelse. Varighed 70 min</div>")
+
+        def description_from_page(soup):
+            text = soup.select_one(".text")
+            return text.get_text() if text else ""
+
+        events = [
+            {"eventNo": 147563, "durationInMinutes": 0},
+            {"eventNo": 146534, "durationInMinutes": 0},  # page never readable
+        ]
+        overrides = self._enrich(
+            events,
+            fake_get_soup,
+            duration_from_page=lambda soup: datetime.timedelta(minutes=70),
+            description_from_page=description_from_page,
+        )
+        assert overrides == {
+            "147563": ShowOverrides(
+                source_url=f"{self.URL}/hun-er-vred",
+                description="Beskrivelse. Varighed 70 min",
+                duration=datetime.timedelta(minutes=70),
+            ),
+            # Keeps its venue link; the API's description is used instead.
+            "146534": ShowOverrides(source_url=f"{self.URL}/myac"),
+        }
+        hun, myac = f"{self.URL}/hun-er-vred", f"{self.URL}/myac"
+        assert fetched == [self.URL, hun, hun, myac, myac]
 
     def test_page_not_fetched_when_api_has_duration(self):
         fetched: list[str] = []

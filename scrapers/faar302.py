@@ -1,13 +1,16 @@
 """Scraper for Teater FÅR302 (https://www.faar302.dk/), via teaterbilletter.dk.
 
-Shows, performance times and content come from the teaterbilletter.dk API (see
-``scrapers/teaterbilletter.py``) for FÅR302's own stage and the site-specific
-locations it registers as separate venues.  Every genre is taken.
+Shows, performance times, prices and images come from the teaterbilletter.dk
+API (see ``scrapers/teaterbilletter.py``) for FÅR302's own stage and the
+site-specific locations it registers as separate venues.  Every genre is taken.
 
 FÅR302's front page lists each show as a ``div.forestilling`` card whose "Køb
 billet" button carries the ticketing ``data-event_no``; that links each event
-to its page on faar302.dk.  Some shows have no running time in the API, so it
-is read from the show page ("Varighed ca. 35 min") instead.
+to its page on faar302.dk, whose ``div.textbox`` gives the description: fuller
+than the API's (Danish and English, full credits, practical notes).  Some shows
+have no running time in the API, so it is read from the page ("Varighed ca. 35
+min") instead.  When a show page can't be read (faar302.dk intermittently
+serves a bot challenge), the API's description and credits are used.
 
 The theatre is not wheelchair accessible (stated on its /billetter/ page).
 
@@ -65,6 +68,11 @@ def parse_duration(soup: BeautifulSoup) -> datetime.timedelta | None:
     return None
 
 
+def parse_description(soup: BeautifulSoup) -> str:
+    """Return a show page's ``div.textbox`` (description and credits) as markdown."""
+    return teaterbilletter.html_markdown(soup.select_one("div.textbox"))
+
+
 def scrape(delay: float = 0.5) -> list[dict]:
     """Scrape FÅR302's programme and return a list of event dicts."""
     return teaterbilletter.scrape(
@@ -73,6 +81,7 @@ def scrape(delay: float = 0.5) -> list[dict]:
             PROGRAM_URL,
             card_selector="div.forestilling",
             link_selector='a.forteksten[href], a[href*="/forestilling/"]',
+            description_from_page=parse_description,
             duration_from_page=parse_duration,
             delay=delay,
         ),

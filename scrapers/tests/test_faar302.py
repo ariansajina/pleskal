@@ -9,7 +9,7 @@ from unittest.mock import patch
 from bs4 import BeautifulSoup
 
 from scrapers import faar302
-from scrapers.faar302 import parse_duration, scrape
+from scrapers.faar302 import parse_description, parse_duration, scrape
 from scrapers.teaterbilletter import ticket_links
 
 
@@ -67,12 +67,37 @@ def test_scrape_takes_every_genre_at_both_venues_and_enriches():
     kwargs = _enricher_kwargs()
     assert kwargs["url"] == "https://www.faar302.dk/"
     assert kwargs["duration_from_page"] is parse_duration
+    assert kwargs["description_from_page"] is parse_description
     assert kwargs["delay"] == 0.25
     venue = faar302.VENUE
     assert venue.venue_codes == ("VN0000120", "VN0003980")
     assert venue.genres is None and venue.categories is None
     assert venue.venue_names["VN0000120"] == "Teater FÅR302"
     assert venue.is_wheelchair_accessible is False
+
+
+def test_parse_description_takes_the_textbox_with_credits():
+    html = """
+    <div class="forestilling"><h1>Gazed</h1></div>
+    <div class="textbox">
+      <p>GAZED er et soloværk.</p>
+      <p>&nbsp;</p>
+      <p><strong>Koncept og koreografi</strong> Þórunn Guðmundsdóttir<br>
+         <strong>Lysdesign</strong> Ida Herring</p>
+      <p><img src="https://www.faar302.dk/wp-content/uploads/foto.jpg"></p>
+    </div>
+    <footer>TEATER FÅR302</footer>
+    """
+    assert parse_description(_soup(html)) == (
+        "GAZED er et soloværk.\n\n"
+        "**Koncept og koreografi** Þórunn Guðmundsdóttir  \n"
+        "**Lysdesign** Ida Herring"
+    )
+
+
+def test_parse_description_of_a_bot_challenge_is_empty():
+    html = "<html><head><title>Et øjeblik…</title></head><body></body></html>"
+    assert parse_description(_soup(html)) == ""
 
 
 class TestParseDuration:
