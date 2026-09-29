@@ -1,0 +1,17 @@
+{# The other dates of a series on its list card (events.series.SeriesCard). #}
+<div class="date-rail">
+    <span class="date-rail__icon" aria-hidden="true">↻</span>
+    {% if card.showtimes %}
+        <span class="date-rail__label">{{ card.count }} showing{{ card.count|pluralize }} this day</span>
+        <span>{% for time in card.showtimes %}<span{% if forloop.first %} class="date-rail__first"{% endif %}>{{ time|date:"H:i" }}</span>{% if not forloop.last %} · {% endif %}{% endfor %}</span>
+    {% else %}
+        <span class="date-rail__label">
+            {% if card.total is not None %}{{ card.count }} of {{ card.total }} dates in range{% elif card.day_count < card.count %}{{ card.count }} showings on {{ card.day_count }} days, until {{ card.last|date:"j M" }}{% else %}{{ card.count }} dates, until {{ card.last|date:"j M" }}{% endif %}
+        </span>
+        <span>
+            {% for day in card.days %}{{ day.date|date:"D j M" }}{% if day.count > 1 %} <span class="date-rail__count">×{{ day.count }}</span>{% endif %}{% if not forloop.last %} · {% endif %}{% empty %}{% if card.total is not None %}the only one in range{% endif %}{% endfor %}
+            {% if card.more_days %}<span class="date-rail__more">+{{ card.more_days }} more</span>{% endif %}
+        </span>
+    {% endif %}
+    {% if card.outside %}<span class="date-rail__outside">{{ card.outside }} more date{{ card.outside|pluralize }} outside this range</span>{% endif %}
+</div>

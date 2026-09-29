@@ -185,6 +185,7 @@ class PublisherListView(View):
 class PublisherProfileView(View):
     def get(self, request, slug):
         from events.models import Event
+        from events.series import attach_series_cards, first_per_series
 
         publisher = get_object_or_404(User, display_name_slug=slug)
         is_own_profile = request.user.is_authenticated and request.user == publisher
@@ -196,18 +197,27 @@ class PublisherProfileView(View):
 
         show_past = request.GET.get("past") == "1"
         now = timezone.now()
+        # A series is listed once: at its next date (its latest for past).
         if show_past:
-            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime", "-id")
+            dated = qs.filter(start_datetime__lt=now)
+            qs = first_per_series(dated, descending=True).order_by(
+                "-start_datetime", "-id"
+            )
         else:
-            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime", "id")
+            dated = qs.filter(start_datetime__gte=now)
+            qs = first_per_series(dated).order_by("start_datetime", "id")
+        events = list(qs)
+        attach_series_cards(events, dated)
 
         drafts = None
         if is_own_profile:
-            drafts = (
-                Event.objects.filter(submitted_by=publisher, is_draft=True)
-                .select_related("submitted_by")
-                .order_by("start_datetime", "id")
+            dated_drafts = Event.objects.filter(
+                submitted_by=publisher, is_draft=True
+            ).select_related("submitted_by")
+            drafts = list(
+                first_per_series(dated_drafts).order_by("start_datetime", "id")
             )
+            attach_series_cards(drafts, dated_drafts)
 
         return render(
             request,
@@ -215,7 +225,7 @@ class PublisherProfileView(View):
             {
                 "publisher": publisher,
                 "publisher_jsonld": publisher_jsonld(publisher),
-                "events": qs,
+                "events": events,
                 "show_past": show_past,
                 "is_own_profile": is_own_profile,
                 "drafts": drafts,

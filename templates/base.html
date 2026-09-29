@@ -459,7 +459,58 @@
     .repeat-row .form-input, .repeat-row .form-select { width: auto; }
     .repeat-preview { font-size: var(--text-sm); margin-top: var(--space-3); }
     .repeat-preview:empty { display: none; }
-    .series-dates { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+
+    /* ─── EVENT SERIES ──────────────────────────────────── */
+    /* List card of a series: its next date, then its other dates. */
+    .event-meta--series { flex-wrap: wrap; column-gap: var(--space-2); row-gap: 0; }
+    .series-next {
+      font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--blue); border: 1px solid var(--border); padding: 0 0.35rem; white-space: nowrap;
+    }
+    .series-more-times { font-size: var(--text-xs); font-style: italic; color: var(--ink-muted); white-space: nowrap; }
+    .date-rail {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem;
+      margin: var(--space-2) 0 var(--space-1); font-size: var(--text-xs); color: var(--ink-muted);
+    }
+    .date-rail__icon { color: var(--blue); }
+    .date-rail__label { font-weight: 600; color: var(--ink); }
+    .date-rail__first { color: var(--blue); font-weight: 600; }
+    .date-rail__count { opacity: 0.75; }
+    .date-rail__more { border-bottom: 1px dotted currentColor; }
+    .date-rail__outside { flex-basis: 100%; padding-left: 1.05rem; font-style: italic; }
+    /* Detail page: every date of the series in one scrollable row. */
+    .dates-head {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2);
+      font-size: var(--text-sm); color: var(--ink-muted); margin-bottom: var(--space-2);
+    }
+    .dates-head strong { color: var(--blue); font-size: var(--text-xs); letter-spacing: 0.1em; text-transform: uppercase; }
+    .date-strip {
+      display: flex; gap: 0.3rem; overflow-x: auto; scroll-snap-type: x proximity;
+      padding-bottom: 6px; margin-bottom: var(--space-3); scrollbar-width: thin;
+    }
+    .date-strip--overflow {
+      -webkit-mask-image: linear-gradient(to right, #000 88%, transparent);
+      mask-image: linear-gradient(to right, #000 88%, transparent);
+    }
+    .date-strip__month {
+      flex: none; writing-mode: vertical-rl; transform: rotate(180deg); scroll-snap-align: start;
+      font-size: 0.58rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--blue); text-align: center; padding: 0 0.05rem;
+    }
+    .date-tile {
+      flex: none; width: 3.1rem; display: flex; flex-direction: column; align-items: center;
+      padding: 0.2rem 0; border: 1.5px solid var(--border-light); background: var(--surface);
+      font-size: 0.66rem; line-height: 1.2; color: var(--ink-muted); scroll-snap-align: start;
+    }
+    .date-tile strong { font-size: 0.95rem; color: var(--ink); }
+    .date-tile:hover { border-color: var(--blue); color: var(--ink-muted); }
+    .date-tile--current, .date-tile--current:hover { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
+    .date-tile--current strong { color: var(--on-blue); }
+    .date-tile--past { opacity: 0.45; }
+    .date-tile--draft { border-style: dashed; border-color: var(--border-draft); }
+    .showtimes { font-size: var(--text-sm); color: var(--ink-muted); margin: calc(-1 * var(--space-1)) 0 var(--space-3); }
+    .showtimes a { padding: 0 0.15rem; }
+    .showtimes a[aria-current] { color: var(--blue); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 
     /* ─── BUTTONS ───────────────────────────────────────── */
     .btn {

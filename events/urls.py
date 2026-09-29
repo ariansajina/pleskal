@@ -1,7 +1,12 @@
 from django.urls import path
 from django.views.generic import TemplateView
 
-from .feeds import EventICalFeed, EventICalSingleView, EventRSSFeed
+from .feeds import (
+    EventICalFeed,
+    EventICalSeriesView,
+    EventICalSingleView,
+    EventRSSFeed,
+)
 from .views import (
     EventCreateView,
     EventDeleteView,
@@ -46,6 +51,11 @@ urlpatterns = [
         "events/<slug:slug>/calendar.ics",
         EventICalSingleView.as_view(),
         name="event_ical_single",
+    ),
+    path(
+        "events/<slug:slug>/all-dates.ics",
+        EventICalSeriesView.as_view(),
+        name="event_ical_series",
     ),
     # Feeds
     path("feed/events.ics", EventICalFeed.as_view(), name="event_ical_feed"),

@@ -541,13 +541,19 @@ class TestEditSeries:
         assert len(names) == 1
         assert names != {""}
 
-    def test_publish_state_copied_only_when_changed(self, client, series):
-        self._post(client, series[4], submit_action="draft", scope="this")
-        self._post(client, series[1], title="Renamed", scope="all")
-        assert [e.is_draft for e in _occurrences()] == [False] * 4 + [True, False]
-        series[0].refresh_from_db()
-        self._post(client, series[0], submit_action="draft", scope="all")
+    @pytest.mark.parametrize("scope", ["this", "following", "all"])
+    def test_publish_state_applies_to_whole_series(self, client, series, scope):
+        self._post(client, series[4], submit_action="draft", scope=scope)
         assert all(e.is_draft for e in _occurrences())
+        series[1].refresh_from_db()
+        self._post(client, series[1], submit_action="publish", scope="this")
+        assert not any(e.is_draft for e in _occurrences())
+
+    def test_edit_without_publish_action_keeps_publish_state(self, client, series):
+        data = _edit_data(series[1], title="Renamed", scope="this")
+        del data["submit_action"]
+        client.post(reverse("event_edit", args=[series[1].slug]), data)
+        assert not any(e.is_draft for e in _occurrences())
 
     def test_edit_clashing_with_another_event_is_rejected(self, client, series):
         other_day = _local(series[4].start_datetime).date()
@@ -599,19 +605,19 @@ class TestDeleteAndToggle:
         series[-1].delete()
         assert not EventSeries.objects.exists()
 
-    @pytest.mark.parametrize(
-        ("scope", "drafts"),
-        [
-            ("this", [False, False, True, False, False, False]),
-            ("following", [False, False, True, True, True, True]),
-            ("all", [True] * 6),
-        ],
-    )
-    def test_toggle_draft_scopes(self, client, series, scope, drafts):
-        client.post(
-            reverse("event_toggle_draft", args=[series[2].slug]), {"scope": scope}
-        )
-        assert [e.is_draft for e in _occurrences()] == drafts
+    @pytest.mark.parametrize("scope", ["", "this", "following", "all"])
+    def test_toggle_draft_applies_to_whole_series(self, client, series, scope):
+        url = reverse("event_toggle_draft", args=[series[2].slug])
+        client.post(url, {"scope": scope})
+        assert all(e.is_draft for e in _occurrences())
+        client.post(url)
+        assert not any(e.is_draft for e in _occurrences())
+
+    def test_toggle_draft_leaves_other_events_alone(self, client, series, owner):
+        other = EventFactory.create(submitted_by=owner)
+        client.post(reverse("event_toggle_draft", args=[series[0].slug]))
+        other.refresh_from_db()
+        assert not other.is_draft
 
 
 @pytest.mark.django_db
@@ -675,18 +681,21 @@ class TestPreview:
 
 @pytest.mark.django_db
 class TestDisplay:
-    def test_detail_shows_rule_and_other_dates(self, client, series):
+    def test_detail_shows_rule_and_all_dates(self, client, series):
         client.logout()
-        resp = client.get(reverse("event_detail", args=[series[0].slug]))
+        resp = client.get(reverse("event_detail", args=[series[1].slug]))
         content = resp.content.decode()
         assert "Weekly on" in content
         last = _local(series[-1].start_datetime)
         assert f"until {last.day} {last:%B %Y}" in content
-        assert "Other dates" in content
-        for event in series[1:]:
+        assert "6 dates" in content
+        for event in series:
             assert reverse("event_detail", args=[event.slug]) in content
+        assert content.count('class="date-tile') == 6
+        assert content.count('class="date-tile date-tile--current"') == 1
+        assert 'aria-current="date"' in content
 
-    def test_other_dates_hide_drafts_from_the_public(self, client, series):
+    def test_dates_hide_drafts_from_the_public(self, client, series):
         Event.objects.filter(pk=series[3].pk).update(is_draft=True)
         resp = client.get(reverse("event_detail", args=[series[0].slug]))
         assert reverse("event_detail", args=[series[3].slug]) in resp.content.decode()
@@ -696,30 +705,34 @@ class TestDisplay:
             reverse("event_detail", args=[series[3].slug]) not in resp.content.decode()
         )
 
-    def test_other_dates_are_capped(self, client, owner):
+    def test_all_dates_are_in_the_strip(self, client, owner):
         client.post(
             reverse("event_create"), _create_data(_future_weekday(), repeat_count="12")
         )
         first = _occurrences()[0]
         resp = client.get(reverse("event_detail", args=[first.slug]))
-        assert b"and 3 more" in resp.content
+        assert resp.context["series"]["count"] == 12
+        assert resp.content.count(b'class="date-tile') == 12
+        assert b'class="date-strip date-strip--overflow"' not in resp.content
 
-    def test_owner_sees_extend_and_scope_controls(self, client, series):
+    def test_owner_sees_extend_but_no_publish_scope(self, client, series):
         resp = client.get(reverse("event_detail", args=[series[0].slug]))
         content = resp.content.decode()
         assert "Extend series" in content
-        assert 'name="scope"' in content
+        assert 'name="scope"' not in content
 
     def test_single_event_has_no_series_block(self, client):
         event = EventFactory.create()
         resp = client.get(reverse("event_detail", args=[event.slug]))
         assert resp.context["series"] is None
-        assert b"Other dates" not in resp.content
+        assert b"data-date-strip" not in resp.content
 
-    def test_list_card_shows_repeat_badge(self, client, series):
+    def test_list_shows_series_once(self, client, series):
         EventFactory.create(title="One-off")
         resp = client.get(reverse("event_list"))
-        assert resp.content.count(b'class="badge badge--repeat"') == 6
+        assert [e.title for e in resp.context["events"]] == ["One-off", "Weekly Jam"]
+        assert resp.content.count(b'class="series-next"') == 1
+        assert b"2 events \xc2\xb7 7 dates found" in resp.content
 
 
 @pytest.mark.django_db

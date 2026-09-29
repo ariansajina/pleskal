@@ -51,7 +51,7 @@ events/
   views.py             # CRUD + list + subscribe views
   forms.py             # EventForm (markdownx; repeat fields + edit scope for recurring events)
   recurrence.py        # Repeat rules (no DB): Pattern <-> RRULE, describe(), date-dependent presets, expand() within the one-year / per-series limits
-  series.py            # Recurring events: plan + apply series creation and scoped edits (this / following / all), scope_queryset for delete/toggle
+  series.py            # Series: plan + apply recurring-event creation and scoped edits (this / following / all), scope_queryset for delete/toggle, scraped-show linking (scraped_series_key, link_scraped_series), listing helpers (first_per_series, attach_series_cards), detail date strip (series_context)
   feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)
   images.py            # WebP conversion, EXIF stripping, resize; list-card thumbnails (make_thumbnail/store_thumbnail)
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
@@ -66,7 +66,7 @@ events/
   templatetags/
     markdown_filters.py   # render_markdown filter (nh3 sanitized)
   management/commands/
-    base_import.py              # Base class for event import logic (upsert, stale deletion, images)
+    base_import.py              # Base class for event import logic (upsert, stale deletion, images, linking a show's dates into a series)
     import_events.py            # Generic importer: import_events <source> (config from scrapers/registry.py)
     run_scrapers.py             # Unified command: runs all scrapers + imports (used by Railway cron)
     backfill_geocoding.py       # Populate latitude/longitude on events that predate geocoding
@@ -227,7 +227,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
   - `EventOwnerMixin` — restricts edit/delete/duplicate to event owner (raises 403)
 - **Custom User model:** UUID primary key, email-based authentication (`USERNAME_FIELD = "email"`, no username)
 - **Draft events:** Events can be saved as drafts (`is_draft=True`) and are only visible to their owner; toggle via `EventToggleDraftView`
-- **Recurring events:** stored as one `Event` row per occurrence linked to an `EventSeries` (see Models), so lists, feeds, search and retention need no special cases
+- **Series (recurring events, scraped multi-date shows):** stored as one `Event` row per occurrence linked to an `EventSeries` (see Models), so feeds, search and retention need no special cases; listings collapse a series into one card
 - **No moderation workflow:** All published events are visible immediately
 - **Invite-only registration:** Users register via claim codes (`/claim/` flow), no open signup; logged-in users can generate batches of invite codes via `MyInvitesView` (limited by `CLAIM_CODES_PER_BATCH` per month)
 
@@ -340,7 +340,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `image` | Optional; WebP, max 10 MB, 1200px max dimension, EXIF stripped |
 | `thumbnail` | Not editable: list-card rendition of `image` (WebP, shorter side scaled to 360px), content-addressed under `events/thumbs/`; kept in sync by `save()` (regenerated when `image` changes, reused from another event with the same image, cleared with it). Generation failures leave it empty and the card falls back to the full image; `backfill_thumbnails` retries. Deleted with the event unless another event shares it |
 | `image_source_url` | Scraped events only (not editable): source URL `image` was downloaded from; the importer re-downloads when the scraped `image_url` differs (e.g. a venue replaces an "image coming soon" placeholder) |
-| `start_datetime` | Must be future on creation, max 1 year out |
+| `start_datetime` | Must be future on creation, max 1 year out (not for system accounts) |
 | `end_datetime` | Optional, must be after start |
 | `venue_name` | Max 200 chars |
 | `venue_address` | Optional, max 200 chars |
@@ -358,7 +358,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `description_da` | Danish part of a `mixed` description (blank otherwise) |
 | `description_en` | Machine translation of a Danish description, or the English part of a `mixed` one (blank for English originals) |
 | `description_en_is_machine` | Boolean; True when `description_en` is a machine translation |
-| `series` | FK -> EventSeries, nullable (SET_NULL), not editable; set on the occurrences of a recurring event |
+| `series` | FK -> EventSeries, nullable (SET_NULL), not editable; set on the occurrences of a recurring event and the dates of a scraped show with several dates |
 | `created_at`, `updated_at` | Auto timestamps |
 
 Constraint: `(title, start_datetime, venue_name)` is unique — dedupes the same event arriving from two scrapers (or a scraper and a manual submission) while letting generic titles recur at the same time in different venues. `EventForm.clean()` mirrors it with a friendly error.
@@ -375,13 +375,14 @@ Property: `has_map_location` — True when both `latitude` and `longitude` are s
 
 ### EventSeries (`events/models.py`)
 
-A recurring event. Each occurrence is an ordinary `Event` row with `series` set; the series stores only what repeats.
+Several dates of one event, listed as one card. Each occurrence is an ordinary `Event` row with `series` set. Two kinds: a **recurring event** (a user's repeat rule; the series stores what repeats) and a **scraped show** (a source page listing several dates; no rule).
 
 | Field | Notes |
 |---|---|
 | `id` | UUID PK |
-| `rrule` | RFC 5545 RRULE **without** COUNT/UNTIL, as written by `events.recurrence.Pattern.to_rrule()` (subset: DAILY; WEEKLY + BYDAY; MONTHLY + BYMONTHDAY or BYDAY=`<n>`/`-1` weekday; INTERVAL) |
-| `dtstart` | Anchor of the rule (fixes the phase of "every 2 weeks" and the time of day); not necessarily an occurrence |
+| `rrule` | RFC 5545 RRULE **without** COUNT/UNTIL, as written by `events.recurrence.Pattern.to_rrule()` (subset: DAILY; WEEKLY + BYDAY; MONTHLY + BYMONTHDAY or BYDAY=`<n>`/`-1` weekday; INTERVAL); blank for a scraped show (`pattern` is then None) |
+| `dtstart` | Anchor of the rule (fixes the phase of "every 2 weeks" and the time of day); not necessarily an occurrence. First date for a scraped show |
+| `source_key` | Scraped shows only: `"<external_source>:<source page URL>"` (`series.scraped_series_key`; a trailing `/YYYY-MM-DD/` is dropped for per-date URLs such as Warehouse9's). Unique when non-blank |
 | `created_at` | Auto timestamp |
 
 The end isn't stored: a series ends at its last occurrence, which is what lets the owner extend or shorten it. Deleted with its last occurrence (`events/signals.py`, and `SeriesEdit.apply` when an edit detaches the occurrences).
@@ -391,8 +392,14 @@ Recurrence (`events/recurrence.py`, `events/series.py`):
 - Rules are expanded on the local wall clock (a 19:00 class stays at 19:00 across DST) and limited to dates at most `EVENT_HORIZON` (365 days) from today, `MAX_UPCOMING_OCCURRENCES_PER_SERIES` (110) **upcoming** dates per series, and the owner's remaining `MAX_UPCOMING_EVENTS_PER_USER` (220) allowance (system accounts exempt). Rules producing more are **cut off, not rejected**; the form preview and a flash message say why (`series.cut_notice`).
 - Planning is separate from writing: `plan_creation` / `plan_edit` return a plan (used by the HTMX preview, `EventRecurrencePreviewView`, and by the save), `create_series` / `SeriesEdit.apply` write it in one transaction. Every occurrence is checked against the `(title, start_datetime, venue_name)` constraint first (`check_conflicts`); a clash rejects the whole change.
 - Editing an occurrence asks for a scope (`this` / `following` / `all`). Only the fields the owner changed (`form.changed_data`) are copied to the others, so individual edits survive; the publish state is copied only when it changed. A new time of day moves every date in scope; a new rule or date regenerates the **upcoming** occurrences in scope (rows already on a new date keep it, the rest are reused in order, so URLs survive; "all" shifts the series by the same number of days from its first upcoming date, "following" splits off a new series when earlier occurrences exist); changing only the end adds dates after the last occurrence or deletes those past it ("Extend series" on the detail page links to the edit form with `?scope=all`). "Does not repeat" deletes the other upcoming occurrences in scope. Past occurrences are never moved or deleted by an edit. A single event can be given a rule on edit and becomes the first occurrence of a new series.
-- Delete and the draft toggle take the same scope (`scope_queryset`); deleting "all" includes past occurrences.
-- Display: cards show a "Repeats" badge; the detail page shows the rule summary with the last date, and up to 8 other upcoming dates (drafts only for the owner). Feeds, JSON-LD and the sitemap list each occurrence as its own event.
+- Delete takes the same scope (`scope_queryset`); deleting "all" includes past occurrences. **Publishing is all-or-nothing**: the draft toggle and the edit form's Publish / Save as draft buttons always apply to every date of the series (`_sync_series_publish_state`), whatever the edit's scope.
+
+Scraped shows: scrapers emit one record per date. After each import `link_scraped_series` links the dates sharing a `source_key` into a series once a show lists two or more dates (a later lone date still joins an existing series); migration `0011` did the same for rows already in the database. The series is deleted with its last date, like any series.
+
+Display (both kinds):
+- **Listings show one card per series** (event list, publisher profile incl. drafts): `first_per_series` keeps each series' first date in the listed range (its latest for past listings) using a `RowNumber` window over the already-filtered queryset, so filters decide which date stands for the series. Counts and pagination count series (`series_group()` = series id, else event id); the results line reads "N events · M dates found". `attach_series_cards` gives each card a `SeriesCard`: a boxed **NEXT** (LAST in past listings) marker, "+N more times" when the card's day has several showings, and a date line (`events/partials/series_date_rail.html`) naming up to 5 other days (`×n` per day) then "+N more". With a date filter the line reads "X of Y dates in range" plus how many fall outside it; a single-day filter lists that day's showtimes instead. The "Repeats" badge shows only on cards without that line.
+- **Detail page:** a date strip — all dates of the series (drafts only for the owner; dates hidden from listings left out) as one horizontally scrolling row of day tiles, month markers where a month starts, the current day highlighted (`static/js/date-strip.js` scrolls it into view) and, for a day with several showings, its showtimes below. Headed by the rule summary ("until" the last date) or, for a scraped show, the date range. The calendar dropdown adds "All dates (.ics)" (`EventICalSeriesView`).
+- Feeds, JSON-LD and the sitemap list each occurrence as its own event.
 
 ### FeedHit (`events/models.py`)
 
@@ -412,7 +419,7 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 
 Cookieless, server-side analytics: nothing is stored on or read from the visitor's device, so no consent banner is needed. `AnalyticsMiddleware` counts successful GET HTML responses after the view runs; it skips bots (User-Agent regex), prefetches, staff users, infrastructure URLs (`/health/`, PWA, robots, sitemap, `/stats/`), the admin, and non-200s. HTMX partials are not page views, but on `event_list` they feed search and filter counts, diffed against `HX-Current-URL` so each newly applied filter counts once and incremental typing counts only the final search term. Recording failures are logged and never break the response.
 
-- `DailyCount(date, kind, key, count)`: kinds `page` (key = path), `visitors` (key blank), `referrer` (external host), `search` (normalized term), `filter` (e.g. `category:workshop`, `is_free`), `calendar` (single-event `.ics` path). Unique `(date, kind, key)`; `increment()`/`decrement()` use `F()` updates.
+- `DailyCount(date, kind, key, count)`: kinds `page` (key = path), `visitors` (key blank), `referrer` (external host), `search` (normalized term), `filter` (e.g. `category:workshop`, `is_free`), `calendar` (single-event or all-dates `.ics` path). Unique `(date, kind, key)`; `increment()`/`decrement()` use `F()` updates.
 - `DailySalt` / `VisitorHash`: unique visitors per day = SHA-256 of today's random salt + client IP + User-Agent. The first request of a new day creates a new salt and deletes older salts and hashes, so no IP is stored and days can't be linked. Skipped when the browser sends `Sec-GPC: 1` or `DNT: 1`.
 
 ## Views Summary
@@ -427,7 +434,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `EventUpdateView` | `/events/<slug>/edit/` | Owner only |
 | `EventDeleteView` | `/events/<slug>/delete/` | Owner only |
 | `EventDuplicateView` | `/events/<slug>/duplicate/` | Owner only |
-| `EventToggleDraftView` | `/events/<slug>/toggle-draft/` | Owner only (`scope` = this / following / all for a series) |
+| `EventToggleDraftView` | `/events/<slug>/toggle-draft/` | Owner only (a series is published / unpublished as a whole) |
 | `EventRecurrencePreviewView` | `/events/submit/preview-dates/` | Login required (owner of `event` when editing); HTMX partial listing the dates a repeat rule produces |
 | `MyEventsView` | `/my-events/` | Login required (redirects to publisher profile) |
 | `SubscribeView` | `/subscribe/` | Public |
@@ -435,11 +442,13 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `EventICalFeed` | `/feed/events.ics` | Public |
 | `EventRSSFeed` | `/feed/events.rss` | Public |
 | `EventICalSingleView` | `/events/<slug>/calendar.ics` | Public |
+| `EventICalSeriesView` | `/events/<slug>/all-dates.ics` | Public; every upcoming published date of the event's series (404 for a single event); counted as a calendar download by analytics |
 
 - Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity
 - Event list filters (`_filtered_event_queryset` + `events/partials/event_filter_panel.html`) support: category (multi-value), date range, is_free, is_wheelchair_accessible, search (title/venue/description/submitter)
 - Quick date filters: this_week, next_week, this_month, next_month
-- Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting); a repeating event counts each occurrence and is cut off at the remaining allowance
+- Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting); a repeating event counts each occurrence and is cut off at the remaining allowance. This cap and the one-year limit apply to private users only: system (scraper) accounts are exempt, and the importer never runs them
+- The event list and publisher profile show a series as one card (see EventSeries → Display)
 - Draft events are hidden from public list/detail; only visible to the owner
 
 ### Project-level (config/urls.py)

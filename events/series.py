@@ -12,7 +12,11 @@ preview shows the plan) and then applies them in one transaction:
   other occurrences, so their individual edits survive. Changing the rule or
   the date regenerates the upcoming occurrences; changing only the end date
   extends or shortens the series.
-- `scope_queryset`: the occurrences a delete or publish/draft toggle affects.
+- `scope_queryset`: the occurrences a delete affects.
+- `link_scraped_series`: groups a scraped show's dates into a series (no
+  rule; the importer calls it after each run).
+- `first_per_series` / `attach_series_cards`: listings show a series as one
+  card, at its first date in the listed range, with its other dates.
 
 Past occurrences are never moved or deleted by an edit; limits count only
 upcoming dates (MAX_UPCOMING_OCCURRENCES_PER_SERIES per series,
@@ -21,12 +25,15 @@ off with a notice rather than rejected.
 """
 
 import datetime
+import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateformat import format as date_format
 
@@ -646,37 +653,236 @@ def scope_queryset(event: Event, scope: str):
     return qs
 
 
-SHOWN_OTHER_DATES = 8
-
-
 def series_context(event: Event, user) -> dict | None:
-    """Detail-page info for an occurrence of a series: summary, the last
-    date, and the other upcoming dates (drafts only for their owner)."""
+    """Detail-page info for an occurrence of a series: the rule (if any) and
+    all its dates, grouped by day for the date strip.
+
+    Drafts are shown only to their owner; dates too old for the listings
+    (hidden_events_q) are left out.
+    """
+    from .models import hidden_events_q
+
     if event.series_id is None:
         return None
     series = _series(event)
     if series is None:
         return None
-    occurrences = Event.objects.filter(series=series).exclude(pk=event.pk)
+    occurrences = Event.objects.filter(series=series).exclude(
+        ~Q(pk=event.pk) & hidden_events_q()
+    )
     is_owner = user.is_authenticated and user == event.submitted_by
     if not is_owner:
-        occurrences = occurrences.filter(is_draft=False)
-    last = (
-        Event.objects.filter(series=series)
-        .order_by("-start_datetime")
-        .values_list("start_datetime", flat=True)
-        .first()
+        occurrences = occurrences.filter(Q(is_draft=False) | Q(pk=event.pk))
+    occurrences = list(
+        occurrences.order_by("start_datetime", "id").only(
+            "slug", "start_datetime", "venue_name", "is_draft", "series_id"
+        )
     )
-    upcoming = occurrences.filter(start_datetime__gte=timezone.now()).order_by(
-        "start_datetime", "id"
-    )
-    other_dates = list(upcoming[:SHOWN_OTHER_DATES])
-    more_count = 0
-    if len(other_dates) == SHOWN_OTHER_DATES:
-        more_count = upcoming.count() - SHOWN_OTHER_DATES
+    if len(occurrences) < 2:
+        return None
+    now = timezone.now()
+    days: dict[datetime.date, list[Event]] = {}
+    for occurrence in occurrences:
+        days.setdefault(occurrence.local_start_date, []).append(occurrence)
+    strip = []
+    month = None
+    current_day = []
+    for day, dated in days.items():
+        is_current = any(o.pk == event.pk for o in dated)
+        if is_current:
+            current_day = dated
+        strip.append(
+            {
+                "date": day,
+                "occurrences": dated,
+                "new_month": (day.year, day.month) != month,
+                "is_current": is_current,
+                "is_past": all(o.start_datetime < now for o in dated),
+            }
+        )
+        month = (day.year, day.month)
+    pattern = series.pattern
     return {
-        "summary": series.pattern.describe(),
-        "last": last,
-        "other_dates": other_dates,
-        "more_count": more_count,
+        "summary": pattern.describe() if pattern is not None else "",
+        "first": occurrences[0].start_datetime,
+        "last": occurrences[-1].start_datetime,
+        "count": len(occurrences),
+        "day_count": len(strip),
+        "days": strip,
+        "current_day_times": current_day if len(current_day) > 1 else [],
     }
+
+
+# ---------------------------------------------------------------------------
+# Scraped shows
+# ---------------------------------------------------------------------------
+
+# A trailing date segment, as in WordPress/Tribe Events per-date URLs
+# (".../event/get-weird-with-wrestling/2026-10-01/").
+_TRAILING_DATE_RE = re.compile(r"/\d{4}-\d{2}-\d{2}/?$")
+
+
+def scraped_series_key(external_source: str, source_url: str) -> str:
+    """Identify the show a scraped date belongs to ("" = can't tell).
+
+    Scrapers emit one record per date, and the dates of one show share its
+    page URL (or, for per-date URLs, the URL minus the date).
+    """
+    if not external_source or not source_url:
+        return ""
+    return f"{external_source}:{_TRAILING_DATE_RE.sub('/', source_url)}"
+
+
+def link_scraped_series(external_source: str, events: list[Event]) -> int:
+    """Link imported dates of the same show into one series.
+
+    A show gets a series once it lists two or more dates; after that its
+    dates keep joining it, so a show down to its last upcoming date still
+    groups with its past ones. Returns how many events were (re)linked.
+    """
+    groups: dict[str, list[Event]] = defaultdict(list)
+    for event in events:
+        key = scraped_series_key(external_source, str(event.source_url))
+        if key:
+            groups[key].append(event)
+    if not groups:
+        return 0
+    series_by_key = {
+        series.source_key: series
+        for series in EventSeries.objects.filter(source_key__in=list(groups))
+    }
+    linked = 0
+    for key, dates in groups.items():
+        series = series_by_key.get(key)
+        if series is None:
+            if len(dates) < 2:
+                continue
+            series = EventSeries.objects.create(
+                source_key=key, dtstart=min(e.start_datetime for e in dates)
+            )
+        stray = [e.pk for e in dates if e.series_id != series.pk]
+        if stray:
+            linked += Event.objects.filter(pk__in=stray).update(series=series)
+    return linked
+
+
+# ---------------------------------------------------------------------------
+# Listings: one card per series
+# ---------------------------------------------------------------------------
+
+# How many other days a list card names before "+N more".
+CARD_DAYS = 5
+
+
+def series_group():
+    """What a listing groups by: the series, or the event itself."""
+    from django.db.models import CharField
+    from django.db.models.functions import Cast, Coalesce
+
+    return Coalesce(Cast("series_id", CharField()), Cast("id", CharField()))
+
+
+def first_per_series(qs, *, descending=False):
+    """Keep only the first date of each series in *qs* (the latest when
+    *descending*, for past listings); single events are kept as they are.
+
+    Ranks the dates within each series by a window function, so filters
+    already applied to *qs* decide which date stands for its series.
+    """
+    from django.db.models import F, Window
+    from django.db.models.functions import RowNumber
+
+    order = (
+        [F("start_datetime").desc(), F("id").desc()]
+        if descending
+        else [F("start_datetime").asc(), F("id").asc()]
+    )
+    return (
+        qs.annotate(series_group=series_group())
+        .annotate(
+            series_rank=Window(
+                RowNumber(), partition_by=[F("series_group")], order_by=order
+            )
+        )
+        .filter(series_rank=1)
+    )
+
+
+@dataclass
+class SeriesCard:
+    """What a list card shows about the other dates of its series."""
+
+    count: int  # dates of the series in the listed range
+    day_count: int  # distinct days among them
+    days: list[dict]  # other days: {"date", "count"}, at most CARD_DAYS
+    more_days: int  # other days not named
+    last: datetime.date  # last day in range
+    times_on_day: int  # dates on the card's own day (incl. its own)
+    total: int | None = None  # all listed dates when a date filter is on
+    showtimes: list[datetime.datetime] = field(default_factory=list)
+
+    @property
+    def outside(self) -> int:
+        return max(0, self.total - self.count) if self.total is not None else 0
+
+
+def attach_series_cards(
+    events, dated_qs, *, range_active=False, single_day=False, include_drafts=False
+) -> None:
+    """Set `series_card` on each event of a listing page that stands for a
+    series with other dates (None otherwise).
+
+    *dated_qs* is the listing's queryset before `first_per_series`: the
+    dates it holds are the ones a card counts and names. With
+    *range_active*, a card also says how many listed dates fall outside
+    the range (drafts count only with *include_drafts*).
+    """
+    from django.db.models import Count
+
+    from .models import hidden_events_q
+
+    events = list(events)
+    series_ids = {e.series_id for e in events if e.series_id}
+    for event in events:
+        event.series_card = None
+    if not series_ids:
+        return
+    dated: dict = defaultdict(list)
+    for occurrence in (
+        dated_qs.filter(series_id__in=series_ids)
+        .select_related(None)
+        .order_by("start_datetime", "id")
+        .only("start_datetime", "series_id")
+    ):
+        dated[occurrence.series_id].append(occurrence.start_datetime)
+    totals = {}
+    if range_active:
+        listed = Event.objects.filter(series_id__in=series_ids).exclude(
+            hidden_events_q()
+        )
+        if not include_drafts:
+            listed = listed.filter(is_draft=False)
+        totals = dict(
+            listed.values_list("series_id").annotate(n=Count("id")).order_by()
+        )
+    for event in events:
+        starts = dated.get(event.series_id, [])
+        total = totals.get(event.series_id) if range_active else None
+        if len(starts) < 2 and not (total and total > 1):
+            continue
+        days: dict[datetime.date, int] = {}
+        for start in starts:
+            day = timezone.localtime(start).date()
+            days[day] = days.get(day, 0) + 1
+        own_day = event.local_start_date
+        others = [{"date": d, "count": n} for d, n in days.items() if d != own_day]
+        event.series_card = SeriesCard(
+            count=len(starts),
+            day_count=len(days),
+            days=others[:CARD_DAYS],
+            more_days=max(0, len(others) - CARD_DAYS),
+            last=max(days) if days else own_day,
+            times_on_day=days.get(own_day, 1),
+            total=total,
+            showtimes=[timezone.localtime(s) for s in starts] if single_day else [],
+        )

@@ -132,6 +132,15 @@ class TestCalendarDownloads:
         assert _count(DailyCount.CALENDAR, path) == 1
         assert not DailyCount.objects.filter(kind=DailyCount.PAGE).exists()
 
+    def test_counts_series_ics(self, browser):
+        from events.models import EventSeries
+
+        series = EventSeries.objects.create(dtstart=timezone.now())
+        event = EventFactory.create(series=series)
+        path = reverse("event_ical_series", kwargs={"slug": event.slug})
+        browser.get(path)
+        assert _count(DailyCount.CALENDAR, path) == 1
+
 
 @pytest.mark.django_db
 class TestReferrers:

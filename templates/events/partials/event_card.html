@@ -3,7 +3,9 @@
         <div class="event-row__body">
             <div class="event-row__content">
                 <h3 class="event-title">{{ event.title }}</h3>
-                <div class="event-meta">
+                {% with card=event.series_card %}
+                <div class="event-meta{% if card %} event-meta--series{% endif %}">
+                    {% if card and not card.showtimes %}<span class="series-next">{% if show_past and not date_range_active %}Last{% else %}Next{% endif %}</span>{% endif %}
                     {% if event.start_datetime|date:"H:i" == "00:00" %}
                         <span>{{ event.start_datetime|date:"l, j F" }}</span>
                     {% else %}
@@ -13,7 +15,9 @@
                             <span>{{ event.end_datetime|date:"H:i" }}</span>
                         {% endif %}
                     {% endif %}
+                    {% if card.times_on_day > 1 and not card.showtimes %}<span class="series-more-times">+{{ card.times_on_day|add:"-1" }} more time{{ card.times_on_day|add:"-1"|pluralize }}</span>{% endif %}
                 </div>
+                {% endwith %}
                 <div class="event-meta event-meta--two-line">
                     <span class="event-meta--venue">{{ event.venue_name }}</span>{% if event.venue_address %}<span style="opacity:0.5;" aria-hidden="true"> · </span><span>{{ event.venue_address }}</span>{% endif %}
                 </div>
@@ -22,12 +26,15 @@
                         <span style="opacity:0.5;">by</span> <span style="color:var(--blue);font-weight:500;">{{ event.submitted_by.public_name }}</span>
                     </div>
                 {% endif %}
+                {% if event.series_card %}
+                    {% include "events/partials/series_date_rail.html" with card=event.series_card %}
+                {% endif %}
             </div>
             <div class="event-row__footer">
                 <div class="event-tags">
                     <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
                     {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
-                    {% if event.series_id %}<span class="badge badge--repeat">Repeats</span>{% endif %}
+                    {% if event.series_id and not event.series_card %}<span class="badge badge--repeat">Repeats</span>{% endif %}
                     {% if event.is_draft %}<span class="badge badge--draft">Draft</span>{% endif %}
                 </div>
             </div>

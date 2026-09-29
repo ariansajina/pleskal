@@ -225,3 +225,37 @@ class EventICalSingleView(View):
             content_type="text/calendar; charset=utf-8",
             headers={"Content-Disposition": disposition},
         )
+
+
+# ---------------------------------------------------------------------------
+# All dates of a series
+# ---------------------------------------------------------------------------
+
+
+class EventICalSeriesView(View):
+    """Every upcoming published date of the series *slug* belongs to."""
+
+    def get(self, request, slug):
+        event = get_object_or_404(
+            Event, slug=slug, is_draft=False, series__isnull=False
+        )
+        dates = Event.objects.filter(
+            series_id=event.series_id,
+            is_draft=False,
+            start_datetime__gte=timezone.now(),
+        ).order_by("start_datetime", "id")
+
+        cal = Calendar()
+        cal.add("prodid", "-//Copenhagen Dance Calendar//EN")
+        cal.add("version", "2.0")
+        cal.add("calscale", "GREGORIAN")
+        for occurrence in dates:
+            cal.add_component(_build_vevent(occurrence))
+
+        return HttpResponse(
+            cal.to_ical(),
+            content_type="text/calendar; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{event.slug}-all-dates.ics"'
+            },
+        )

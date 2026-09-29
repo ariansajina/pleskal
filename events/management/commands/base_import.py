@@ -32,6 +32,7 @@ from events.models import (
     Event,
     EventCategory,
 )
+from events.series import link_scraped_series
 from events.translation import DescriptionResult, process_description
 from scrapers.base import is_cancelled_title
 
@@ -378,6 +379,10 @@ class BaseEventImportCommand(BaseCommand):
                     continue
                 translations[key] = process_description(description)
 
+        # Every event this run leaves in place for an incoming record, so
+        # the dates of one show can be linked into a series afterwards.
+        imported: list[Event] = []
+
         with transaction.atomic():
             # ── Upsert ────────────────────────────────────────────────────────
             for key, rec in incoming.items():
@@ -472,6 +477,7 @@ class BaseEventImportCommand(BaseCommand):
                         updated += 1
                     else:
                         skipped += 1
+                    imported.append(event)
                 else:
                     if dry_run:
                         self.stdout.write(f"  CREATE  {rec['title'][:60]}")
@@ -491,7 +497,12 @@ class BaseEventImportCommand(BaseCommand):
                             self.stderr.write(f"  FAILED (create) {event_title}: {exc}")
                             skipped += 1
                             continue
+                        imported.append(event)
                     created += 1
+
+            # ── Series: one card for a show with several dates ───────────────
+            if not dry_run:
+                link_scraped_series(self.external_source, imported)
 
             # ── Stale deletion ────────────────────────────────────────────────
             if not no_delete and self._stale_deletion_is_safe(

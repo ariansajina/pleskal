@@ -60,11 +60,32 @@ details[open] summary::after { content: ''; }
             {% endif %}
         </div>
 
-        {# Repeat summary #}
+        {# All dates of a series: one scrollable row, the current one highlighted #}
         {% if series %}
-            <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
-                <span><span aria-hidden="true">↻</span> {{ series.summary }}, until {{ series.last|date:"j F Y" }}</span>
+            <div class="dates-head">
+                <strong>{% if series.day_count < series.count %}{{ series.count }} showings on {{ series.day_count }} days{% else %}{{ series.count }} dates{% endif %}</strong>
+                <span>{% if series.summary %}<span aria-hidden="true">↻</span> {{ series.summary }}, until {{ series.last|date:"j F Y" }}{% else %}{{ series.first|date:"j M" }} – {{ series.last|date:"j M Y" }}{% endif %}</span>
             </div>
+            <nav class="date-strip{% if series.days|length > 12 %} date-strip--overflow{% endif %}" aria-label="All dates" data-date-strip>
+                {% for day in series.days %}
+                    {% if day.new_month %}<span class="date-strip__month" aria-hidden="true">{{ day.date|date:"M" }}</span>{% endif %}
+                    {% with first=day.occurrences.0 %}
+                        <a href="{% url 'event_detail' first.slug %}"
+                           class="date-tile{% if day.is_current %} date-tile--current{% elif day.is_past %} date-tile--past{% endif %}{% if first.is_draft %} date-tile--draft{% endif %}"
+                           {% if day.is_current %}aria-current="date"{% endif %}
+                           title="{{ day.date|date:'l j F Y' }} · {{ first.venue_name }}{% if first.is_draft %} (draft){% endif %}">
+                            <span>{{ day.date|date:"D" }}</span>
+                            <strong>{{ day.date|date:"j" }}</strong>
+                            <span>{% if day.occurrences|length > 1 %}{{ day.occurrences|length }} times{% else %}{{ first.start_datetime|date:"H:i" }}{% endif %}</span>
+                        </a>
+                    {% endwith %}
+                {% endfor %}
+            </nav>
+            {% if series.current_day_times %}
+                <div class="showtimes">Showtimes this day:
+                    {% for occurrence in series.current_day_times %}<a href="{% url 'event_detail' occurrence.slug %}"{% if occurrence.pk == event.pk %} aria-current="page"{% endif %}>{{ occurrence.start_datetime|date:"H:i" }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}
+                </div>
+            {% endif %}
         {% endif %}
 
         {# Venue #}
@@ -113,6 +134,7 @@ details[open] summary::after { content: ''; }
                     <a href="{{ outlook_calendar_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Outlook &nearr;</a>
                     <a href="{{ apple_calendar_url }}" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Apple Calendar</a>
                     <a href="{% url 'event_ical_single' event.slug %}" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">Download .ics</a>
+                    {% if series %}<a href="{% url 'event_ical_series' event.slug %}" class="btn btn--ghost btn--sm" style="display:block;text-align:left;">All dates (.ics)</a>{% endif %}
                 </div>
             </details>
             {% if event.has_map_location %}
@@ -143,25 +165,6 @@ details[open] summary::after { content: ''; }
             </div>
         {% endif %}
 
-        {# Other dates of a repeating event #}
-        {% if series.other_dates %}
-            <hr class="rule">
-            <section style="margin-bottom:var(--space-6);">
-                <h2 class="form-label">Other dates</h2>
-                <ul class="series-dates">
-                    {% for occurrence in series.other_dates %}
-                        <li>
-                            <a href="{% url 'event_detail' occurrence.slug %}" class="link-accent">{{ occurrence.start_datetime|date:"l, j F Y · H:i" }}</a>
-                            {% if occurrence.is_draft %}<span class="badge badge--draft">Draft</span>{% endif %}
-                        </li>
-                    {% endfor %}
-                    {% if series.more_count %}
-                        <li class="text-sm text-muted">and {{ series.more_count }} more</li>
-                    {% endif %}
-                </ul>
-            </section>
-        {% endif %}
-
         {# Source link #}
         {% if event.source_url %}
             <hr class="rule">
@@ -186,13 +189,6 @@ details[open] summary::after { content: ''; }
                     <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
                     <form method="post" action="{% url 'event_toggle_draft' event.slug %}" style="display:contents;">
                         {% csrf_token %}
-                        {% if series %}
-                            <select name="scope" class="form-select" style="width:auto;" aria-label="Which dates">
-                                <option value="this">This date</option>
-                                <option value="following">This and following dates</option>
-                                <option value="all">All dates</option>
-                            </select>
-                        {% endif %}
                         {% if event.is_draft %}
                             <button type="submit" class="btn btn--ghost btn--sm">Publish</button>
                         {% else %}
@@ -234,4 +230,5 @@ details[open] summary::after { content: ''; }
     <script src="{% static 'js/show-map.js' %}"></script>
 {% endif %}
 <script src="{% static 'js/calendar-dropdown.js' %}"></script>
+{% if series %}<script src="{% static 'js/date-strip.js' %}"></script>{% endif %}
 {% endblock %}
