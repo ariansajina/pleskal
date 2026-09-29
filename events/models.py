@@ -102,9 +102,41 @@ class DescriptionLanguage(models.TextChoices):
     MIXED = "mixed", "Danish and English"
 
 
+class EventSeries(models.Model):
+    """A recurring event: its occurrences are ordinary Event rows linking here.
+
+    Stores what repeats (`rrule`, an RFC 5545 RRULE without COUNT/UNTIL, as
+    written by events.recurrence.Pattern) and from when (`dtstart`, which
+    fixes the phase of e.g. "every 2 weeks"). Where it ends isn't stored: the
+    series ends at its last occurrence, so the owner can extend or shorten it
+    (events/series.py). Deleted with its last occurrence (events/signals.py).
+    """
+
+    objects = models.Manager()
+    DoesNotExist: type[ObjectDoesNotExist]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    rrule = models.CharField(max_length=200)
+    dtstart = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = "event series"
+
+    def __str__(self):
+        return f"{self.rrule} from {self.dtstart:%Y-%m-%d}"
+
+    @property
+    def pattern(self):
+        from .recurrence import Pattern
+
+        return Pattern.from_rrule(str(self.rrule))
+
+
 class Event(models.Model):
     objects = models.Manager()
     DoesNotExist: type[ObjectDoesNotExist]
+    series_id: uuid.UUID | None
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     slug = models.SlugField(max_length=MAX_SLUG_LENGTH, unique=True, editable=False)
@@ -155,6 +187,15 @@ class Event(models.Model):
         related_name="events",
     )
     is_draft = models.BooleanField(default=False)
+    # Set on the occurrences of a recurring event (see EventSeries).
+    series = models.ForeignKey(
+        EventSeries,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="occurrences",
+        editable=False,
+    )
     # Language processing of scraped descriptions (events/translation.py).
     # `description` always keeps the scraped original; these fields hold the
     # per-language versions derived from it, so a bilingual site can later

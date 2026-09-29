@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from events.models import Event
+from events.models import Event, EventSeries
 
 # Stored files per event. Thumbnails are content-addressed and shared between
 # events with the same image, so every deletion checks for other references.
@@ -25,6 +25,14 @@ def delete_event_image_on_delete(sender, instance, **kwargs):
         if not (file and file.name):
             continue
         _delete_file_if_unreferenced(field_name, file.storage, file.name)
+
+
+@receiver(post_delete, sender=Event)
+def delete_empty_series(sender, instance, **kwargs):
+    """A recurring event's series goes with its last occurrence."""
+    series_id = instance.series_id
+    if series_id and not Event.objects.filter(series_id=series_id).exists():
+        EventSeries.objects.filter(pk=series_id).delete()
 
 
 @receiver(pre_save, sender=Event)

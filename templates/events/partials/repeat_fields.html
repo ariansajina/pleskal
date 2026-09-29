@@ -1,0 +1,75 @@
+{# Repeat controls of the event form (events.forms.EventForm, events.recurrence). #}
+{# Everything is visible without JS; static/js/event-form.js shows only what the #}
+{# chosen option needs and relabels the date-dependent options. #}
+<div id="repeat-section" class="repeat-section" data-repeat-section>
+    <label for="{{ form.repeat.id_for_label }}" class="form-label">Repeat</label>
+    {{ form.repeat }}
+    {% if form.repeat.errors %}
+        <p class="form-field-error">{{ form.repeat.errors|join:", " }}</p>
+    {% endif %}
+
+    <div class="repeat-group" data-repeat-custom>
+        <div>
+            <label for="{{ form.repeat_interval.id_for_label }}" class="form-label">Repeat every</label>
+            <div class="repeat-row">
+                {{ form.repeat_interval }}
+                {{ form.repeat_unit }}
+            </div>
+            {% if form.repeat_interval.errors %}
+                <p class="form-field-error">{{ form.repeat_interval.errors|join:", " }}</p>
+            {% endif %}
+        </div>
+        <fieldset class="repeat-fieldset" data-repeat-unit="week">
+            <legend class="form-label">On</legend>
+            <div class="repeat-row">
+                {% for checkbox in form.repeat_weekdays %}
+                    <label class="form-check">{{ checkbox.tag }}<span class="text-base">{{ checkbox.choice_label }}</span></label>
+                {% endfor %}
+            </div>
+        </fieldset>
+        <fieldset class="repeat-fieldset" data-repeat-unit="month">
+            <legend class="form-label">On</legend>
+            <div class="repeat-options">
+                {% for radio in form.repeat_monthly %}
+                    <label class="form-check" data-monthly-option="{{ radio.data.value }}"{% if radio.data.attrs.hidden %} hidden{% endif %}>{{ radio.tag }}<span class="text-base" data-monthly-label>{{ radio.choice_label }}</span></label>
+                {% endfor %}
+            </div>
+            {% if form.repeat_monthly.errors %}
+                <p class="form-field-error">{{ form.repeat_monthly.errors|join:", " }}</p>
+            {% endif %}
+        </fieldset>
+    </div>
+
+    <fieldset class="repeat-fieldset repeat-group" data-repeat-ends>
+        <legend class="form-label">Ends</legend>
+        <div class="repeat-options">
+            {% for radio in form.repeat_ends %}
+                <div class="repeat-row">
+                    <label class="form-check">{{ radio.tag }}<span class="text-base">{{ radio.choice_label }}</span></label>
+                    {% if radio.data.value == "on" %}
+                        {{ form.repeat_until }}
+                    {% elif radio.data.value == "after" %}
+                        {{ form.repeat_count }}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        {% if form.repeat_until.errors %}
+            <p class="form-field-error">{{ form.repeat_until.errors|join:", " }}</p>
+        {% endif %}
+        {% if form.repeat_count.errors %}
+            <p class="form-field-error">{{ form.repeat_count.errors|join:", " }}</p>
+        {% endif %}
+        <p class="form-help">Dates can be at most one year ahead, and a repeating event can have at most {{ form.max_occurrences }} upcoming dates.</p>
+    </fieldset>
+
+    {% if form.instance.pk %}
+        <input type="hidden" name="event" value="{{ form.instance.slug }}">
+    {% endif %}
+    <div class="repeat-preview"
+         aria-live="polite"
+         hx-post="{% url 'event_recurrence_preview' %}"
+         hx-trigger="load, change from:closest form delay:200ms"
+         hx-include="[name=date],[name=start_time],[name=end_time],[name=end_date],[name=title],[name=venue_name],[name^=repeat],[name=scope],[name=event]"
+         hx-swap="innerHTML"></div>
+</div>

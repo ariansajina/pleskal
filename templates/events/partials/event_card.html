@@ -27,6 +27,7 @@
                 <div class="event-tags">
                     <span class="badge badge--{{ event.category }}">{{ event.get_category_display }}</span>
                     {% if event.is_free %}<span class="badge badge--free">Free</span>{% endif %}
+                    {% if event.series_id %}<span class="badge badge--repeat">Repeats</span>{% endif %}
                     {% if event.is_draft %}<span class="badge badge--draft">Draft</span>{% endif %}
                 </div>
             </div>

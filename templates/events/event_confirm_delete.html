@@ -15,8 +15,18 @@
             This cannot be undone.
         </div>
 
-        <form method="post">
+        <form method="post" class="form-stack" style="gap:var(--space-6);">
             {% csrf_token %}
+            {% if scope_counts %}
+                <fieldset class="repeat-fieldset">
+                    <legend class="form-label">This event repeats · delete</legend>
+                    <div class="repeat-options">
+                        <label class="form-check"><input type="radio" name="scope" value="this" checked><span class="text-base">Only this date</span></label>
+                        <label class="form-check"><input type="radio" name="scope" value="following"><span class="text-base">This and following dates ({{ scope_counts.following }})</span></label>
+                        <label class="form-check"><input type="radio" name="scope" value="all"><span class="text-base">All dates, including past ones ({{ scope_counts.all }})</span></label>
+                    </div>
+                </fieldset>
+            {% endif %}
             <div class="btn-row">
                 <button type="submit" class="btn btn--danger">Yes, delete</button>
                 <a href="{% url 'event_detail' object.slug %}" class="btn btn--ghost">Cancel</a>

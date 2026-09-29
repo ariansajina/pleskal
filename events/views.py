@@ -22,6 +22,13 @@ from config.ratelimit import RateLimitMixin
 from .forms import EventForm
 from .images import validate_and_process
 from .models import Event, EventCategory, hidden_events_q
+from .series import (
+    Scope,
+    create_series,
+    plan_edit,
+    scope_queryset,
+    series_context,
+)
 from .sharing import apple_calendar_url, google_calendar_url, outlook_calendar_url
 from .structured_data import event_jsonld, event_meta_description
 
@@ -208,6 +215,18 @@ class UpcomingEventLimitMixin:
         return None
 
 
+def _save_new_event(request, form, event) -> None:
+    """Save a new event, with its other dates when it repeats."""
+    plan = form.cleaned_data.get("series_plan")
+    if plan is None:
+        event.save()
+        return
+    create_series(event, plan)
+    messages.info(request, f"The event repeats: {len(plan.spans)} dates were created.")
+    if plan.notice:
+        messages.warning(request, plan.notice)
+
+
 def _reprompt_image_if_needed(request, form) -> None:
     """Warn the user to re-attach their image after an unrelated validation error.
 
@@ -245,6 +264,7 @@ class EventCreateView(
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["creation"] = True
+        kwargs["user"] = self.request.user
         return kwargs
 
     def form_invalid(self, form):
@@ -261,7 +281,7 @@ class EventCreateView(
         if image_file and not _attach_processed_image(form, event, image_file):
             return self.form_invalid(form)
 
-        event.save()
+        _save_new_event(self.request, form, event)
 
         if event.is_draft:
             messages.success(self.request, "Your event has been saved as a draft.")
@@ -568,6 +588,7 @@ class EventDetailView(DetailView):
         context["meta_description"] = event_meta_description(event)
         if not event.is_draft:
             context["event_jsonld"] = event_jsonld(event, self.request)
+        context["series"] = series_context(event, self.request.user)
         return context
 
 
@@ -590,6 +611,8 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["creation"] = False
+        kwargs["user"] = self.request.user
+        kwargs["scope"] = self.request.GET.get("scope")
         return kwargs
 
     def form_invalid(self, form):
@@ -606,12 +629,35 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
             event.is_draft = False
         # If neither button was used (fallback), keep existing value.
 
+        # Planned before the image is processed, so a rejected series edit
+        # doesn't leave an uploaded file behind.
+        series_edit = None
+        if form.series is not None or form.cleaned_data.get("pattern"):
+            try:
+                series_edit = _plan_series_edit(form, event, self.request.user)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+                return self.form_invalid(form)
+
         image_file = form.cleaned_data.get("image")
 
         if image_file and not _attach_processed_image(form, event, image_file):
             return self.form_invalid(form)
 
-        event.save()
+        if series_edit is None:
+            event.save()
+        else:
+            try:
+                target = series_edit.apply()
+            except ValidationError as exc:
+                form.add_error(None, exc)
+                return self.form_invalid(form)
+            if series_edit.notice:
+                messages.warning(self.request, series_edit.notice)
+            if target is None:
+                messages.success(self.request, "Events updated.")
+                return redirect("my_events")
+            event = target
         if event.is_draft:
             messages.success(self.request, "Event saved as draft.")
         else:
@@ -624,6 +670,31 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
         return ctx
 
 
+def _plan_series_edit(form, event, user):
+    """Plan an edit that goes beyond this one event, or return None.
+
+    That's an edit of an occurrence with scope "this and following" / "all",
+    or a single event given a repeat rule.
+    """
+    scope = form.cleaned_data.get("scope") or Scope.THIS
+    pattern = form.cleaned_data.get("pattern")
+    if form.series is not None and scope == Scope.THIS:
+        return None
+    if form.series is None and pattern is None:
+        return None
+    original = Event.objects.select_related("series").get(pk=event.pk)
+    return plan_edit(
+        event,
+        original,
+        scope=Scope(scope),
+        pattern=pattern,
+        ends=form.cleaned_data.get("ends"),
+        ends_changed=form.ends_changed,
+        changed_fields=form.changed_data,
+        user=user,
+    )
+
+
 class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
     model = Event
     template_name = "events/event_confirm_delete.html"
@@ -631,9 +702,26 @@ class EventDeleteView(LoginRequiredMixin, EventOwnerMixin, DeleteView):
     slug_field = "slug"
     slug_url_kwarg = "slug"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        event = self.object
+        if event.series_id:
+            context["scope_counts"] = {
+                scope: scope_queryset(event, scope).count() for scope in Scope
+            }
+        return context
+
     def form_valid(self, form):
-        messages.success(self.request, "Event deleted.")
-        return super().form_valid(form)
+        from django.db import transaction
+
+        events = scope_queryset(self.object, self.request.POST.get("scope", ""))
+        with transaction.atomic():
+            count, _ = events.delete()
+        if count > 1:
+            messages.success(self.request, f"{count} events deleted.")
+        else:
+            messages.success(self.request, "Event deleted.")
+        return redirect(self.get_success_url())
 
 
 class EventDuplicateView(
@@ -687,7 +775,7 @@ class EventDuplicateView(
         over_limit_response = self._reject_if_over_event_limit(request)
         if over_limit_response:
             return over_limit_response
-        form = EventForm(request.POST, request.FILES, creation=True)
+        form = EventForm(request.POST, request.FILES, creation=True, user=request.user)
         if not form.is_valid():
             return self._render_form(request, form, source)
 
@@ -706,12 +794,73 @@ class EventDuplicateView(
                 save=False,
             )
             source.image.close()
-        event.save()
+        _save_new_event(request, form, event)
         if event.is_draft:
             messages.success(request, "Event duplicated and saved as draft.")
         else:
             messages.success(request, "Event duplicated.")
         return redirect("event_detail", slug=event.slug)
+
+
+class EventRecurrencePreviewView(RateLimitMixin, LoginRequiredMixin, View):
+    """HTMX partial for the event form: the dates a repeat rule produces.
+
+    Posted the form's date and repeat fields (plus `event`, the slug, when
+    editing) on every change, so the owner sees the dates, and any cut-off
+    notice, before saving. Uses the same planning code as the save.
+    """
+
+    rate_limit_key = "event_recurrence_preview"
+    rate_limit_limit = 120
+    rate_limit_window = 60
+    rate_limit_by_user = True
+
+    def post(self, request):
+        from django.shortcuts import render
+
+        from .forms import RECURRENCE_FIELDS
+
+        instance = None
+        if slug := request.POST.get("event"):
+            instance = get_object_or_404(
+                Event.objects.select_related("series"), slug=slug
+            )
+            _require_owner(request, instance)
+        form = EventForm(
+            request.POST,
+            instance=instance,
+            creation=instance is None,
+            user=request.user,
+        )
+        form.is_valid()
+        relevant = ("date", "start_time", "end_time", "end_date", *RECURRENCE_FIELDS)
+        errors = [e for name in relevant for e in form.errors.get(name, [])]
+        context = {"errors": errors, "editing": instance is not None}
+        if not errors and form.repeat_applies:
+            try:
+                context.update(self._dates(form, instance, request.user))
+            except ValidationError as exc:
+                context["errors"] = exc.messages
+        return render(request, "events/partials/recurrence_preview.html", context)
+
+    @staticmethod
+    def _dates(form, instance, user) -> dict:
+        if instance is None:
+            plan = form.cleaned_data.get("series_plan")
+            if plan is None:
+                return {}
+            return {"dates": [start for start, _ in plan.spans], "notice": plan.notice}
+        if "start_datetime" not in form.cleaned_data:
+            return {}
+        edit = _plan_series_edit(form, form.instance, user)
+        if edit is None:
+            return {}
+        return {
+            "dates": edit.upcoming_dates,
+            "notice": edit.notice,
+            "added": len(edit.creates),
+            "removed": len(edit.deletes) + (edit.event_span is None),
+        }
 
 
 class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
@@ -724,11 +873,15 @@ class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
         event = get_object_or_404(Event, slug=slug)
         _require_owner(request, event)
         event.is_draft = not event.is_draft
-        event.save(update_fields=["is_draft", "updated_at"])
+        # A bulk update: saving changes nothing else (no image, no venue).
+        count = scope_queryset(event, request.POST.get("scope", "")).update(
+            is_draft=event.is_draft, updated_at=timezone.now()
+        )
+        noun = f"{count} events" if count > 1 else "Event"
         if event.is_draft:
-            messages.success(request, "Event saved as draft.")
+            messages.success(request, f"{noun} saved as draft.")
         else:
-            messages.success(request, "Event published.")
+            messages.success(request, f"{noun} published.")
         return redirect("event_detail", slug=event.slug)
 
 

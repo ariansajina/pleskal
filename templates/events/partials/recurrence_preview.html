@@ -1,0 +1,16 @@
+{# Dates a repeat rule produces; returned by EventRecurrencePreviewView. #}
+{% if errors %}
+    {% for error in errors %}<p class="form-field-error">{{ error }}</p>{% endfor %}
+{% elif dates %}
+    <div class="alert alert--info" style="margin-bottom:0;">
+        <p>
+            <strong>{{ dates|length }} date{{ dates|length|pluralize }}</strong>{% if editing %} upcoming after saving{% if added or removed %} ({{ added }} added, {{ removed }} removed){% endif %}{% endif %}:
+        </p>
+        <p>
+            {% for start in dates %}{% if forloop.counter <= 5 %}{{ start|date:"D j M Y" }}{% if not forloop.last %}, {% endif %}{% elif forloop.last %}… {{ start|date:"D j M Y" }}{% endif %}{% endfor %}
+        </p>
+    </div>
+    {% if notice %}
+        <div class="alert alert--warning" style="margin:var(--space-2) 0 0;">{{ notice }}</div>
+    {% endif %}
+{% endif %}

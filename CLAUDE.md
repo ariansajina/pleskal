@@ -46,10 +46,12 @@ docker-compose.yml   # Local PostgreSQL for development
 
 ```
 events/
-  models.py            # Event, EventCategory, FeedHit models
+  models.py            # Event, EventSeries, EventCategory, FeedHit models
   limits.py            # Field length limits (Django-free, so scrapers run standalone)
   views.py             # CRUD + list + subscribe views
-  forms.py             # EventForm (markdownx)
+  forms.py             # EventForm (markdownx; repeat fields + edit scope for recurring events)
+  recurrence.py        # Repeat rules (no DB): Pattern <-> RRULE, describe(), date-dependent presets, expand() within the one-year / per-series limits
+  series.py            # Recurring events: plan + apply series creation and scoped edits (this / following / all), scope_queryset for delete/toggle
   feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)
   images.py            # WebP conversion, EXIF stripping, resize; list-card thumbnails (make_thumbnail/store_thumbnail)
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
@@ -225,6 +227,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
   - `EventOwnerMixin` — restricts edit/delete/duplicate to event owner (raises 403)
 - **Custom User model:** UUID primary key, email-based authentication (`USERNAME_FIELD = "email"`, no username)
 - **Draft events:** Events can be saved as drafts (`is_draft=True`) and are only visible to their owner; toggle via `EventToggleDraftView`
+- **Recurring events:** stored as one `Event` row per occurrence linked to an `EventSeries` (see Models), so lists, feeds, search and retention need no special cases
 - **No moderation workflow:** All published events are visible immediately
 - **Invite-only registration:** Users register via claim codes (`/claim/` flow), no open signup; logged-in users can generate batches of invite codes via `MyInvitesView` (limited by `CLAIM_CODES_PER_BATCH` per month)
 
@@ -281,6 +284,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 | Event update | POST | 20 req/min | per user |
 | Event duplicate | POST | 20 req/min | per user |
 | Event toggle draft | POST | 20 req/min | per user |
+| Repeat dates preview | POST | 120 req/min | per user |
 
 - `EventDeleteView` is **not** rate-limited (owner-only + confirmation step).
 - Event toggle draft shares the `event_update` cache key, so it draws from the same per-user counter as Event update.
@@ -354,6 +358,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `description_da` | Danish part of a `mixed` description (blank otherwise) |
 | `description_en` | Machine translation of a Danish description, or the English part of a `mixed` one (blank for English originals) |
 | `description_en_is_machine` | Boolean; True when `description_en` is a machine translation |
+| `series` | FK -> EventSeries, nullable (SET_NULL), not editable; set on the occurrences of a recurring event |
 | `created_at`, `updated_at` | Auto timestamps |
 
 Constraint: `(title, start_datetime, venue_name)` is unique — dedupes the same event arriving from two scrapers (or a scraper and a manual submission) while letting generic titles recur at the same time in different venues. `EventForm.clean()` mirrors it with a friendly error.
@@ -367,6 +372,27 @@ Translation: `description` always keeps the scraped original. `events.translatio
 Retention: past events are counted from `end_datetime` (or `start_datetime` when there is no end). **Scraped** events (non-blank `external_source`) are deleted `SCRAPED_EVENT_RETENTION_DAYS` (default 90) after they end: `expired_events_q()` in `events/models.py` matches them and `purge_expired_events` deletes them daily (as a step of `run_scrapers`). **User-published** events, drafts included, are **never deleted**; `hidden_events_q()` drops them from the event list `USER_EVENT_HIDE_AFTER_DAYS` (default 730) after they end, and also hides expired scraped events before the purge runs. Detail pages stay reachable. The importer's stale deletion only touches **upcoming** events, since scrapers list only what's coming up and past events would otherwise vanish on every run.
 
 Property: `has_map_location` — True when both `latitude` and `longitude` are set; used by the event detail page to render the "Show map" button and OpenStreetMap embed modal. Geocoding happens synchronously at save time (best-effort, failures swallowed) via `events.geocoding.geocode`, which calls Nominatim with a ≥1 req/sec rate limit and the configured `GEOCODING_USER_AGENT`. Results (including definitive "no result" answers) are cached in the shared Django cache, so repeat venues skip the network call.
+
+### EventSeries (`events/models.py`)
+
+A recurring event. Each occurrence is an ordinary `Event` row with `series` set; the series stores only what repeats.
+
+| Field | Notes |
+|---|---|
+| `id` | UUID PK |
+| `rrule` | RFC 5545 RRULE **without** COUNT/UNTIL, as written by `events.recurrence.Pattern.to_rrule()` (subset: DAILY; WEEKLY + BYDAY; MONTHLY + BYMONTHDAY or BYDAY=`<n>`/`-1` weekday; INTERVAL) |
+| `dtstart` | Anchor of the rule (fixes the phase of "every 2 weeks" and the time of day); not necessarily an occurrence |
+| `created_at` | Auto timestamp |
+
+The end isn't stored: a series ends at its last occurrence, which is what lets the owner extend or shorten it. Deleted with its last occurrence (`events/signals.py`, and `SeriesEdit.apply` when an edit detaches the occurrences).
+
+Recurrence (`events/recurrence.py`, `events/series.py`):
+- Options match Google/Apple Calendar minus yearly: daily, every weekday, weekly on a day, monthly on day N / on the nth or last weekday, and a custom rule (every N days/weeks/months, chosen weekdays, monthly mode); ends never / on a date / after N dates. Presets are labelled from the start date (server-side in `forms._repeat_choices`, client-side in `static/js/event-form.js`); ones that don't fit the date render hidden + disabled.
+- Rules are expanded on the local wall clock (a 19:00 class stays at 19:00 across DST) and limited to dates at most `EVENT_HORIZON` (365 days) from today, `MAX_UPCOMING_OCCURRENCES_PER_SERIES` (110) **upcoming** dates per series, and the owner's remaining `MAX_UPCOMING_EVENTS_PER_USER` (220) allowance (system accounts exempt). Rules producing more are **cut off, not rejected**; the form preview and a flash message say why (`series.cut_notice`).
+- Planning is separate from writing: `plan_creation` / `plan_edit` return a plan (used by the HTMX preview, `EventRecurrencePreviewView`, and by the save), `create_series` / `SeriesEdit.apply` write it in one transaction. Every occurrence is checked against the `(title, start_datetime, venue_name)` constraint first (`check_conflicts`); a clash rejects the whole change.
+- Editing an occurrence asks for a scope (`this` / `following` / `all`). Only the fields the owner changed (`form.changed_data`) are copied to the others, so individual edits survive; the publish state is copied only when it changed. A new time of day moves every date in scope; a new rule or date regenerates the **upcoming** occurrences in scope (rows already on a new date keep it, the rest are reused in order, so URLs survive; "all" shifts the series by the same number of days from its first upcoming date, "following" splits off a new series when earlier occurrences exist); changing only the end adds dates after the last occurrence or deletes those past it ("Extend series" on the detail page links to the edit form with `?scope=all`). "Does not repeat" deletes the other upcoming occurrences in scope. Past occurrences are never moved or deleted by an edit. A single event can be given a rule on edit and becomes the first occurrence of a new series.
+- Delete and the draft toggle take the same scope (`scope_queryset`); deleting "all" includes past occurrences.
+- Display: cards show a "Repeats" badge; the detail page shows the rule summary with the last date, and up to 8 other upcoming dates (drafts only for the owner). Feeds, JSON-LD and the sitemap list each occurrence as its own event.
 
 ### FeedHit (`events/models.py`)
 
@@ -401,7 +427,8 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `EventUpdateView` | `/events/<slug>/edit/` | Owner only |
 | `EventDeleteView` | `/events/<slug>/delete/` | Owner only |
 | `EventDuplicateView` | `/events/<slug>/duplicate/` | Owner only |
-| `EventToggleDraftView` | `/events/<slug>/toggle-draft/` | Owner only |
+| `EventToggleDraftView` | `/events/<slug>/toggle-draft/` | Owner only (`scope` = this / following / all for a series) |
+| `EventRecurrencePreviewView` | `/events/submit/preview-dates/` | Login required (owner of `event` when editing); HTMX partial listing the dates a repeat rule produces |
 | `MyEventsView` | `/my-events/` | Login required (redirects to publisher profile) |
 | `SubscribeView` | `/subscribe/` | Public |
 | `TemplateView` (about) | `/about/` | Public (static `about.html`) |
@@ -412,7 +439,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 - Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity
 - Event list filters (`_filtered_event_queryset` + `events/partials/event_filter_panel.html`) support: category (multi-value), date range, is_free, is_wheelchair_accessible, search (title/venue/description/submitter)
 - Quick date filters: this_week, next_week, this_month, next_month
-- Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting)
+- Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting); a repeating event counts each occurrence and is cut off at the remaining allowance
 - Draft events are hidden from public list/detail; only visible to the owner
 
 ### Project-level (config/urls.py)
@@ -500,7 +527,8 @@ See `.env.example` for the full list. Key variables:
 | `TRANSLATION_ENABLED` | Toggle language detection + translation of scraped descriptions (default: `false` in DEBUG, `true` otherwise; `conftest.py` disables it) |
 | `TRANSLATION_MODEL_DIR` | Translation model directory (default: `models/translate-da_en`; baked into the Docker image there) |
 | `TRANSLATION_MIN_CONFIDENCE` | Minimum lingua confidence for a paragraph's language to count (default: 0.9) |
-| `MAX_UPCOMING_EVENTS_PER_USER` | Cap on upcoming events per user (default: 100) |
+| `MAX_UPCOMING_EVENTS_PER_USER` | Cap on upcoming events per user, occurrences of repeating events included (default: 220) |
+| `MAX_UPCOMING_OCCURRENCES_PER_SERIES` | Cap on the upcoming dates of one repeating event (default: 110) |
 | `CLAIM_CODES_PER_BATCH` | Max codes a user can mint per month from `MyInvitesView` (default: 3) |
 | `CLAIM_CODE_EXPIRY_DAYS` | Expiry for user-minted claim codes (default: 30) |
 | `DB_BACKUP_RETENTION_DAYS` | Retention for `scripts/backup_db.py` uploads to R2 (default: 30) |

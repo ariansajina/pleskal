@@ -21,6 +21,19 @@
                 <div class="alert alert--error">{{ form.non_field_errors }}</div>
             {% endif %}
 
+            {% if form.series %}
+                {# Editing an occurrence of a repeating event #}
+                <fieldset class="repeat-fieldset alert alert--info" style="margin-bottom:0;">
+                    <legend class="form-label" style="color:inherit;">This event repeats · apply changes to</legend>
+                    <div class="repeat-options">
+                        {% for radio in form.scope %}
+                            <label class="form-check">{{ radio.tag }}<span class="text-base">{{ radio.choice_label }}</span></label>
+                        {% endfor %}
+                    </div>
+                    <p class="form-help" style="color:inherit;">Only the fields you change are copied to the other dates. Past dates are never moved or removed.</p>
+                </fieldset>
+            {% endif %}
+
             {# Title #}
             <div>
                 <label for="{{ form.title.id_for_label }}" class="form-label">
@@ -83,6 +96,8 @@
                     <p class="form-field-error">{{ form.end_date.errors|join:", " }}</p>
                 {% endif %}
             </div>
+
+            {% include "events/partials/repeat_fields.html" %}
 
             {# Venue #}
             <div>

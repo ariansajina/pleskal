@@ -71,7 +71,12 @@ SITE_ID = 1
 SITE_DOMAIN = env("SITE_DOMAIN", default="pleskal.dk")
 SITE_NAME = env("SITE_NAME", default="pleskal")
 
-MAX_UPCOMING_EVENTS_PER_USER = env.int("MAX_UPCOMING_EVENTS_PER_USER", default=100)
+MAX_UPCOMING_EVENTS_PER_USER = env.int("MAX_UPCOMING_EVENTS_PER_USER", default=220)
+# Cap on the upcoming dates of one recurring event (events.recurrence); rules
+# that produce more are cut off, with a notice in the form.
+MAX_UPCOMING_OCCURRENCES_PER_SERIES = env.int(
+    "MAX_UPCOMING_OCCURRENCES_PER_SERIES", default=110
+)
 CLAIM_CODES_PER_BATCH = env.int("CLAIM_CODES_PER_BATCH", default=3)
 CLAIM_CODE_EXPIRY_DAYS = env.int("CLAIM_CODE_EXPIRY_DAYS", default=30)
 
