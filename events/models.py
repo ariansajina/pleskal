@@ -103,33 +103,52 @@ class DescriptionLanguage(models.TextChoices):
 
 
 class EventSeries(models.Model):
-    """A recurring event: its occurrences are ordinary Event rows linking here.
+    """Several dates of one event: its occurrences are ordinary Event rows
+    linking here, shown as one card in listings.
 
-    Stores what repeats (`rrule`, an RFC 5545 RRULE without COUNT/UNTIL, as
-    written by events.recurrence.Pattern) and from when (`dtstart`, which
-    fixes the phase of e.g. "every 2 weeks"). Where it ends isn't stored: the
-    series ends at its last occurrence, so the owner can extend or shorten it
-    (events/series.py). Deleted with its last occurrence (events/signals.py).
+    A recurring event stores what repeats (`rrule`, an RFC 5545 RRULE without
+    COUNT/UNTIL, as written by events.recurrence.Pattern) and from when
+    (`dtstart`, which fixes the phase of e.g. "every 2 weeks"). Where it ends
+    isn't stored: the series ends at its last occurrence, so the owner can
+    extend or shorten it (events/series.py).
+
+    A scraped show with several dates has no rule (blank `rrule`): its dates
+    are whatever the source lists. `source_key` identifies it across imports
+    (see events.series.scraped_series_key). Either kind is deleted with its
+    last occurrence (events/signals.py).
     """
 
     objects = models.Manager()
     DoesNotExist: type[ObjectDoesNotExist]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    rrule = models.CharField(max_length=200)
+    rrule = models.CharField(max_length=200, blank=True)
     dtstart = models.DateTimeField()
+    source_key = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name_plural = "event series"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_key"],
+                condition=~models.Q(source_key=""),
+                name="unique_event_series_source_key",
+            )
+        ]
 
     def __str__(self):
+        if not self.rrule:
+            return str(self.source_key) or f"dates from {self.dtstart:%Y-%m-%d}"
         return f"{self.rrule} from {self.dtstart:%Y-%m-%d}"
 
     @property
     def pattern(self):
+        """The repeat rule, or None for a series of listed dates (scraped)."""
         from .recurrence import Pattern
 
+        if not self.rrule:
+            return None
         return Pattern.from_rrule(str(self.rrule))
 
 
@@ -283,9 +302,10 @@ class Event(models.Model):
         if self._state.adding and self.start_datetime:
             if self.start_datetime <= timezone.now():
                 errors["start_datetime"] = "Start date and time must be in the future."
-            # Must not be more than 1 year in the future
+            # At most 1 year ahead, except for scraper (system) accounts,
+            # which list whatever their source publishes.
             one_year = timezone.now() + timezone.timedelta(days=365)
-            if self.start_datetime > one_year:
+            if self.start_datetime > one_year and not self._submitted_by_system():
                 errors["start_datetime"] = (
                     "Start date must not be more than 1 year in the future."
                 )
@@ -302,6 +322,11 @@ class Event(models.Model):
 
         if errors:
             raise ValidationError(errors)
+
+    def _submitted_by_system(self) -> bool:
+        """True for events published by a scraper (system) account."""
+        submitter = self.submitted_by
+        return bool(submitter and submitter.is_system_account)  # ty: ignore[unresolved-attribute]
 
     @property
     def has_map_location(self) -> bool:

@@ -428,7 +428,9 @@ class EventForm(forms.ModelForm):
                 "Events cannot be created in the past. "
                 "Please choose a future date and time.",
             )
-        if start_dt > timezone.now() + EVENT_HORIZON:
+        # Scraper (system) accounts list whatever their source publishes.
+        unlimited = self._user is not None and self._user.is_system_account
+        if start_dt > timezone.now() + EVENT_HORIZON and not unlimited:
             self.add_error(
                 "date",
                 "Start date must not be more than 1 year in the future.",

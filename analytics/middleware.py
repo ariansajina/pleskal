@@ -89,7 +89,7 @@ def _should_record(request, response) -> bool:
 
 def _record(request, response) -> None:
     url_name = request.resolver_match.url_name
-    if url_name == "event_ical_single":
+    if url_name in ("event_ical_single", "event_ical_series"):
         DailyCount.increment(DailyCount.CALENDAR, request.path[:KEY_MAX_LENGTH])
         return
     if not response.get("Content-Type", "").startswith("text/html"):

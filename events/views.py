@@ -24,10 +24,13 @@ from .images import validate_and_process
 from .models import Event, EventCategory, hidden_events_q
 from .series import (
     Scope,
+    attach_series_cards,
     create_series,
+    first_per_series,
     plan_edit,
     scope_queryset,
     series_context,
+    series_group,
 )
 from .sharing import apple_calendar_url, google_calendar_url, outlook_calendar_url
 from .structured_data import event_jsonld, event_meta_description
@@ -500,13 +503,19 @@ class EventListView(RateLimitMixin, View):
         date_range_active = filter_state["date_range_active"]
 
         # --- Counts for upcoming/past toggle (computed after other filters) ---
-        # One aggregate for both; the paginator reuses it instead of running
-        # its own COUNT(*), so the (possibly search-filtered) set is scanned
-        # once rather than three times.
+        # A series is one listing entry, so these count series (and single
+        # events), plus the dates behind them. One aggregate for all; the
+        # paginator reuses it instead of running its own COUNT(*), so the
+        # (possibly search-filtered) set is scanned once rather than again.
         now = timezone.now()
-        counts = qs.aggregate(
-            upcoming=Count("pk", filter=Q(start_datetime__gte=now)),
-            past=Count("pk", filter=Q(start_datetime__lt=now)),
+        upcoming = Q(start_datetime__gte=now)
+        past = Q(start_datetime__lt=now)
+        counts = qs.annotate(series_group=series_group()).aggregate(
+            upcoming=Count("series_group", filter=upcoming, distinct=True),
+            past=Count("series_group", filter=past, distinct=True),
+            both=Count("series_group", distinct=True),
+            upcoming_dates=Count("pk", filter=upcoming),
+            past_dates=Count("pk", filter=past),
         )
         upcoming_count = counts["upcoming"]
         past_count = counts["past"]
@@ -517,20 +526,37 @@ class EventListView(RateLimitMixin, View):
         # silently discard half the results with no visible explanation.
         show_past = request.GET.get("past") == "1"
         if date_range_active:
-            qs = qs.order_by("start_datetime", "id")
-            total = upcoming_count + past_count
+            dated = qs
+            total = counts["both"]
+            date_count = counts["upcoming_dates"] + counts["past_dates"]
         elif show_past:
-            qs = qs.filter(start_datetime__lt=now).order_by("-start_datetime", "-id")
+            dated = qs.filter(past)
             total = past_count
+            date_count = counts["past_dates"]
         else:
-            qs = qs.filter(start_datetime__gte=now).order_by("start_datetime", "id")
+            dated = qs.filter(upcoming)
             total = upcoming_count
+            date_count = counts["upcoming_dates"]
+        descending = show_past and not date_range_active
+        # One card per series, at its first date in range (latest for past).
+        qs = first_per_series(dated, descending=descending)
+        if descending:
+            qs = qs.order_by("-start_datetime", "-id")
+        else:
+            qs = qs.order_by("start_datetime", "id")
 
         # --- Pagination ---
         qs = qs.defer(*_UNUSED_LISTING_FIELDS)
         paginator = _KnownCountPaginator(qs, EVENTS_PER_PAGE, count=total)
         page_number = request.GET.get("page", 1)
         page_obj = paginator.get_page(page_number)
+        date_from = filter_state["date_from"]
+        attach_series_cards(
+            page_obj.object_list,
+            dated,
+            range_active=date_range_active,
+            single_day=bool(date_from and date_from == filter_state["date_to"]),
+        )
 
         # Build a query string with all current params except `page`, so
         # pagination links preserve active filters.
@@ -545,6 +571,7 @@ class EventListView(RateLimitMixin, View):
             "show_past": show_past,
             "upcoming_count": upcoming_count,
             "past_count": past_count,
+            "date_count": date_count,
         }
         ctx.update(_filter_panel_context(request, filter_state))
 
@@ -644,14 +671,17 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
 
         if series_edit is None:
             event.save()
-            return self._saved(event)
-        try:
-            target = series_edit.apply()
-        except ValidationError as exc:
-            form.add_error(None, exc)
-            return self.form_invalid(form)
-        if series_edit.notice:
-            messages.warning(self.request, series_edit.notice)
+            target = event
+        else:
+            try:
+                target = series_edit.apply()
+            except ValidationError as exc:
+                form.add_error(None, exc)
+                return self.form_invalid(form)
+            if series_edit.notice:
+                messages.warning(self.request, series_edit.notice)
+        if submit_action in ("draft", "publish") and target is not None:
+            _sync_series_publish_state(target)
         return self._saved(target)
 
     def _saved(self, event):
@@ -670,6 +700,19 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
         ctx = super().get_context_data(**kwargs)
         ctx["page_title"] = "Edit Event"
         return ctx
+
+
+def _sync_series_publish_state(event):
+    """Give every date of *event*'s series its publish state.
+
+    Publishing is all-or-nothing for a series, whatever dates an edit's
+    scope covers, so a series is never listed with some dates missing.
+    """
+    if event.series_id is None:
+        return
+    scope_queryset(event, Scope.ALL).exclude(is_draft=event.is_draft).update(
+        is_draft=event.is_draft, updated_at=timezone.now()
+    )
 
 
 def _plan_series_edit(form, event, user):
@@ -883,8 +926,9 @@ class EventToggleDraftView(RateLimitMixin, LoginRequiredMixin, View):
         event = get_object_or_404(Event, slug=slug)
         _require_owner(request, event)
         event.is_draft = not event.is_draft
-        # A bulk update: saving changes nothing else (no image, no venue).
-        count = scope_queryset(event, request.POST.get("scope", "")).update(
+        # Publishing is all-or-nothing for a series, so it never shows up
+        # with gaps. A bulk update: saving changes nothing else.
+        count = scope_queryset(event, Scope.ALL).update(
             is_draft=event.is_draft, updated_at=timezone.now()
         )
         noun = f"{count} events" if count > 1 else "Event"

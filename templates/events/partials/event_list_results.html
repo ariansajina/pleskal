@@ -3,7 +3,7 @@
 {% endif %}
 
 <p class="text-sm text-muted" role="status" style="margin-bottom:var(--space-3);">
-    {{ page_obj.paginator.count }} event{{ page_obj.paginator.count|pluralize }} found
+    {{ page_obj.paginator.count }} event{{ page_obj.paginator.count|pluralize }}{% if date_count > page_obj.paginator.count %} · {{ date_count }} dates{% endif %} found
 </p>
 
 {% if events %}

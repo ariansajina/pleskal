@@ -14,6 +14,17 @@ from icalendar import Event as ICalEvent
 
 from .models import Event, EventCategory, FeedHit
 
+ICAL_CONTENT_TYPE = "text/calendar; charset=utf-8"
+
+
+def _new_calendar() -> Calendar:
+    """An empty VCALENDAR with the headers every pleskal .ics carries."""
+    cal = Calendar()
+    cal.add("prodid", "-//Copenhagen Dance Calendar//EN")
+    cal.add("version", "2.0")
+    cal.add("calscale", "GREGORIAN")
+    return cal
+
 
 def _plain_text(markdown_text: str) -> str:
     """Strip markdown markup to get plain text for feeds."""
@@ -166,10 +177,7 @@ class EventICalFeed(View):
             past_days=ICAL_PAST_EVENT_DAYS,
         )
 
-        cal = Calendar()
-        cal.add("prodid", "-//Copenhagen Dance Calendar//EN")
-        cal.add("version", "2.0")
-        cal.add("calscale", "GREGORIAN")
+        cal = _new_calendar()
         cal.add("x-wr-calname", "Copenhagen Dance Calendar")
         # Polling hint for subscribed calendars (Apple uses X-PUBLISHED-TTL,
         # RFC 7986 clients REFRESH-INTERVAL); matches the daily refresh the
@@ -187,7 +195,7 @@ class EventICalFeed(View):
         content = cal.to_ical()
         return HttpResponse(
             content,
-            content_type="text/calendar; charset=utf-8",
+            content_type=ICAL_CONTENT_TYPE,
             headers={"Content-Disposition": 'attachment; filename="events.ics"'},
         )
 
@@ -201,10 +209,7 @@ class EventICalSingleView(View):
     def get(self, request, slug):
         event = get_object_or_404(Event, slug=slug, is_draft=False)
 
-        cal = Calendar()
-        cal.add("prodid", "-//Copenhagen Dance Calendar//EN")
-        cal.add("version", "2.0")
-        cal.add("calscale", "GREGORIAN")
+        cal = _new_calendar()
 
         cal.add_component(_build_vevent(event))
 
@@ -222,6 +227,37 @@ class EventICalSingleView(View):
             disposition = f'attachment; filename="{filename}"'
         return HttpResponse(
             content,
-            content_type="text/calendar; charset=utf-8",
+            content_type=ICAL_CONTENT_TYPE,
             headers={"Content-Disposition": disposition},
+        )
+
+
+# ---------------------------------------------------------------------------
+# All dates of a series
+# ---------------------------------------------------------------------------
+
+
+class EventICalSeriesView(View):
+    """Every upcoming published date of the series *slug* belongs to."""
+
+    def get(self, request, slug):
+        event = get_object_or_404(
+            Event, slug=slug, is_draft=False, series__isnull=False
+        )
+        dates = Event.objects.filter(
+            series_id=event.series_id,
+            is_draft=False,
+            start_datetime__gte=timezone.now(),
+        ).order_by("start_datetime", "id")
+
+        cal = _new_calendar()
+        for occurrence in dates:
+            cal.add_component(_build_vevent(occurrence))
+
+        return HttpResponse(
+            cal.to_ical(),
+            content_type=ICAL_CONTENT_TYPE,
+            headers={
+                "Content-Disposition": f'attachment; filename="{event.slug}-all-dates.ics"'
+            },
         )
