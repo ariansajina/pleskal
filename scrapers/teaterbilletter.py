@@ -106,8 +106,9 @@ class ShowOverrides:
 
 
 # An enrich hook gets the session and the (filtered) API events and returns
-# overrides keyed by str(eventNo). It should be best-effort: log and return
-# what it has rather than raise, so a venue site outage only costs the links.
+# overrides keyed by str(eventNo). A show it finds no override for keeps its
+# teaterbilletter.dk link; if it can't read the venue's site at all, it should
+# raise rather than return nothing (see listing_enricher).
 EnrichHook = Callable[[requests.Session, list[dict]], dict[str, ShowOverrides]]
 
 
@@ -288,6 +289,10 @@ def ticket_links(
     return links
 
 
+class ListingUnavailable(Exception):
+    """A venue's programme page couldn't be read (error or bot challenge)."""
+
+
 def listing_enricher(
     listing_url: str,
     card_selector: str,
@@ -295,28 +300,46 @@ def listing_enricher(
     duration_from_page: Callable[[BeautifulSoup], datetime.timedelta | None]
     | None = None,
     delay: float = 0.5,
+    retry_delay: float = 10.0,
 ) -> EnrichHook:
     """Return an enrich hook linking events to their pages on the venue's site.
 
     Reads the programme at *listing_url* (see :func:`ticket_links`).  With
     *duration_from_page*, the show page of an event whose API running time is
-    0 is fetched and parsed for one.  Best-effort: if the listing can't be
-    fetched, events keep their teaterbilletter.dk links.
+    0 is fetched and parsed for one (best-effort).
+
+    If the programme can't be read — an HTTP error, or a page without any
+    *card_selector* card, which is what a bot challenge looks like (faar302.dk
+    serves one to some requests, with status 200) — it is retried once and then
+    :class:`ListingUnavailable` is raised, failing the venue's scrape.  Falling
+    back to teaterbilletter.dk links instead would switch every event's
+    ``source_url`` for one run and back on the next, and scraped series are
+    keyed on ``source_url``, so each switch would move the upcoming dates into
+    another series.  A failed scrape leaves the imported events as they are.
     """
+
+    def read_listing(session: requests.Session) -> dict[str, str]:
+        for attempt in (1, 2):
+            try:
+                soup = get_soup(listing_url, session)
+            except requests.RequestException as exc:
+                problem = str(exc)
+            else:
+                if soup.select(card_selector):
+                    return ticket_links(soup, listing_url, card_selector, link_selector)
+                title = soup.title.get_text(strip=True) if soup.title else ""
+                problem = f"no {card_selector!r} cards (page title {title!r})"
+            log.warning("Could not read %s (try %d): %s", listing_url, attempt, problem)
+            if attempt == 1:
+                time.sleep(retry_delay)
+        raise ListingUnavailable(f"{listing_url}: {problem}")
 
     def enrich(
         session: requests.Session, events: list[dict]
     ) -> dict[str, ShowOverrides]:
-        try:
-            links = ticket_links(
-                get_soup(listing_url, session),
-                listing_url,
-                card_selector,
-                link_selector,
-            )
-        except requests.RequestException as exc:
-            log.warning("Could not fetch %s: %s", listing_url, exc)
+        if not events:
             return {}
+        links = read_listing(session)
 
         overrides: dict[str, ShowOverrides] = {}
         for event in events:

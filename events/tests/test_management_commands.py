@@ -446,7 +446,7 @@ class TestImportFaar302:
     [
         ("blaagaardteater", "blaagaardteater", "Blaagaard Teater"),
         ("afukscene", "afukscene", "AFUK Scene"),
-        ("dansekapellet", "uppercut", "Uppercut"),
+        ("dansekapellet", "dansekapellet", "Dansekapellet"),
     ],
 )
 def test_teaterbilletter_sources_import_under_their_publishers(

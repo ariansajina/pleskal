@@ -69,13 +69,13 @@ def test_afuk_takes_dance_and_events_without_enrichment():
     )
 
 
-def test_dansekapellet_takes_everything_under_uppercut():
+def test_dansekapellet_takes_everything():
     with patch("scrapers.teaterbilletter.scrape", return_value=[]) as scrape:
         assert dansekapellet.scrape() == []
     scrape.assert_called_once_with(dansekapellet.VENUE)
     venue = dansekapellet.VENUE
     assert venue.genres is None and venue.categories is None
-    assert venue.external_source == "uppercut"
+    assert venue.external_source == "dansekapellet"
     assert venue.venue_names == {"VN0000720": "Dansekapellet"}
 
 

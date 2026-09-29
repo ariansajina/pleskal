@@ -27,6 +27,7 @@ import json
 import random
 import re
 import sys
+import zoneinfo
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
@@ -60,6 +61,12 @@ ENGLISH_MARKERS = (
     "are", "on", "by", "from", "it", "as", "an", "be", "you", "performance",
 )  # fmt: skip
 MOJIBAKE_RE = re.compile(r"Ã.|â€|Â[^A-Za-z]|â [^\w\s]|�")
+
+CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
+# A clock time on a source page: "20:00", "kl. 20.00". Dates such as
+# "09.09.26" don't match (a time must not touch another digit, dot or colon).
+CLOCK_RE = re.compile(r"(?<![\d.:])([01]?\d|2[0-3])[:.]([0-5]\d)(?![\d.:])")
+TICKETING_API_URL = "https://teaterbilletter.dk/api/events"
 
 
 def _session() -> requests.Session:
@@ -170,7 +177,107 @@ def time_flags(start: datetime.datetime, end: datetime.datetime | None) -> list[
     return flags
 
 
-def inspect_event(session: requests.Session, card: dict, out_dir: Path) -> dict:
+def clock_shift_flags(start: datetime.datetime, source_text: str) -> list[str]:
+    """Flag a start time that the source page doesn't list but lists 1-2 h off.
+
+    That offset is what a time-zone bug produces (a UTC time stored as
+    Copenhagen time, or the reverse): the page says "kl. 20.00", pleskal 18:00.
+    """
+    local = start.astimezone(CPH_TZ)
+    times = {(int(h), int(m)) for h, m in CLOCK_RE.findall(source_text)}
+    if not times or (local.hour, local.minute) in times:
+        return []
+    shifted = sorted(
+        f"{h:02d}:{m:02d}"
+        for h, m in times
+        if m == local.minute and abs(h - local.hour) in (1, 2)
+    )
+    if not shifted:
+        return []
+    return [
+        (
+            f"time zone? pleskal starts at {local:%H:%M} (Copenhagen), which the "
+            f"source page doesn't list, but it lists {', '.join(shifted)}"
+        )
+    ]
+
+
+def ticketing_venue_codes(source: ScraperSource) -> tuple[str, ...]:
+    """Venue codes of a scraper built on scrapers/teaterbilletter.py, else ()."""
+    module = importlib.import_module(source.scrape.__module__)
+    return tuple(getattr(getattr(module, "VENUE", None), "venue_codes", ()) or ())
+
+
+def fetch_ticketing_events(
+    session: requests.Session, venue_codes: tuple[str, ...]
+) -> list[dict]:
+    events: list[dict] = []
+    page = 1
+    while True:
+        resp = session.get(
+            TICKETING_API_URL,
+            params={"page": page, "pageSize": 30, "venueCodes": ",".join(venue_codes)},
+            timeout=TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        events += data.get("items") or []
+        if page >= ((data.get("pagination") or {}).get("pageCount") or 1):
+            return events
+        page += 1
+
+
+def ticketing_flags(
+    start: datetime.datetime, title: str, api_events: list[dict]
+) -> list[str]:
+    """Check a start time against the teaterbilletter.dk API, independently.
+
+    The API's times are UTC without an offset. This converts them here rather
+    than through the scraper's own code, so a conversion bug there can't hide
+    itself; a start that equals the API's UTC time read as Copenhagen time is
+    reported as exactly that bug.
+    """
+
+    def norm(text: str) -> str:
+        return " ".join(text.casefold().split())
+
+    matches = [e for e in api_events if norm(e.get("title") or "") == norm(title)]
+    if not matches:
+        return [f"'{title}' is not in the teaterbilletter.dk API for this venue"]
+    naive = set()
+    for event in matches:
+        values = [s.get("dateTime") for s in event.get("scheduledShows") or []]
+        values += [s.get("showTime") for s in event.get("shows") or []]
+        for value in values:
+            try:
+                naive.add(datetime.datetime.fromisoformat(value).replace(tzinfo=None))
+            except TypeError, ValueError:
+                continue
+    utc_as_local = {t.replace(tzinfo=datetime.UTC).astimezone(CPH_TZ) for t in naive}
+    if start in utc_as_local:
+        return []
+    local = start.astimezone(CPH_TZ)
+    if local in {t.replace(tzinfo=CPH_TZ) for t in naive}:
+        return [
+            (
+                f"TIME-ZONE BUG: start {local:%Y-%m-%d %H:%M} is the API's UTC "
+                "time read as Copenhagen time (the real start is 1-2 h later)"
+            )
+        ]
+    return [
+        (
+            f"start {local:%Y-%m-%d %H:%M} (Copenhagen) is not a performance "
+            "time in the teaterbilletter.dk API"
+        )
+    ]
+
+
+def inspect_event(
+    session: requests.Session,
+    card: dict,
+    out_dir: Path,
+    ticketing_events: list[dict] | None = None,
+) -> dict:
     result: dict = {"pleskal_url": card["url"], "card": card, "problems": []}
     resp = session.get(card["url"], timeout=TIMEOUT)
     result["pleskal_status"] = resp.status_code
@@ -244,6 +351,10 @@ def inspect_event(session: requests.Session, card: dict, out_dir: Path) -> dict:
         result["problems"].append("description looks Danish (heuristic)")
     if result["mojibake"]:
         result["problems"].append(f"mojibake in description: {result['mojibake']}")
+    if ticketing_events is not None:
+        result["problems"] += ticketing_flags(
+            start, data.get("name") or "", ticketing_events
+        )
 
     if not source_link:
         result["problems"].append("no source link")
@@ -271,6 +382,7 @@ def inspect_event(session: requests.Session, card: dict, out_dir: Path) -> dict:
     dump.parent.mkdir(parents=True, exist_ok=True)
     dump.write_text(text)
     result["source_text_file"] = str(dump)
+    result["problems"] += clock_shift_flags(start, text)
     return result
 
 
@@ -322,8 +434,20 @@ def check_scraper(
     for c in cards:
         by_title.setdefault(c["title"], []).append(c)
     titles = rng.sample(sorted(by_title), k=min(samples, len(by_title)))
+
+    # Scrapers built on the teaterbilletter.dk API get their times checked
+    # against it (the source pages of some of them don't show times).
+    ticketing_events = None
+    venue_codes = ticketing_venue_codes(source)
+    report["ticketing_venue_codes"] = list(venue_codes)
+    if venue_codes:
+        try:
+            ticketing_events = fetch_ticketing_events(session, venue_codes)
+        except (requests.RequestException, ValueError) as exc:
+            report["problems"].append(f"teaterbilletter.dk API unreachable: {exc}")
     report["samples"] = [
-        inspect_event(session, rng.choice(by_title[t]), out_dir) for t in titles
+        inspect_event(session, rng.choice(by_title[t]), out_dir, ticketing_events)
+        for t in titles
     ]
     return report
 

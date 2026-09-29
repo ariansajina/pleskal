@@ -166,8 +166,7 @@ _ALL_SOURCES = [
     ScraperSource(
         name="dansekapellet",
         scrape=scrape_dansekapellet,
-        # Published under the Uppercut account, which runs the venue.
-        external_source="uppercut",
+        external_source="dansekapellet",
         default_venue_name="Dansekapellet",
         allowed_image_domains=TEATERBILLETTER_IMAGE_DOMAINS,
     ),

@@ -2,8 +2,8 @@
 
 Shows, performance times and content come from the teaterbilletter.dk API (see
 ``scrapers/teaterbilletter.py``).  The venue is registered there to Uppercut
-Danseteater, which runs it, and events are published under the Uppercut
-account, though visiting companies play there too.  Every genre is taken.
+Danseteater, its resident company, but visiting companies play there too, so
+events are published under a Dansekapellet account.  Every genre is taken.
 Dansekapellet's site has no show pages, so events keep their
 teaterbilletter.dk links.
 
@@ -19,7 +19,7 @@ from scrapers import teaterbilletter
 from scrapers.teaterbilletter import TeaterbilletterVenue
 
 VENUE = TeaterbilletterVenue(
-    external_source="uppercut",
+    external_source="dansekapellet",
     venue_codes=("VN0000720",),
     venue_names={"VN0000720": "Dansekapellet"},
 )

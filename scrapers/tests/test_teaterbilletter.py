@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 
 from scrapers import teaterbilletter
 from scrapers.teaterbilletter import (
+    ListingUnavailable,
     ShowOverrides,
     TeaterbilletterVenue,
     build_records,
@@ -348,6 +349,10 @@ LISTING_HTML = """
 """
 
 
+# What faar302.dk serves some requests instead of its programme (status 200).
+CHALLENGE_HTML = "<html><head><title>Et øjeblik…</title></head><body></body></html>"
+
+
 def _soup(html: str) -> BeautifulSoup:
     return BeautifulSoup(html, "lxml")
 
@@ -416,11 +421,37 @@ class TestListingEnricher:
         assert overrides["147563"].duration is None
         assert fetched == [self.URL]
 
-    def test_listing_failure_leaves_teaterbilletter_links(self):
-        def fake_get_soup(url, session):
-            raise requests.ConnectionError("down")
+    def test_bot_challenge_is_retried_once(self):
+        pages = iter([_soup(CHALLENGE_HTML), _soup(LISTING_HTML)])
+        overrides = self._enrich(
+            [{"eventNo": 147563, "durationInMinutes": 90}],
+            lambda url, session: next(pages),
+        )
+        assert overrides["147563"].source_url == f"{self.URL}/hun-er-vred"
 
-        assert self._enrich([{"eventNo": 147563}], fake_get_soup) == {}
+    @pytest.mark.parametrize(
+        "failure",
+        [requests.ConnectionError("down"), "challenge"],
+        ids=["http-error", "bot-challenge"],
+    )
+    def test_unreadable_listing_fails_instead_of_dropping_links(self, failure):
+        calls: list[str] = []
+
+        def fake_get_soup(url, session):
+            calls.append(url)
+            if failure == "challenge":
+                return _soup(CHALLENGE_HTML)
+            raise failure
+
+        with pytest.raises(ListingUnavailable, match="blaagaardteater.dk/program"):
+            self._enrich([{"eventNo": 147563}], fake_get_soup)
+        assert calls == [self.URL, self.URL]
+
+    def test_no_events_skips_the_listing(self):
+        def fake_get_soup(url, session):
+            raise AssertionError("listing fetched")
+
+        assert self._enrich([], fake_get_soup) == {}
 
 
 # ── scrape ────────────────────────────────────────────────────────────────────
