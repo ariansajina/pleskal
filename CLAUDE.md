@@ -33,7 +33,7 @@ config/          # Django project settings (incl. SECURE_CSP), URLs, rate limiti
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
 events/          # Dance events app (CRUD, feeds, image processing, geocoding, sharing)
 analytics/       # Cookieless server-side analytics (daily counters, staff /stats/ dashboard)
-scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9)
+scrapers/        # Per-source scrapers (afukscene, blaagaardteater, dansehallerne, dansehallerne_workshops, dansekapellet, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9); teaterbilletter.py is shared by the venues ticketed through teaterbilletter.dk
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX, PWA icons, JS shims)
 scripts/         # Standalone scripts (backup_db.py for the backup cron; download_translation_model.py, run at Docker build time)
@@ -106,7 +106,11 @@ scrapers/
   base.py                      # Shared utilities (get_soup, canonical_url, scrape_url_list, etc.)
   dansehallerne.py             # Dansehallerne scraper
   dansehallerne_workshops.py   # Dansehallerne workshops scraper
-  faar302.py                   # Teater FÅR302 scraper (front-page show cards + teaterbilletter.dk JSON API for performance times)
+  teaterbilletter.py           # Shared scraper for venues ticketed through teaterbilletter.dk (Billetten): public JSON API (/api/events?venueCodes=…) for shows, times, content, images (tereba.dk); per-venue config (TeaterbilletterVenue: venue codes, genre/category filter, wheelchair) + optional `enrich` hook (listing_enricher links events to the venue's own show pages via the ticket widget's data-event_no). API times are UTC
+  afukscene.py                 # AFUK Scene (teaterbilletter.dk; dance/performance/new-circus only; links to teaterbilletter.dk)
+  blaagaardteater.py           # Blaagaard Teater (teaterbilletter.dk; dance/performance/new-circus only; links to blaagaardteater.dk show pages)
+  dansekapellet.py             # Dansekapellet (teaterbilletter.dk; every genre; published as Uppercut, external_source `uppercut`)
+  faar302.py                   # Teater FÅR302 (teaterbilletter.dk; every genre, incl. its site-specific venue; links to faar302.dk show pages, running time from the page when the API has none)
   hautscene.py                 # HAUT Scene scraper
   kbhdanser.py                 # KBH Danser scraper
   sort_hvid.py                 # Sort/Hvid scraper
@@ -179,7 +183,7 @@ uv run python manage.py import_events hautscene                 # default JSON: 
 uv run python manage.py import_events hautscene events.json --dry-run
 
 # Unified scraper (runs all sources; used by Railway scrape-cron service)
-uv run python manage.py run_scrapers              # run all 10 importers
+uv run python manage.py run_scrapers              # run all 13 importers
 uv run python manage.py run_scrapers --dry-run    # preview only (no DB writes)
 uv run python manage.py run_scrapers --skip-images  # skip image downloads
 uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # subset
