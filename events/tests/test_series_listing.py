@@ -20,10 +20,24 @@ from ..models import Event, EventSeries
 from ..series import link_scraped_series, scraped_series_key
 from .factories import EventFactory
 
+_today = datetime.date.min  # pinned per test by _pin_today
+
+
+@pytest.fixture(autouse=True)
+def _pin_today():
+    """Read the date once per test for `_at`.
+
+    Tests call `_at` both to create events and to build the values they expect,
+    so a test running across local midnight would otherwise take the two from
+    different days and fail by one day.
+    """
+    global _today
+    _today = timezone.localdate()
+
 
 def _at(days, hour=19, minute=0):
     """An aware local datetime *days* from today at *hour*:*minute*."""
-    day = timezone.localdate() + datetime.timedelta(days=days)
+    day = _today + datetime.timedelta(days=days)
     return timezone.make_aware(
         datetime.datetime.combine(day, datetime.time(hour, minute))
     )
