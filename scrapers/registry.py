@@ -11,16 +11,20 @@ configuration from it — adding or retiring a source happens here (plus
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from scrapers.afukscene import scrape as scrape_afukscene
+from scrapers.blaagaardteater import scrape as scrape_blaagaardteater
 from scrapers.dansehallerne import scrape as scrape_dansehallerne
 from scrapers.dansehallerne_workshops import (
     scrape as scrape_dansehallerne_workshops,
 )
+from scrapers.dansekapellet import scrape as scrape_dansekapellet
 from scrapers.faar302 import scrape as scrape_faar302
 from scrapers.hautscene import scrape as scrape_hautscene
 from scrapers.kbhdanser import scrape as scrape_kbhdanser
 from scrapers.sort_hvid import scrape as scrape_sort_hvid
 from scrapers.sydhavnteater import scrape as scrape_sydhavnteater
 from scrapers.taornby import scrape as scrape_taornby
+from scrapers.teaterbilletter import IMAGE_DOMAIN
 from scrapers.toastercph import scrape as scrape_toastercph
 from scrapers.warehouse9 import scrape as scrape_warehouse9
 
@@ -54,6 +58,10 @@ class ScraperSource:
     def default_json_file(self) -> str:
         return f"{self.name}_events.json"
 
+
+# Venues scraped through teaterbilletter.dk (scrapers/teaterbilletter.py) take
+# their images from its API, which serves them from tereba.dk.
+TEATERBILLETTER_IMAGE_DOMAINS = frozenset({IMAGE_DOMAIN})
 
 _ALL_SOURCES = [
     ScraperSource(
@@ -139,8 +147,28 @@ _ALL_SOURCES = [
         scrape_kwargs={"delay": 0.5},
         external_source="faar302",
         default_venue_name="Teater FÅR302",
-        # Cover images come from the WordPress media library on faar302.dk.
-        allowed_image_domains=frozenset({"faar302.dk"}),
+        allowed_image_domains=TEATERBILLETTER_IMAGE_DOMAINS,
+    ),
+    ScraperSource(
+        name="blaagaardteater",
+        scrape=scrape_blaagaardteater,
+        external_source="blaagaardteater",
+        default_venue_name="Blaagaard Teater",
+        allowed_image_domains=TEATERBILLETTER_IMAGE_DOMAINS,
+    ),
+    ScraperSource(
+        name="afukscene",
+        scrape=scrape_afukscene,
+        external_source="afukscene",
+        default_venue_name="AFUK Scene",
+        allowed_image_domains=TEATERBILLETTER_IMAGE_DOMAINS,
+    ),
+    ScraperSource(
+        name="dansekapellet",
+        scrape=scrape_dansekapellet,
+        external_source="dansekapellet",
+        default_venue_name="Dansekapellet",
+        allowed_image_domains=TEATERBILLETTER_IMAGE_DOMAINS,
     ),
 ]
 

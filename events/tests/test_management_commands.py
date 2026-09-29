@@ -440,6 +440,34 @@ class TestImportFaar302:
         assert event.submitted_by.public_name == "FÅR302"
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("source", "external_source", "publisher"),
+    [
+        ("blaagaardteater", "blaagaardteater", "Blaagaard Teater"),
+        ("afukscene", "afukscene", "AFUK Scene"),
+        ("dansekapellet", "dansekapellet", "Dansekapellet"),
+    ],
+)
+def test_teaterbilletter_sources_import_under_their_publishers(
+    tmp_path, source, external_source, publisher
+):
+    # The publisher accounts come from the real scrapers/sources.json.
+    call_command("create_source_accounts", stdout=io.StringIO())
+    record = {
+        **FAAR302_EVENT,
+        "source_url": f"https://teaterbilletter.dk/forestillinger/{source}-1",
+        "title": f"{source} show",
+        "venue_name": "Scene",
+    }
+    f = tmp_path / "events.json"
+    _write_json([record], f)
+    call_command("import_events", source, str(f))
+    event = Event.objects.get(external_source=external_source)
+    assert event.submitted_by.display_name_slug == external_source
+    assert event.submitted_by.public_name == publisher
+
+
 # ---------------------------------------------------------------------------
 # Command: dry-run
 # ---------------------------------------------------------------------------

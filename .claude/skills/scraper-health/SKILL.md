@@ -37,7 +37,18 @@ The script:
   logo shown instead), empty description, Danish-looking description
   (crude stopword heuristic), mojibake, and odd times (00:00 start, 23:59
   end, start before 08:00 or from 23:00, off-5-minute starts, zero/negative,
-  <15 min or >12 h durations, >1 year out).
+  <15 min or >12 h durations, >1 year out);
+- checks the **time zone** of every sample, since a 1–2 hour shift looks
+  plausible and passes every other check:
+  - scrapers built on `scrapers/teaterbilletter.py` (a module-level `VENUE`)
+    have each start compared with the teaterbilletter.dk API, whose times are
+    UTC; the collector converts them itself rather than through the scraper's
+    code. `TIME-ZONE BUG: … UTC time read as Copenhagen time` means exactly
+    that bug; "not a performance time in the API" or "not in the API" means
+    the start or show doesn't match what is on sale;
+  - for every scraper, the clock times on the source page ("kl. 20.00") are
+    compared with pleskal's start in Copenhagen time: `time zone? …` means the
+    page doesn't list pleskal's start but lists one 1–2 h off.
 
 It prints a short per-scraper summary; the full evidence is in
 `$OUT/scraper_health.json`. Flags are **leads, not verdicts** — confirm each
@@ -47,16 +58,27 @@ one against the source before counting it.
 
 For every sampled event, read `$OUT/sources/<slug>.txt` (or fetch the
 `source_url` with WebFetch when the text dump is thin — some venues render
-dates with JavaScript: FÅR302 takes performance times from the
-teaterbilletter.dk API, Sydhavn Teater from its CMS API, Warehouse9 from an
-iCal feed; read the scraper module in `scrapers/` to see where a field
+dates with JavaScript: Sydhavn Teater takes them from its CMS API, Warehouse9
+from an iCal feed; read the scraper module in `scrapers/` to see where a field
 really comes from before calling it wrong). Check:
+
+FÅR302, Blaagaard Teater, AFUK Scene and Dansekapellet are scraped entirely
+from the teaterbilletter.dk API (`scrapers/teaterbilletter.py`; each module's
+`VENUE` has its venue codes and genre filter), and the collector already
+checks their times against it (see above). AFUK and Dansekapellet events link to teaterbilletter.dk
+pages, which render with JavaScript, so the text dump has no dates. Compare
+against `https://teaterbilletter.dk/api/events?page=1&pageSize=30&venueCodes=<code>`
+instead: its `scheduledShows[].dateTime` is **UTC**, so a 20:00 show reads
+`18:00:00` in summer and `19:00:00` in winter. Blaagaard and AFUK take only
+dance/performance/new-circus shows, so a play missing from pleskal is not a
+fault.
 
 | Check | Healthy when |
 |---|---|
 | Source link | Returns 200 and is the page for *this* event (not a homepage, 404 page or another show) |
 | Title | Matches the source (translation/casing differences are fine) |
 | Date & time | The start date/time is one the source lists for this event; the end/duration agrees with the source's stated duration. For a multi-date run, pleskal should normally have one event per performance, not one event spanning weeks |
+| Time zone | The start is the source's local (Copenhagen) time: a "kl. 20.00" show starts at 20:00 on pleskal, not 18:00 or 19:00. Any `TIME-ZONE BUG` or `time zone?` flag that the source confirms makes the scraper **Unhealthy**, since every event of it is then off |
 | Time plausibility | Not a 00:00 start, 23:59 end, multi-day or near-zero duration, or a 03:00-type hour — **unless the source itself says so** (an exhibition open for weeks is fine) |
 | Venue | Matches the source (or the scraper's default venue when the source names none) |
 | Image | Event has its own image (`has_own_image`); if not, check whether the source has one (`source_og_image` / the page) — missing only when the source has one is a problem |

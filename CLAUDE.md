@@ -33,7 +33,7 @@ config/          # Django project settings (incl. SECURE_CSP), URLs, rate limiti
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
 events/          # Dance events app (CRUD, feeds, image processing, geocoding, sharing)
 analytics/       # Cookieless server-side analytics (daily counters, staff /stats/ dashboard)
-scrapers/        # Per-source scrapers (dansehallerne, dansehallerne_workshops, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9)
+scrapers/        # Per-source scrapers (afukscene, blaagaardteater, dansehallerne, dansehallerne_workshops, dansekapellet, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9); teaterbilletter.py is shared by the venues ticketed through teaterbilletter.dk
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX, PWA icons, JS shims)
 scripts/         # Standalone scripts (backup_db.py for the backup cron; download_translation_model.py, run at Docker build time)
@@ -106,7 +106,11 @@ scrapers/
   base.py                      # Shared utilities (get_soup, canonical_url, scrape_url_list, etc.)
   dansehallerne.py             # Dansehallerne scraper
   dansehallerne_workshops.py   # Dansehallerne workshops scraper
-  faar302.py                   # Teater FÅR302 scraper (front-page show cards + teaterbilletter.dk JSON API for performance times)
+  teaterbilletter.py           # Shared scraper for venues ticketed through teaterbilletter.dk (Billetten): public JSON API (/api/events?venueCodes=…) for shows, times, content, images (tereba.dk); per-venue config (TeaterbilletterVenue: venue codes, genre/category filter, wheelchair) + optional `enrich` hook (listing_enricher links events to the venue's own show pages via the ticket widget's data-event_no; an unreadable programme page, e.g. faar302.dk's intermittent bot challenge, is retried once and then fails the venue's scrape rather than switching its links). API times are UTC
+  afukscene.py                 # AFUK Scene (teaterbilletter.dk; dance/performance/new-circus only; links to teaterbilletter.dk)
+  blaagaardteater.py           # Blaagaard Teater (teaterbilletter.dk; dance/performance/new-circus only; links to blaagaardteater.dk show pages)
+  dansekapellet.py             # Dansekapellet (teaterbilletter.dk; every genre; links to teaterbilletter.dk)
+  faar302.py                   # Teater FÅR302 (teaterbilletter.dk; every genre, incl. its site-specific venue; links to faar302.dk show pages, running time from the page when the API has none)
   hautscene.py                 # HAUT Scene scraper
   kbhdanser.py                 # KBH Danser scraper
   sort_hvid.py                 # Sort/Hvid scraper
@@ -179,7 +183,7 @@ uv run python manage.py import_events hautscene                 # default JSON: 
 uv run python manage.py import_events hautscene events.json --dry-run
 
 # Unified scraper (runs all sources; used by Railway scrape-cron service)
-uv run python manage.py run_scrapers              # run all 10 importers
+uv run python manage.py run_scrapers              # run all 13 importers
 uv run python manage.py run_scrapers --dry-run    # preview only (no DB writes)
 uv run python manage.py run_scrapers --skip-images  # skip image downloads
 uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # subset
@@ -488,7 +492,7 @@ This repo ships `.claude/hooks/` + `.claude/settings.json` for remote/web sessio
 - **`session-start.sh`** (`SessionStart`): runs `uv sync --dev`, `npm install`, and `pre-commit install --install-hooks` at session start, so dependencies are ready without spending turns on setup.
 - **`pre-pr-check.sh`** (`PreToolUse`, matches `create_pull_request`): runs `pre-commit run --all-files` — ruff format, ruff check, ty check, and the full `pytest -n 8` suite (see `.pre-commit-config.yaml`) — and blocks PR creation with the failure output until it's clean.
 
-Project skills live in `.claude/skills/`: `run-pleskal` (run + smoke-test the app locally) and `scraper-health` (samples 1–3 scraped events per active scraper from the live site, compares them with the venues' pages, and reports a Healthy / Needs work / Unhealthy table; meant to run as a periodic routine; evidence gathered by `collect.py`, which reads public pages only and never the feeds, so FeedHit counts stay clean).
+Project skills live in `.claude/skills/`: `run-pleskal` (run + smoke-test the app locally) and `scraper-health` (samples 1–3 scraped events per active scraper from the live site, compares them with the venues' pages, checks start times for time-zone shifts (against the teaterbilletter.dk API for the venues scraped from it, and against the clock times on each source page), and reports a Healthy / Needs work / Unhealthy table; meant to run as a periodic routine; evidence gathered by `collect.py`, which reads public pages only and never the feeds, so FeedHit counts stay clean).
 
 Because of this hook, **do not manually run `ruff format`, `ruff check`, `ty check`, or `pytest` before opening a PR** — the hook runs them automatically and will block the PR creation tool call if anything fails, feeding the failure output back for you to fix and retry. Manually re-running these first just duplicates the check. Only run them ad hoc if you want a mid-task sanity check on a single file, or if the hook itself surfaces a failure to diagnose.
 

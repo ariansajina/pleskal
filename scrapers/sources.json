@@ -52,5 +52,23 @@
     "display_name": "FÅR302",
     "email": "system.faar302@pleskal.internal",
     "website": "https://www.faar302.dk"
+  },
+  {
+    "external_source": "blaagaardteater",
+    "display_name": "Blaagaard Teater",
+    "email": "system.blaagaardteater@pleskal.internal",
+    "website": "https://blaagaardteater.dk"
+  },
+  {
+    "external_source": "afukscene",
+    "display_name": "AFUK Scene",
+    "email": "system.afukscene@pleskal.internal",
+    "website": "https://www.afuk.dk/scene/"
+  },
+  {
+    "external_source": "dansekapellet",
+    "display_name": "Dansekapellet",
+    "email": "system.dansekapellet@pleskal.internal",
+    "website": "https://www.dansekapellet.dk"
   }
 ]
