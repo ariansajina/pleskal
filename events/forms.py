@@ -311,14 +311,12 @@ class EventForm(forms.ModelForm):
             Freq.MONTHLY: UNIT_MONTH,
         }[pattern.freq]
         self.initial["repeat_weekdays"] = list(pattern.weekdays)
-        if pattern.freq == Freq.MONTHLY:
-            self.initial["repeat_monthly"] = (
-                MONTHLY_DAY
-                if pattern.month_day is not None
-                else MONTHLY_LAST
-                if pattern.nth == -1
-                else MONTHLY_NTH
-            )
+        if pattern.month_day is not None:
+            self.initial["repeat_monthly"] = MONTHLY_DAY
+        elif pattern.nth == -1:
+            self.initial["repeat_monthly"] = MONTHLY_LAST
+        elif pattern.nth is not None:
+            self.initial["repeat_monthly"] = MONTHLY_NTH
         last = Event.objects.filter(series=series).latest("start_datetime")
         self.initial["repeat_ends"] = ENDS_ON
         self.initial["repeat_until"] = timezone.localtime(last.start_datetime).date()

@@ -538,7 +538,8 @@ class TestEditSeries:
         events = _occurrences(series[0].series_id)
         assert not events[2].image
         names = {e.image.name for e in events[3:]}
-        assert len(names) == 1 and names != {""}
+        assert len(names) == 1
+        assert names != {""}
 
     def test_publish_state_copied_only_when_changed(self, client, series):
         self._post(client, series[4], submit_action="draft", scope="this")

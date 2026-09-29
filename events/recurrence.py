@@ -86,7 +86,9 @@ class Pattern:
     @classmethod
     def from_rrule(cls, value: str) -> Pattern:
         """Parse an RRULE written by `to_rrule` (only that subset)."""
-        fields = dict(part.split("=", 1) for part in value.split(";"))
+        fields = {
+            key: val for key, val in (part.split("=", 1) for part in value.split(";"))
+        }
         freq = Freq(fields["FREQ"])
         interval = int(fields.get("INTERVAL", 1))
         if freq == Freq.WEEKLY:
@@ -204,6 +206,17 @@ class Ends:
     until: datetime.date | None = None
     count: int | None = None
 
+    def reached(self, counted: int) -> bool:
+        """Whether *counted* dates use up `count`."""
+        return self.count is not None and counted >= self.count
+
+    def bound(self, open_bound: datetime.datetime) -> datetime.datetime:
+        """The last moment a date may start: the end of `until`, or
+        *open_bound* for a rule without one (or with a later one)."""
+        if self.until is None:
+            return open_bound
+        return min(open_bound, datetime.datetime.combine(self.until, datetime.time.max))
+
 
 class CutReason(StrEnum):
     """Why an expansion stopped before the rule's own end."""
@@ -243,18 +256,14 @@ def expand(
     # A finite bound for rules that never end. Going a year past the horizon
     # tells a rule the horizon cut off from one that ends just after it.
     open_bound = horizon_end + EVENT_HORIZON
-    until_bound = open_bound
-    if ends.until is not None:
-        until_bound = min(
-            open_bound, datetime.datetime.combine(ends.until, datetime.time.max)
-        )
+    until_bound = ends.bound(open_bound)
 
     starts: list[datetime.datetime] = []
     counted = 0
     for occurrence in pattern._rrule(anchor, until_bound):
         if occurrence < start_from:
             continue
-        if ends.count is not None and counted >= ends.count:
+        if ends.reached(counted):
             return Expansion(starts)
         if occurrence > horizon_end:
             return Expansion(starts, CutReason.HORIZON)
@@ -264,7 +273,7 @@ def expand(
         if len(starts) >= limit:
             return Expansion(starts, limit_reason)
         starts.append(occurrence)
-    if until_bound == open_bound and (ends.count is None or counted < ends.count):
+    if until_bound == open_bound and not ends.reached(counted):
         # Only a rule with no occurrence in the year after the horizon gets
         # here (e.g. every 99 months); it still runs past the horizon.
         return Expansion(starts, CutReason.HORIZON)

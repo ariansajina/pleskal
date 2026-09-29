@@ -631,13 +631,11 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
 
         # Planned before the image is processed, so a rejected series edit
         # doesn't leave an uploaded file behind.
-        series_edit = None
-        if form.series is not None or form.cleaned_data.get("pattern"):
-            try:
-                series_edit = _plan_series_edit(form, event, self.request.user)
-            except ValidationError as exc:
-                form.add_error(None, exc)
-                return self.form_invalid(form)
+        try:
+            series_edit = _plan_series_edit(form, event, self.request.user)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
 
         image_file = form.cleaned_data.get("image")
 
@@ -646,18 +644,22 @@ class EventUpdateView(RateLimitMixin, LoginRequiredMixin, EventOwnerMixin, Updat
 
         if series_edit is None:
             event.save()
-        else:
-            try:
-                target = series_edit.apply()
-            except ValidationError as exc:
-                form.add_error(None, exc)
-                return self.form_invalid(form)
-            if series_edit.notice:
-                messages.warning(self.request, series_edit.notice)
-            if target is None:
-                messages.success(self.request, "Events updated.")
-                return redirect("my_events")
-            event = target
+            return self._saved(event)
+        try:
+            target = series_edit.apply()
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return self.form_invalid(form)
+        if series_edit.notice:
+            messages.warning(self.request, series_edit.notice)
+        return self._saved(target)
+
+    def _saved(self, event):
+        """Redirect after saving; *event* is None when the edit removed it
+        and nothing remains in its scope."""
+        if event is None:
+            messages.success(self.request, "Events updated.")
+            return redirect("my_events")
         if event.is_draft:
             messages.success(self.request, "Event saved as draft.")
         else:

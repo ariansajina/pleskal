@@ -327,33 +327,18 @@ class SeriesEdit:
                     event.save()
                 # The edited event's values (incl. a new image) are the
                 # template for the others even when the edit removes it.
-                template = event
                 for other in self.others:
-                    for name in self.content_fields:
-                        value = getattr(template, name)
-                        if name == "image":
-                            value = value.name or None
-                        setattr(other, name, value)
-                    if other.pk in self.moves:
-                        _set_span(other, self.moves[other.pk])
-                    if self.copy_draft:
-                        other.is_draft = template.is_draft
-                    other.series = series  # ty: ignore[invalid-assignment]
-                    other.save()
-                created = [_clone(template, span, series) for span in self.creates]
+                    self._update_other(other, series)
+                created = [_clone(event, span, series) for span in self.creates]
                 for occurrence in created:
                     occurrence.save()
                 if self.event_span is None:
                     # Last, so its files are still referenced by the others
                     # when the delete signal checks.
                     event.delete()
-                if (
-                    old_series_id
-                    and not Event.objects.filter(series_id=old_series_id).exists()
-                ):
-                    # The occurrences left it (e.g. "does not repeat"), which
-                    # the delete signal can't see.
-                    EventSeries.objects.filter(pk=old_series_id).delete()
+                # The occurrences may have left it (e.g. "does not repeat"),
+                # which the delete signal can't see.
+                _delete_series_if_empty(old_series_id)
         except IntegrityError as exc:
             # check() already rules out clashes in the final state; this is
             # a safety net for a concurrent edit or an intermediate clash.
@@ -367,6 +352,25 @@ class SeriesEdit:
             [*self.others, *created], key=lambda o: (o.start_datetime, str(o.pk))
         )
         return remaining[0] if remaining else None
+
+    def _update_other(self, other: Event, series: EventSeries | None) -> None:
+        """Apply the edit to another occurrence in scope and save it."""
+        for name in self.content_fields:
+            value = getattr(self.event, name)
+            if name == "image":
+                value = value.name or None
+            setattr(other, name, value)
+        if other.pk in self.moves:
+            _set_span(other, self.moves[other.pk])
+        if self.copy_draft:
+            other.is_draft = self.event.is_draft
+        other.series = series  # ty: ignore[invalid-assignment]
+        other.save()
+
+
+def _delete_series_if_empty(series_id) -> None:
+    if series_id and not Event.objects.filter(series_id=series_id).exists():
+        EventSeries.objects.filter(pk=series_id).delete()
 
 
 def _scope_others(original: Event, scope: Scope) -> list[Event]:
@@ -457,19 +461,8 @@ def _plan_regeneration(edit, original, scope, pattern, ends, user, now):
     """New rule or date: replace the upcoming occurrences in scope with the
     rule's dates, reusing existing rows (and their URLs) where possible."""
     event, series = edit.event, edit.series
-    start_local = local_naive(event.start_datetime)
     duration = _duration(event.start_datetime, event.end_datetime)
-    if scope == Scope.ALL and series is not None:
-        # Moving the date of one occurrence moves the whole series by as
-        # much, from its first upcoming date (as in Google Calendar).
-        upcoming = [o for o in [original, *edit.others] if o.start_datetime >= now]
-        first = min(upcoming, key=lambda o: o.start_datetime, default=original)
-        shift = start_local.date() - local_naive(original.start_datetime).date()
-        anchor = datetime.datetime.combine(
-            local_naive(first.start_datetime).date() + shift, start_local.time()
-        )
-    else:
-        anchor = start_local
+    anchor = _regeneration_anchor(edit, original, scope, now)
 
     event_upcoming = original.start_datetime >= now
     pool = [o for o in edit.others if o.start_datetime >= now]
@@ -493,24 +486,7 @@ def _plan_regeneration(edit, original, scope, pattern, ends, user, now):
         raise ValidationError(NO_DATES_ERROR)
     edit.expansion = expansion
     spans = [_span(s, duration) for s in expansion.starts]
-
-    # Rows already at one of the new start times keep it; the rest are paired
-    # with the remaining dates in order. Rows never move onto a start another
-    # row still holds, so the unique constraint holds at every step.
-    by_start = {span[0]: span for span in spans}
-    assigned: dict = {}
-    unmatched_rows = []
-    for row in pool:
-        span = by_start.pop(row.start_datetime, None)
-        if span is None:
-            unmatched_rows.append(row)
-        else:
-            assigned[row.pk] = span
-    free_spans = sorted(by_start.values(), key=lambda s: s[0])
-    for row, span in zip(unmatched_rows, free_spans, strict=False):
-        assigned[row.pk] = span
-    edit.creates = free_spans[len(unmatched_rows) :]
-    removed = {row.pk for row in unmatched_rows[len(free_spans) :]}
+    assigned, edit.creates, removed = _assign_spans(pool, spans)
 
     if event_upcoming:
         edit.event_span = assigned.get(original.pk)  # None: removed
@@ -536,6 +512,46 @@ def _plan_regeneration(edit, original, scope, pattern, ends, user, now):
     else:
         series.rrule, series.dtstart = rrule, dtstart
         edit.update_series = True
+
+
+def _regeneration_anchor(edit, original, scope, now) -> datetime.datetime:
+    """DTSTART of a regenerated series: the edited date and time, or for
+    scope "all", the series' first upcoming date moved by as many days as the
+    edited occurrence was (as in Google Calendar)."""
+    start_local = local_naive(edit.event.start_datetime)
+    if scope != Scope.ALL or edit.series is None:
+        return start_local
+    upcoming = [o for o in [original, *edit.others] if o.start_datetime >= now]
+    first = min(upcoming, key=lambda o: o.start_datetime, default=original)
+    shift = start_local.date() - local_naive(original.start_datetime).date()
+    return datetime.datetime.combine(
+        local_naive(first.start_datetime).date() + shift, start_local.time()
+    )
+
+
+def _assign_spans(pool: list[Event], spans: list[Span]):
+    """Pair existing rows with new dates: returns (pk -> span, spans left
+    to create, pks left without a date).
+
+    Rows already at one of the new start times keep it; the rest are paired
+    with the remaining dates in order. Rows never move onto a start another
+    row still holds, so the unique constraint holds at every step.
+    """
+    by_start = {span[0]: span for span in spans}
+    assigned: dict = {}
+    unmatched_rows = []
+    for row in pool:
+        span = by_start.pop(row.start_datetime, None)
+        if span is None:
+            unmatched_rows.append(row)
+        else:
+            assigned[row.pk] = span
+    free_spans = sorted(by_start.values(), key=lambda s: s[0])
+    for row, span in zip(unmatched_rows, free_spans, strict=False):
+        assigned[row.pk] = span
+    creates = free_spans[len(unmatched_rows) :]
+    removed = {row.pk for row in unmatched_rows[len(free_spans) :]}
+    return assigned, creates, removed
 
 
 def _plan_time_and_end(edit, original, scope, ends, ends_changed, user, now, now_local):
