@@ -184,16 +184,21 @@ class EventForm(forms.ModelForm):
         initial=ENDS_NEVER,
         choices=[
             (ENDS_NEVER, "Never (as far as allowed)"),
-            (ENDS_ON, "On date"),
+            (ENDS_ON, "Until"),
             (ENDS_AFTER, "After a number of dates"),
         ],
         widget=forms.RadioSelect,
     )
     repeat_until = forms.DateField(
-        label="End date",
+        label="Repeat until",
         required=False,
         widget=forms.DateInput(
-            attrs={"type": "date", "class": "form-input"}, format=DATE_FORMAT
+            attrs={
+                "type": "date",
+                "class": "form-input",
+                "aria-label": "Repeat until",
+            },
+            format=DATE_FORMAT,
         ),
         input_formats=[DATE_FORMAT],
     )
@@ -202,7 +207,13 @@ class EventForm(forms.ModelForm):
         required=False,
         min_value=1,
         max_value=MAX_REPEAT_COUNT,
-        widget=forms.NumberInput(attrs={"class": "form-input", "style": "width:6rem"}),
+        widget=forms.NumberInput(
+            attrs={
+                "class": "form-input",
+                "style": "width:6rem",
+                "aria-label": "Number of dates",
+            }
+        ),
     )
     # Editing an occurrence of a repeating event: which occurrences to change.
     scope = forms.ChoiceField(
@@ -441,7 +452,7 @@ class EventForm(forms.ModelForm):
                     datetime.datetime.combine(end_date, end_time)
                 )
                 if end_dt <= start_dt:
-                    self.add_error("end_time", "End time must be after start time.")
+                    self.add_error("end_time", self._end_time_error(cleaned))
                 else:
                     cleaned["end_datetime"] = end_dt
 
@@ -464,6 +475,16 @@ class EventForm(forms.ModelForm):
                     )
 
         return cleaned
+
+    @staticmethod
+    def _end_time_error(cleaned) -> str:
+        if cleaned.get("end_date"):
+            return "End time must be after start time."
+        # Most likely an event running past midnight without its end date.
+        return (
+            "End time must be after start time. If the event ends on a later "
+            "day, tick “Ends on a later day” and choose the end date."
+        )
 
     def _clean_recurrence(self, cleaned, day, start_dt) -> None:
         """Set cleaned "pattern" and "ends"; on creation also "series_plan"

@@ -113,3 +113,28 @@ document.addEventListener("DOMContentLoaded", function () {
   unitSelect.addEventListener("change", update);
   scopeInputs.forEach(function (input) { input.addEventListener("change", update); });
 });
+
+// "Ends on a later day": the end date field is only needed for events that
+// run past midnight or over several days, so it stays hidden until ticked.
+// Without JS the checkbox stays hidden and the field is always shown.
+document.addEventListener("DOMContentLoaded", function () {
+  var toggle = document.querySelector("[data-multiday-toggle]");
+  var field = document.querySelector("[data-multiday-field]");
+  var endDate = document.getElementById("id_end_date");
+  if (!toggle || !field || !endDate) return;
+  var checkbox = toggle.querySelector("input");
+
+  toggle.hidden = false;
+  // Open when editing a multi-day event or when the field has an error.
+  checkbox.checked = endDate.value !== "" || field.querySelector(".form-field-error") !== null;
+  field.hidden = !checkbox.checked;
+
+  checkbox.addEventListener("change", function () {
+    field.hidden = !checkbox.checked;
+    if (!checkbox.checked && endDate.value !== "") {
+      // An unticked box means the event ends on its start date.
+      endDate.value = "";
+      endDate.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+});

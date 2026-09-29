@@ -809,3 +809,11 @@ class TestCustomRules:
         assert form.initial["repeat_unit"] == "month"
         assert form.initial["repeat_monthly"] == "last"
         assert form.initial["repeat"] in ("monthly_last", "custom")
+
+
+@pytest.mark.django_db
+def test_preview_does_not_repeat_date_errors(client, owner):
+    data = _create_data(_future_weekday(), start_time="22:00", end_time="03:00")
+    resp = client.post(reverse("event_recurrence_preview"), data)
+    assert b"End time must be after start time" not in resp.content
+    assert b"Fix the date and time above" in resp.content

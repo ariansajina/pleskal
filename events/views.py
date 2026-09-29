@@ -835,10 +835,18 @@ class EventRecurrencePreviewView(RateLimitMixin, LoginRequiredMixin, View):
             user=request.user,
         )
         form.is_valid()
-        relevant = ("date", "start_time", "end_time", "end_date", *RECURRENCE_FIELDS)
-        errors = [e for name in relevant for e in form.errors.get(name, [])]
-        context = {"errors": errors, "editing": instance is not None}
-        if not errors and form.repeat_applies:
+        errors = [e for name in RECURRENCE_FIELDS for e in form.errors.get(name, [])]
+        # Date/time errors are shown at their own fields; don't repeat them.
+        date_fields = ("date", "start_time", "end_time", "end_date")
+        blocked = any(name in form.errors for name in date_fields)
+        context = {
+            "errors": errors,
+            "blocked": blocked
+            and form.repeat_applies
+            and bool(form.data.get("repeat")),
+            "editing": instance is not None,
+        }
+        if not errors and not blocked and form.repeat_applies:
             try:
                 context.update(self._dates(form, instance, request.user))
             except ValidationError as exc:

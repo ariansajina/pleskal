@@ -152,3 +152,29 @@ class TestEventFormMultiDay:
         )
         form = EventForm(instance=event, creation=False)
         assert form.initial["end_date"] == end_dt.date()
+
+
+@pytest.mark.django_db
+class TestEndTimeError:
+    def _form(self, **overrides):
+        day = timezone.localdate() + datetime.timedelta(days=7)
+        data = make_form_data(
+            "Night Party", day, datetime.time(22, 0), end_time="03:00"
+        )
+        data.update(overrides)
+        return EventForm(data=data, creation=True)
+
+    def test_end_before_start_without_end_date_points_to_checkbox(self):
+        form = self._form()
+        assert not form.is_valid()
+        assert "Ends on a later day" in form.errors["end_time"][0]
+
+    def test_end_on_the_next_day_is_valid(self):
+        day = timezone.localdate() + datetime.timedelta(days=8)
+        form = self._form(end_date=day.strftime("%Y-%m-%d"))
+        assert form.is_valid(), form.errors
+
+    def test_end_before_start_with_end_date_keeps_plain_message(self):
+        day = timezone.localdate() + datetime.timedelta(days=7)
+        form = self._form(end_date=day.strftime("%Y-%m-%d"))
+        assert form.errors["end_time"] == ["End time must be after start time."]

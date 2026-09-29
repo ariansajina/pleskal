@@ -87,7 +87,13 @@
                 </div>
             </div>
 
-            <div>
+            {# Shown by event-form.js, which then hides the end date until it's ticked #}
+            <label class="form-check" data-multiday-toggle hidden>
+                <input type="checkbox">
+                <span class="text-base">Ends on a later day</span>
+            </label>
+
+            <div data-multiday-field>
                 <label for="{{ form.end_date.id_for_label }}" class="form-label">
                     End date <span class="form-help" style="text-transform:none;letter-spacing:0;">({{ form.end_date.help_text }})</span>
                 </label>

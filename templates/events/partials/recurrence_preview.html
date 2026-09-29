@@ -1,6 +1,8 @@
 {# Dates a repeat rule produces; returned by EventRecurrencePreviewView. #}
 {% if errors %}
     {% for error in errors %}<p class="form-field-error">{{ error }}</p>{% endfor %}
+{% elif blocked %}
+    <p class="form-help">Fix the date and time above to see the dates.</p>
 {% elif dates %}
     <div class="alert alert--info" style="margin-bottom:0;">
         <p>
