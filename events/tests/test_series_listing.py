@@ -490,8 +490,9 @@ class TestLimitsOnlyForPrivateUsers:
         )
 
     def test_model_rejects_far_dates_for_private_users(self):
+        event = self._event(UserFactory.create())
         with pytest.raises(ValidationError, match="1 year"):
-            self._event(UserFactory.create()).full_clean()
+            event.full_clean()
 
     def test_model_allows_far_dates_for_system_accounts(self):
         self._event(UserFactory.create(is_system_account=True)).full_clean()

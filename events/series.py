@@ -826,63 +826,74 @@ class SeriesCard:
         return max(0, self.total - self.count) if self.total is not None else 0
 
 
-def attach_series_cards(
-    events, dated_qs, *, range_active=False, single_day=False, include_drafts=False
-) -> None:
-    """Set `series_card` on each event of a listing page that stands for a
-    series with other dates (None otherwise).
-
-    *dated_qs* is the listing's queryset before `first_per_series`: the
-    dates it holds are the ones a card counts and names. With
-    *range_active*, a card also says how many listed dates fall outside
-    the range (drafts count only with *include_drafts*).
-    """
-    from django.db.models import Count
-
-    from .models import hidden_events_q
-
-    events = list(events)
-    series_ids = {e.series_id for e in events if e.series_id}
-    for event in events:
-        event.series_card = None
-    if not series_ids:
-        return
-    dated: dict = defaultdict(list)
+def _series_starts(dated_qs, series_ids) -> dict:
+    """Start times in *dated_qs* of each series in *series_ids*, in order."""
+    starts: dict = defaultdict(list)
     for occurrence in (
         dated_qs.filter(series_id__in=series_ids)
         .select_related(None)
         .order_by("start_datetime", "id")
         .only("start_datetime", "series_id")
     ):
-        dated[occurrence.series_id].append(occurrence.start_datetime)
-    totals = {}
-    if range_active:
-        listed = Event.objects.filter(series_id__in=series_ids).exclude(
-            hidden_events_q()
-        )
-        if not include_drafts:
-            listed = listed.filter(is_draft=False)
-        totals = dict(
-            listed.values_list("series_id").annotate(n=Count("id")).order_by()
-        )
+        starts[occurrence.series_id].append(occurrence.start_datetime)
+    return starts
+
+
+def _listed_totals(series_ids) -> dict:
+    """How many dates of each series the listings show at all (published,
+    not hidden), whatever the date filter."""
+    from django.db.models import Count
+
+    from .models import hidden_events_q
+
+    listed = Event.objects.filter(series_id__in=series_ids, is_draft=False).exclude(
+        hidden_events_q()
+    )
+    return dict(listed.values_list("series_id").annotate(n=Count("id")).order_by())
+
+
+def _series_card(event, starts, total, single_day) -> SeriesCard | None:
+    """The card info for *event* standing for its series, given the series'
+    listed *starts* (None when it has no other dates to show)."""
+    if len(starts) < 2 and not (total and total > 1):
+        return None
+    days: dict[datetime.date, int] = {}
+    for start in starts:
+        day = timezone.localtime(start).date()
+        days[day] = days.get(day, 0) + 1
+    own_day = event.local_start_date
+    others = [{"date": d, "count": n} for d, n in days.items() if d != own_day]
+    return SeriesCard(
+        count=len(starts),
+        day_count=len(days),
+        days=others[:CARD_DAYS],
+        more_days=max(0, len(others) - CARD_DAYS),
+        last=max(days) if days else own_day,
+        times_on_day=days.get(own_day, 1),
+        total=total,
+        showtimes=[timezone.localtime(s) for s in starts] if single_day else [],
+    )
+
+
+def attach_series_cards(events, dated_qs, *, range_active=False, single_day=False):
+    """Set `series_card` on each event of a listing page that stands for a
+    series with other dates (None otherwise).
+
+    *dated_qs* is the listing's queryset before `first_per_series`: the
+    dates it holds are the ones a card counts and names. With
+    *range_active*, a card also says how many published dates fall outside
+    the range.
+    """
+    events = list(events)
+    series_ids = {e.series_id for e in events if e.series_id}
+    starts = _series_starts(dated_qs, series_ids) if series_ids else {}
+    totals = _listed_totals(series_ids) if series_ids and range_active else {}
     for event in events:
-        starts = dated.get(event.series_id, [])
-        total = totals.get(event.series_id) if range_active else None
-        if len(starts) < 2 and not (total and total > 1):
-            continue
-        days: dict[datetime.date, int] = {}
-        for start in starts:
-            day = timezone.localtime(start).date()
-            days[day] = days.get(day, 0) + 1
-        own_day = event.local_start_date
-        others = [{"date": d, "count": n} for d, n in days.items() if d != own_day]
-        event.series_card = SeriesCard(
-            count=len(starts),
-            day_count=len(days),
-            days=others[:CARD_DAYS],
-            more_days=max(0, len(others) - CARD_DAYS),
-            last=max(days) if days else own_day,
-            times_on_day=days.get(own_day, 1),
-            total=total,
-            showtimes=[timezone.localtime(s) for s in starts] if single_day else [],
-        )
+        event.series_card = None
+        if event.series_id:
+            event.series_card = _series_card(
+                event,
+                starts.get(event.series_id, []),
+                totals.get(event.series_id) if range_active else None,
+                single_day,
+            )
