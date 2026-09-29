@@ -31,6 +31,7 @@ dependencies = [
     "sacremoses>=0.2.0",
     "subword-nmt>=0.3.8",
     "lingua-language-detector>=2.2.0",
+    "python-dateutil>=2.9.0",
 ]
 
 [dependency-groups]

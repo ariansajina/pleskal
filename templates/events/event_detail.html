@@ -60,6 +60,13 @@ details[open] summary::after { content: ''; }
             {% endif %}
         </div>
 
+        {# Repeat summary #}
+        {% if series %}
+            <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
+                <span><span aria-hidden="true">↻</span> {{ series.summary }}, until {{ series.last|date:"j F Y" }}</span>
+            </div>
+        {% endif %}
+
         {# Venue #}
         <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
             <span class="event-meta--venue">{{ event.venue_name }}</span>
@@ -136,6 +143,25 @@ details[open] summary::after { content: ''; }
             </div>
         {% endif %}
 
+        {# Other dates of a repeating event #}
+        {% if series.other_dates %}
+            <hr class="rule">
+            <section style="margin-bottom:var(--space-6);">
+                <h2 class="form-label">Other dates</h2>
+                <ul class="series-dates">
+                    {% for occurrence in series.other_dates %}
+                        <li>
+                            <a href="{% url 'event_detail' occurrence.slug %}" class="link-accent">{{ occurrence.start_datetime|date:"l, j F Y · H:i" }}</a>
+                            {% if occurrence.is_draft %}<span class="badge badge--draft">Draft</span>{% endif %}
+                        </li>
+                    {% endfor %}
+                    {% if series.more_count %}
+                        <li class="text-sm text-muted">and {{ series.more_count }} more</li>
+                    {% endif %}
+                </ul>
+            </section>
+        {% endif %}
+
         {# Source link #}
         {% if event.source_url %}
             <hr class="rule">
@@ -156,16 +182,26 @@ details[open] summary::after { content: ''; }
         {% if user.is_authenticated %}
             {% if user == event.submitted_by %}
                 <hr class="rule">
-                <div class="btn-row">
+                <div class="btn-row" style="flex-wrap:wrap;">
                     <a href="{% url 'event_edit' event.slug %}" class="btn btn--ghost btn--sm">Edit</a>
                     <form method="post" action="{% url 'event_toggle_draft' event.slug %}" style="display:contents;">
                         {% csrf_token %}
+                        {% if series %}
+                            <select name="scope" class="form-select" style="width:auto;" aria-label="Which dates">
+                                <option value="this">This date</option>
+                                <option value="following">This and following dates</option>
+                                <option value="all">All dates</option>
+                            </select>
+                        {% endif %}
                         {% if event.is_draft %}
                             <button type="submit" class="btn btn--ghost btn--sm">Publish</button>
                         {% else %}
                             <button type="submit" class="btn btn--ghost btn--sm">Mark as Draft</button>
                         {% endif %}
                     </form>
+                    {% if series %}
+                        <a href="{% url 'event_edit' event.slug %}?scope=all#repeat-section" class="btn btn--ghost btn--sm">Extend series</a>
+                    {% endif %}
                     <a href="{% url 'event_duplicate' event.slug %}" class="btn btn--ghost btn--sm">Duplicate</a>
                     <a href="{% url 'event_delete' event.slug %}" class="btn btn--danger btn--sm">Delete</a>
                 </div>

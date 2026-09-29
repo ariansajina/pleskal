@@ -407,6 +407,7 @@
     .badge--free         { color: var(--c-free); background: var(--bg-free); border-color: var(--c-free); }
     .badge--wheelchair   { color: var(--c-wheelchair); background: var(--bg-wheelchair); border-color: var(--c-wheelchair); }
     .badge--draft        { color: var(--c-draft); background: var(--bg-draft); border-color: var(--border-draft); }
+    .badge--repeat       { color: var(--ink-muted); background: transparent; border-color: var(--border); }
 
     /* ─── FORM ELEMENTS ─────────────────────────────────── */
     .form-label {
@@ -428,6 +429,7 @@
     textarea.markdownx-editor { background: var(--field-bg); color: var(--ink); }
 
     .form-check { display: flex; align-items: center; gap: var(--space-3); cursor: pointer; }
+    .form-check[hidden] { display: none; }
     .form-check input[type="checkbox"] {
       appearance: none; width: 1rem; height: 1rem; border: 1.5px solid var(--border-strong);
       position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.15s;
@@ -441,6 +443,23 @@
     .form-field-error { font-size: var(--text-sm); color: var(--c-perf); margin-top: var(--space-1); }
     .form-help { font-size: var(--text-sm); color: var(--ink-muted); margin-top: var(--space-1); }
     .form-required { color: var(--c-perf); }
+
+    /* ─── REPEATING EVENTS (event form, detail page) ───── */
+    /* The repeat controls are shown/hidden by event-form.js; [hidden] must
+       win over the flex layout of .form-check and .repeat-row. */
+    .repeat-section[hidden], .repeat-section [hidden] { display: none !important; }
+    .repeat-fieldset { border: none; margin: 0; padding: 0; min-width: 0; }
+    .repeat-fieldset legend { padding: 0; }
+    .repeat-options { display: flex; flex-direction: column; gap: var(--space-2); }
+    .repeat-group {
+      display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-3);
+      padding-left: var(--space-3); border-left: 1.5px solid var(--border-light);
+    }
+    .repeat-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+    .repeat-row .form-input, .repeat-row .form-select { width: auto; }
+    .repeat-preview { font-size: var(--text-sm); margin-top: var(--space-3); }
+    .repeat-preview:empty { display: none; }
+    .series-dates { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 
     /* ─── BUTTONS ───────────────────────────────────────── */
     .btn {

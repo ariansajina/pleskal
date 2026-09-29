@@ -8,6 +8,7 @@ from .views import (
     EventDetailView,
     EventDuplicateView,
     EventListView,
+    EventRecurrencePreviewView,
     EventToggleDraftView,
     EventUpdateView,
     GuideView,
@@ -20,6 +21,11 @@ urlpatterns = [
     path("", EventListView.as_view(), name="event_list"),
     # Event submission
     path("events/submit/", EventCreateView.as_view(), name="event_create"),
+    path(
+        "events/submit/preview-dates/",
+        EventRecurrencePreviewView.as_view(),
+        name="event_recurrence_preview",
+    ),
     # Event detail
     path("events/<slug:slug>/", EventDetailView.as_view(), name="event_detail"),
     # Event management
