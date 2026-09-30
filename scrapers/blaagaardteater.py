@@ -1,9 +1,9 @@
 """Scraper for Blaagaard Teater (https://blaagaardteater.dk/), via teaterbilletter.dk.
 
-Shows, performance times and content come from the teaterbilletter.dk API (see
-``scrapers/teaterbilletter.py``).  Blaagaard is mostly a drama stage, so only
-dance, performance and new-circus shows and events are taken (the Dans/Events
-genres plus the matching categories).
+Shows, performance times, prices, images, descriptions and credits come from
+the teaterbilletter.dk API (see ``scrapers/teaterbilletter.py``).  Blaagaard is
+mostly a drama stage, so only dance, performance and new-circus shows and
+events are taken (the Dans/Events genres plus the matching categories).
 
 The programme page (``/program``) lists each show as a ``div.teaser`` card
 whose "Køb billet" button carries the ticketing ``data-event_no``; that links
@@ -37,7 +37,7 @@ def scrape() -> list[dict]:
     """Scrape Blaagaard Teater's programme and return a list of event dicts."""
     return teaterbilletter.scrape(
         VENUE,
-        enrich=teaterbilletter.listing_enricher(
+        venue_links=teaterbilletter.venue_page_links(
             PROGRAM_URL,
             card_selector=".teaser-grid .teaser",
             link_selector="h2 a[href]",

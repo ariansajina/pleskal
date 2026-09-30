@@ -144,7 +144,6 @@ _ALL_SOURCES = [
     ScraperSource(
         name="faar302",
         scrape=scrape_faar302,
-        scrape_kwargs={"delay": 0.5},
         external_source="faar302",
         default_venue_name="Teater FÅR302",
         allowed_image_domains=TEATERBILLETTER_IMAGE_DOMAINS,

@@ -3,12 +3,13 @@
 teaterbilletter.dk is the public front of Billetten, the ticketing system many
 Copenhagen stages use.  Its site is backed by a public JSON listing,
 ``/api/events?venueCodes=<code>[,<code>…]``, that carries everything an event
-record needs: title, teaser and description (plain text), images (served from
-tereba.dk), the venue's address, every scheduled performance, the running time
-and the ticket price range.  So a venue on the system is scraped from the API
-alone; a per-venue module only supplies a :class:`TeaterbilletterVenue` config
-and, optionally, an ``enrich`` hook that looks the shows up on the venue's own
-site (to link each event to the venue's page rather than to teaterbilletter.dk).
+record needs: title, teaser and description (plain text), credits, images
+(served from tereba.dk), the venue's address, every scheduled performance, the
+running time and the ticket price range.  So a venue on the system is scraped
+from the API alone; a per-venue module only supplies a
+:class:`TeaterbilletterVenue` config and, optionally, a ``venue_links`` hook
+that looks the shows up on the venue's own programme page, so events link to
+the venue's show pages rather than to teaterbilletter.dk.
 
 Performance times in the API are **UTC** without an offset — a 20:00 show in
 Copenhagen reads ``18:00:00`` in summer and ``19:00:00`` in winter — so they are
@@ -21,7 +22,7 @@ Adding a venue:
 2. Add ``scrapers/<venue>.py`` with a ``VENUE`` config and a ``scrape()`` that
    calls :func:`scrape` (see ``afukscene.py``).  If the venue's own programme
    page shows Billetten's "Køb billet" buttons (``data-event_no``), pass
-   :func:`listing_enricher` so events link to the venue's pages (see
+   :func:`venue_page_links` so events link to the venue's show pages (see
    ``blaagaardteater.py``), and give the module a ``PROGRAM_URL`` for the
    scraper-health skill.
 3. Register it in ``scrapers/registry.py`` (``TEATERBILLETTER_IMAGE_DOMAINS``)
@@ -96,20 +97,11 @@ class TeaterbilletterVenue:
     category: str = "performance"
 
 
-@dataclass(frozen=True)
-class ShowOverrides:
-    """Per-show values an ``enrich`` hook found on the venue's own site."""
-
-    source_url: str | None = None
-    # Running time, used when the API leaves ``durationInMinutes`` at 0.
-    duration: datetime.timedelta | None = None
-
-
-# An enrich hook gets the session and the (filtered) API events and returns
-# overrides keyed by str(eventNo). A show it finds no override for keeps its
+# A venue_links hook gets the session and the (filtered) API events and returns
+# the venue's show page per str(eventNo). A show it has no page for keeps its
 # teaterbilletter.dk link; if it can't read the venue's site at all, it should
-# raise rather than return nothing (see listing_enricher).
-EnrichHook = Callable[[requests.Session, list[dict]], dict[str, ShowOverrides]]
+# raise rather than return nothing (see venue_page_links).
+LinksHook = Callable[[requests.Session, list[dict]], dict[str, str]]
 
 
 # ── API ───────────────────────────────────────────────────────────────────────
@@ -211,17 +203,49 @@ def _paragraphs(text: str) -> list[str]:
     ]
 
 
+# Credits list the crew before the cast, like the venues' own pages.
+_CREDIT_ORDER = {"Production": 0, "Cast": 1}
+
+
+def credits(event: dict) -> str:
+    """Return the API's credits as markdown lines, e.g. "**Koreograf** Name".
+
+    One line per role (names in the API's order, crew before cast), then the
+    producing company when it isn't the venue's own organiser.
+    """
+    roles: dict[str, list[str]] = {}
+    accreditations = sorted(
+        (a for a in event.get("accreditations") or [] if a),
+        key=lambda a: _CREDIT_ORDER.get(a.get("positionTypeName"), 2),
+    )
+    for credit in accreditations:
+        role = _WHITESPACE_RE.sub(" ", str(credit.get("positionName") or "")).strip()
+        name = _WHITESPACE_RE.sub(
+            " ", f"{credit.get('firstName') or ''} {credit.get('lastName') or ''}"
+        ).strip()
+        if role and name and name not in roles.setdefault(role, []):
+            roles[role].append(name)
+    lines = [f"**{role}** {', '.join(names)}" for role, names in roles.items() if names]
+    producer = event.get("producer") or {}
+    organizer = event.get("organizer") or {}
+    if producer.get("name") and producer.get("code") != organizer.get("code"):
+        lines.append(f"**Produktion** {producer['name'].strip()}")
+    return "  \n".join(lines)
+
+
 def description(event: dict) -> str:
-    """Return the teaser and description as markdown paragraphs.
+    """Return the teaser, description and credits as markdown paragraphs.
 
     The API separates paragraphs with single or double newlines, so every line
     becomes a paragraph.  Teaser paragraphs already in the description (venues
-    often reuse the description's opening as teaser) are left out.
+    often reuse the description's opening as teaser) are left out.  The credits
+    (see :func:`credits`) end it as one paragraph of lines.
     """
     body = _paragraphs(event.get("description") or "")
     body_text = " ".join(body)
     lead = [p for p in _paragraphs(event.get("teaser") or "") if p not in body_text]
-    return "\n\n".join(lead + body)
+    credit_lines = credits(event)
+    return "\n\n".join(lead + body + ([credit_lines] if credit_lines else []))
 
 
 def image_url(event: dict) -> str:
@@ -264,7 +288,7 @@ def venue_name(event: dict, venue: TeaterbilletterVenue) -> str:
     return venue.venue_names.get(code) or str(api_venue.get("name") or "").strip()
 
 
-# ── Venue-site enrichment ─────────────────────────────────────────────────────
+# ── Links to the venue's own show pages ───────────────────────────────────────────────
 
 
 def ticket_links(
@@ -293,32 +317,32 @@ class ListingUnavailable(Exception):
     """A venue's programme page couldn't be read (error or bot challenge)."""
 
 
-def listing_enricher(
+def venue_page_links(
     listing_url: str,
     card_selector: str,
     link_selector: str,
-    duration_from_page: Callable[[BeautifulSoup], datetime.timedelta | None]
-    | None = None,
-    delay: float = 0.5,
     retry_delay: float = 10.0,
-) -> EnrichHook:
-    """Return an enrich hook linking events to their pages on the venue's site.
+) -> LinksHook:
+    """Return a hook linking events to their pages on the venue's own site.
 
-    Reads the programme at *listing_url* (see :func:`ticket_links`).  With
-    *duration_from_page*, the show page of an event whose API running time is
-    0 is fetched and parsed for one (best-effort).
+    Reads the programme at *listing_url* (see :func:`ticket_links`); only this
+    one page is fetched.  The content itself (description and credits) comes
+    from the API, which has as much as the venues' show pages and isn't
+    behind the bot challenge faar302.dk serves to some requests.
 
     If the programme can't be read — an HTTP error, or a page without any
-    *card_selector* card, which is what a bot challenge looks like (faar302.dk
-    serves one to some requests, with status 200) — it is retried once and then
-    :class:`ListingUnavailable` is raised, failing the venue's scrape.  Falling
-    back to teaterbilletter.dk links instead would switch every event's
-    ``source_url`` for one run and back on the next, and scraped series are
-    keyed on ``source_url``, so each switch would move the upcoming dates into
-    another series.  A failed scrape leaves the imported events as they are.
+    *card_selector* card, which is what that bot challenge looks like (status
+    200) — it is retried once and then :class:`ListingUnavailable` is raised,
+    failing the venue's scrape.  Falling back to teaterbilletter.dk links
+    instead would switch every event's ``source_url`` for one run and back on
+    the next, and scraped series are keyed on ``source_url``, so each switch
+    would move the upcoming dates into another series.  A failed scrape leaves
+    the imported events as they are.
     """
 
-    def read_listing(session: requests.Session) -> dict[str, str]:
+    def links(session: requests.Session, events: list[dict]) -> dict[str, str]:
+        if not events:
+            return {}
         for attempt in (1, 2):
             try:
                 soup = get_soup(listing_url, session)
@@ -326,7 +350,15 @@ def listing_enricher(
                 problem = str(exc)
             else:
                 if soup.select(card_selector):
-                    return ticket_links(soup, listing_url, card_selector, link_selector)
+                    found = ticket_links(
+                        soup, listing_url, card_selector, link_selector
+                    )
+                    for event in events:
+                        if str(event.get("eventNo")) not in found:
+                            log.info(
+                                "No page on %s for %r", listing_url, event.get("title")
+                            )
+                    return found
                 title = soup.title.get_text(strip=True) if soup.title else ""
                 problem = f"no {card_selector!r} cards (page title {title!r})"
             log.warning("Could not read %s (try %d): %s", listing_url, attempt, problem)
@@ -334,31 +366,7 @@ def listing_enricher(
                 time.sleep(retry_delay)
         raise ListingUnavailable(f"{listing_url}: {problem}")
 
-    def enrich(
-        session: requests.Session, events: list[dict]
-    ) -> dict[str, ShowOverrides]:
-        if not events:
-            return {}
-        links = read_listing(session)
-
-        overrides: dict[str, ShowOverrides] = {}
-        for event in events:
-            event_no = str(event.get("eventNo"))
-            url = links.get(event_no)
-            if url is None:
-                log.info("No page on %s for %r", listing_url, event.get("title"))
-                continue
-            duration = None
-            if duration_from_page and not event.get("durationInMinutes"):
-                time.sleep(delay)
-                try:
-                    duration = duration_from_page(get_soup(url, session))
-                except requests.RequestException as exc:
-                    log.warning("Could not fetch %s: %s", url, exc)
-            overrides[event_no] = ShowOverrides(source_url=url, duration=duration)
-        return overrides
-
-    return enrich
+    return links
 
 
 # ── Record building ───────────────────────────────────────────────────────────
@@ -367,27 +375,24 @@ def listing_enricher(
 def build_records(
     event: dict,
     venue: TeaterbilletterVenue,
-    overrides: ShowOverrides | None = None,
+    source_url: str | None = None,
     now: datetime.datetime | None = None,
 ) -> list[dict]:
     """Build one pleskal record per upcoming public performance of *event*.
 
-    Each record ends after the running time (the API's ``durationInMinutes``,
-    or the override's duration when the API leaves it at 0); without either
-    the end is left open.
+    Each record links to *source_url* (the venue's show page) when given, else
+    to teaterbilletter.dk, and ends after the API's running time; when the API
+    has none (``durationInMinutes`` 0) the end is left open.
     """
     if now is None:
         now = datetime.datetime.now(datetime.UTC)
-    overrides = overrides or ShowOverrides()
 
     title = _WHITESPACE_RE.sub(" ", str(event.get("title") or "")).strip()
     if not title or is_cancelled_title(title):
         return []
 
     minutes = event.get("durationInMinutes") or 0
-    duration = (
-        datetime.timedelta(minutes=minutes) if minutes > 0 else overrides.duration
-    )
+    duration = datetime.timedelta(minutes=minutes) if minutes > 0 else None
     base = {
         "title": title,
         "description": description(event),
@@ -397,7 +402,7 @@ def build_records(
         "is_free": False,
         "is_wheelchair_accessible": venue.is_wheelchair_accessible,
         "price_note": price_note(event),
-        "source_url": overrides.source_url or event_page_url(event),
+        "source_url": source_url or event_page_url(event),
         "external_source": venue.external_source,
         "image_url": image_url(event),
     }
@@ -417,7 +422,7 @@ def build_records(
 
 def scrape(
     venue: TeaterbilletterVenue,
-    enrich: EnrichHook | None = None,
+    venue_links: LinksHook | None = None,
     session: requests.Session | None = None,
 ) -> list[dict]:
     """Scrape *venue*'s teaterbilletter.dk programme into pleskal records."""
@@ -431,11 +436,11 @@ def scrape(
         len(events),
     )
 
-    overrides: dict[str, ShowOverrides] = enrich(session, selected) if enrich else {}
+    links = venue_links(session, selected) if venue_links else {}
     records: list[dict] = []
     for event in selected:
         records.extend(
-            build_records(event, venue, overrides.get(str(event.get("eventNo"))))
+            build_records(event, venue, links.get(str(event.get("eventNo"))))
         )
     log.info("%s: %d event records", venue.external_source, len(records))
     return records

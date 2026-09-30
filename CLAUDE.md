@@ -106,11 +106,11 @@ scrapers/
   base.py                      # Shared utilities (get_soup, canonical_url, scrape_url_list, etc.)
   dansehallerne.py             # Dansehallerne scraper
   dansehallerne_workshops.py   # Dansehallerne workshops scraper
-  teaterbilletter.py           # Shared scraper for venues ticketed through teaterbilletter.dk (Billetten): public JSON API (/api/events?venueCodes=…) for shows, times, content, images (tereba.dk); per-venue config (TeaterbilletterVenue: venue codes, genre/category filter, wheelchair) + optional `enrich` hook (listing_enricher links events to the venue's own show pages via the ticket widget's data-event_no; an unreadable programme page, e.g. faar302.dk's intermittent bot challenge, is retried once and then fails the venue's scrape rather than switching its links). API times are UTC
+  teaterbilletter.py           # Shared scraper for venues ticketed through teaterbilletter.dk (Billetten): public JSON API (/api/events?venueCodes=…) for shows, times, prices, images (tereba.dk) and a description with the credits appended (`credits()`: one "**Role** names" line per role, crew before cast, plus the producing company); per-venue config (TeaterbilletterVenue: venue codes, genre/category filter, wheelchair) + optional `venue_links` hook (`venue_page_links` reads only the venue's programme page and links events to the venue's own show pages via the ticket widget's data-event_no; an unreadable programme page, e.g. faar302.dk's intermittent bot challenge, is retried once and then fails the venue's scrape rather than switching its links). Content comes from the API only: the venues' show pages add nothing it lacks, and faar302.dk's are often behind that bot challenge. API times are UTC
   afukscene.py                 # AFUK Scene (teaterbilletter.dk; dance/performance/new-circus only; links to teaterbilletter.dk)
   blaagaardteater.py           # Blaagaard Teater (teaterbilletter.dk; dance/performance/new-circus only; links to blaagaardteater.dk show pages)
   dansekapellet.py             # Dansekapellet (teaterbilletter.dk; every genre; links to teaterbilletter.dk)
-  faar302.py                   # Teater FÅR302 (teaterbilletter.dk; every genre, incl. its site-specific venue; links to faar302.dk show pages, running time from the page when the API has none)
+  faar302.py                   # Teater FÅR302 (teaterbilletter.dk; every genre, incl. its site-specific venue; links to faar302.dk show pages)
   hautscene.py                 # HAUT Scene scraper
   kbhdanser.py                 # KBH Danser scraper
   sort_hvid.py                 # Sort/Hvid scraper

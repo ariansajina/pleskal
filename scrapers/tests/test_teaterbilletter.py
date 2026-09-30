@@ -13,20 +13,20 @@ from bs4 import BeautifulSoup
 from scrapers import teaterbilletter
 from scrapers.teaterbilletter import (
     ListingUnavailable,
-    ShowOverrides,
     TeaterbilletterVenue,
     build_records,
+    credits,
     description,
     event_page_url,
     fetch_events,
     image_url,
-    listing_enricher,
     matches_filter,
     price_note,
     scrape,
     show_times,
     ticket_links,
     venue_address,
+    venue_page_links,
 )
 
 NOW = datetime.datetime(2026, 9, 29, 12, 0, tzinfo=datetime.UTC)
@@ -248,6 +248,91 @@ class TestDescription:
     def test_empty(self):
         assert description({"teaser": None, "description": ""}) == ""
 
+    def test_credits_end_the_description(self):
+        event = {**EVENT, "accreditations": ACCREDITATIONS}
+        paragraphs = description(event).split("\n\n")
+        assert paragraphs[-2] == "Tredje afsnit."
+        assert paragraphs[-1] == credits(event)
+        assert paragraphs[-1].startswith("**Instruktør** Saga Gärde")
+
+
+# Trimmed from the API's HUN ER VRED, plus a duplicate and blank entries.
+ACCREDITATIONS = [
+    {
+        "positionTypeName": "Cast",
+        "firstName": "Uma",
+        "lastName": "Feed",
+        "positionName": "Medvirkende",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "Saga",
+        "lastName": "Gärde",
+        "positionName": "Instruktør",
+    },
+    {
+        "positionTypeName": "Cast",
+        "firstName": "Daniel  Jeremiah",
+        "lastName": "Persson",
+        "positionName": "Medvirkende",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "Ellen",
+        "lastName": "Ruge",
+        "positionName": "Lysdesigner",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "Saga",
+        "lastName": "Gärde",
+        "positionName": "Instruktør",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "",
+        "lastName": "Rodrigo y Gabriela",
+        "positionName": "Komponist",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "",
+        "lastName": "",
+        "positionName": "Scenograf",
+    },
+    {
+        "positionTypeName": "Production",
+        "firstName": "Nobody",
+        "lastName": "",
+        "positionName": "",
+    },
+    None,
+]
+
+
+class TestCredits:
+    def test_one_line_per_role_crew_before_cast(self):
+        event = {
+            "accreditations": ACCREDITATIONS,
+            "producer": {"code": "OR1", "name": "AMFI "},
+            "organizer": {"code": "OR2", "name": "Blaagaard Teater"},
+        }
+        assert credits(event) == (
+            "**Instruktør** Saga Gärde  \n"
+            "**Lysdesigner** Ellen Ruge  \n"
+            "**Komponist** Rodrigo y Gabriela  \n"
+            "**Medvirkende** Uma Feed, Daniel Jeremiah Persson  \n"
+            "**Produktion** AMFI"
+        )
+
+    def test_venue_producing_itself_is_not_repeated(self):
+        venue = {"code": "OR2", "name": "Blaagaard Teater"}
+        event = {"accreditations": [], "producer": venue, "organizer": venue}
+        assert credits(event) == ""
+
+    def test_no_credits(self):
+        assert credits({}) == ""
+
 
 def test_image_url_prefers_largest_landscape():
     assert image_url(EVENT) == "https://www.tereba.dk/medias/wide.jpg"
@@ -302,20 +387,10 @@ class TestBuildRecords:
         (rec, _) = build_records(event, VENUE, now=NOW)
         assert rec["venue_name"] == "Skuret"
 
-    def test_overrides_link_and_fill_missing_duration(self):
-        event = {**EVENT, "durationInMinutes": 0}
-        overrides = ShowOverrides(
-            source_url="https://blaagaardteater.dk/program/hun-er-vred",
-            duration=datetime.timedelta(minutes=35),
-        )
-        (rec, _) = build_records(event, VENUE, overrides, now=NOW)
-        assert rec["source_url"] == "https://blaagaardteater.dk/program/hun-er-vred"
-        assert rec["end_datetime"] == "2026-12-10T20:35:00+01:00"
-
-    def test_api_duration_wins_over_override(self):
-        overrides = ShowOverrides(duration=datetime.timedelta(minutes=35))
-        (rec, _) = build_records(EVENT, VENUE, overrides, now=NOW)
-        assert rec["end_datetime"] == "2026-12-10T21:40:00+01:00"
+    def test_venue_page_link_replaces_the_ticketing_link(self):
+        url = "https://blaagaardteater.dk/program/hun-er-vred"
+        (rec, _) = build_records(EVENT, VENUE, url, now=NOW)
+        assert rec["source_url"] == url
 
     def test_no_duration_leaves_end_open(self):
         (rec, _) = build_records({**EVENT, "durationInMinutes": 0}, VENUE, now=NOW)
@@ -333,7 +408,7 @@ class TestBuildRecords:
         assert len(build_records(event, VENUE)) == 1
 
 
-# ── Venue-site enrichment ─────────────────────────────────────────────────────
+# ── Links to the venue's own show pages ─────────────────────────────────────────
 
 LISTING_HTML = """
 <div class="grid">
@@ -367,67 +442,35 @@ def test_ticket_links_maps_ticket_numbers_to_absolute_pages():
     }
 
 
-class TestListingEnricher:
+class TestVenuePageLinks:
     URL = "https://blaagaardteater.dk/program"
 
-    def _enrich(self, events, fake_get_soup, duration_from_page=None):
-        hook = listing_enricher(
-            self.URL, ".card", "h2 a[href]", duration_from_page, delay=0
-        )
+    def _links(self, events, fake_get_soup):
+        hook = venue_page_links(self.URL, ".card", "h2 a[href]")
         with (
             patch("scrapers.teaterbilletter.get_soup", side_effect=fake_get_soup),
             patch("scrapers.teaterbilletter.time.sleep"),
         ):
             return hook(MagicMock(), events)
 
-    def test_links_events_and_reads_missing_durations(self):
-        def fake_get_soup(url, session):
-            if url == self.URL:
-                return _soup(LISTING_HTML)
-            if url.endswith("/myac"):
-                raise requests.HTTPError("404")
-            return _soup("<p>page</p>")
-
-        events = [
-            {"eventNo": 147563, "durationInMinutes": 0},
-            {"eventNo": 146534, "durationInMinutes": 0},  # page fetch fails
-            {"eventNo": 150810, "durationInMinutes": 60},  # no link on the listing
-        ]
-        pages: list[str] = []
-
-        def duration_from_page(soup):
-            pages.append(soup.get_text())
-            return datetime.timedelta(minutes=35)
-
-        overrides = self._enrich(events, fake_get_soup, duration_from_page)
-        assert overrides == {
-            "147563": ShowOverrides(
-                source_url=f"{self.URL}/hun-er-vred",
-                duration=datetime.timedelta(minutes=35),
-            ),
-            "146534": ShowOverrides(source_url=f"{self.URL}/myac"),
-        }
-        assert pages == ["page"]
-
-    def test_page_not_fetched_when_api_has_duration(self):
+    def test_reads_only_the_programme(self):
         fetched: list[str] = []
 
         def fake_get_soup(url, session):
             fetched.append(url)
             return _soup(LISTING_HTML)
 
-        events = [{"eventNo": 147563, "durationInMinutes": 90}]
-        overrides = self._enrich(events, fake_get_soup, lambda soup: None)
-        assert overrides["147563"].duration is None
+        events = [{"eventNo": 147563}, {"eventNo": 150810, "title": "No page"}]
+        assert self._links(events, fake_get_soup) == {
+            "147563": f"{self.URL}/hun-er-vred",
+            "146534": f"{self.URL}/myac",
+        }
         assert fetched == [self.URL]
 
     def test_bot_challenge_is_retried_once(self):
         pages = iter([_soup(CHALLENGE_HTML), _soup(LISTING_HTML)])
-        overrides = self._enrich(
-            [{"eventNo": 147563, "durationInMinutes": 90}],
-            lambda url, session: next(pages),
-        )
-        assert overrides["147563"].source_url == f"{self.URL}/hun-er-vred"
+        links = self._links([{"eventNo": 147563}], lambda url, session: next(pages))
+        assert links["147563"] == f"{self.URL}/hun-er-vred"
 
     @pytest.mark.parametrize(
         "failure",
@@ -444,20 +487,20 @@ class TestListingEnricher:
             raise failure
 
         with pytest.raises(ListingUnavailable, match="blaagaardteater.dk/program"):
-            self._enrich([{"eventNo": 147563}], fake_get_soup)
+            self._links([{"eventNo": 147563}], fake_get_soup)
         assert calls == [self.URL, self.URL]
 
     def test_no_events_skips_the_listing(self):
         def fake_get_soup(url, session):
             raise AssertionError("listing fetched")
 
-        assert self._enrich([], fake_get_soup) == {}
+        assert self._links([], fake_get_soup) == {}
 
 
 # ── scrape ────────────────────────────────────────────────────────────────────
 
 
-def test_scrape_filters_enriches_and_builds():
+def test_scrape_filters_links_and_builds():
     venue = TeaterbilletterVenue(
         external_source="blaagaardteater",
         venue_codes=("VN0000046",),
@@ -473,12 +516,12 @@ def test_scrape_filters_enriches_and_builds():
     events = [{**EVENT, "scheduledShows": future}, drama]
     seen: list[list[dict]] = []
 
-    def enrich(session, selected):
+    def venue_links(session, selected):
         seen.append(selected)
-        return {"147563": ShowOverrides(source_url="https://example.dk/hun")}
+        return {"147563": "https://example.dk/hun"}
 
     with patch("scrapers.teaterbilletter.fetch_events", return_value=events) as fetch:
-        records = scrape(venue, enrich=enrich, session=MagicMock())
+        records = scrape(venue, venue_links=venue_links, session=MagicMock())
 
     assert fetch.call_args.args[1] == ("VN0000046",)
     assert [e["eventNo"] for e in seen[0]] == [147563]
@@ -487,7 +530,7 @@ def test_scrape_filters_enriches_and_builds():
     ]
 
 
-def test_scrape_without_enrich_uses_new_session():
+def test_scrape_without_links_uses_new_session():
     with (
         patch("scrapers.teaterbilletter.make_session") as make_session,
         patch("scrapers.teaterbilletter.fetch_events", return_value=[]) as fetch,

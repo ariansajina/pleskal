@@ -36,7 +36,7 @@ BLAAGAARD_PROGRAM = """
 
 def test_blaagaard_program_links_ticket_numbers():
     with (
-        patch("scrapers.teaterbilletter.listing_enricher") as enricher,
+        patch("scrapers.teaterbilletter.venue_page_links") as enricher,
         patch("scrapers.teaterbilletter.scrape"),
     ):
         blaagaardteater.scrape()
