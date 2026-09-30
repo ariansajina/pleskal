@@ -1,6 +1,8 @@
+import datetime
 import logging
 import secrets
 import uuid
+from typing import cast
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
@@ -19,6 +21,10 @@ from .limits import (
 from .validators import validate_url_scheme
 
 logger = logging.getLogger(__name__)
+
+# Assumed length of an event with no end time, for consumers that need one
+# (feeds, calendar links, structured data). Retention still counts from start.
+DEFAULT_EVENT_DURATION = datetime.timedelta(hours=1)
 
 # Field length constraints are defined in events.limits (Django-free, so
 # scrapers can use them standalone); need to makemigrations if they change.
@@ -332,6 +338,13 @@ class Event(models.Model):
     def has_map_location(self) -> bool:
         """True when the venue has been successfully geocoded to lat/lon."""
         return self.latitude is not None and self.longitude is not None
+
+    @property
+    def effective_end(self) -> datetime.datetime:
+        """end_datetime, or start_datetime + DEFAULT_EVENT_DURATION when unset."""
+        if self.end_datetime:
+            return cast(datetime.datetime, self.end_datetime)
+        return cast(datetime.datetime, self.start_datetime) + DEFAULT_EVENT_DURATION
 
     @property
     def local_start_date(self):

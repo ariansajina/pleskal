@@ -69,13 +69,13 @@ class TestGoogleCalendarURL:
         qs = parse_qs(urlparse(google_calendar_url(event)).query)
         assert qs["dates"] == ["20260115T190000Z/20260115T210000Z"]
 
-    def test_missing_end_datetime_uses_start(self):
+    def test_missing_end_datetime_defaults_to_one_hour(self):
         event = EventFactory.build(
             start_datetime=datetime(2026, 6, 15, 18, 30, tzinfo=UTC),
             end_datetime=None,
         )
         qs = parse_qs(urlparse(google_calendar_url(event)).query)
-        assert qs["dates"] == ["20260615T183000Z/20260615T183000Z"]
+        assert qs["dates"] == ["20260615T183000Z/20260615T193000Z"]
 
     def test_markdown_in_description_is_stripped(self):
         event = EventFactory.build(
@@ -134,13 +134,13 @@ class TestOutlookCalendarURL:
         assert qs["startdt"] == ["2026-07-15T18:00:00Z"]
         assert qs["enddt"] == ["2026-07-15T20:00:00Z"]
 
-    def test_missing_end_datetime_uses_start(self):
+    def test_missing_end_datetime_defaults_to_one_hour(self):
         event = EventFactory.build(
             start_datetime=datetime(2026, 6, 15, 18, 30, tzinfo=UTC),
             end_datetime=None,
         )
         qs = parse_qs(urlparse(outlook_calendar_url(event)).query)
-        assert qs["enddt"] == ["2026-06-15T18:30:00Z"]
+        assert qs["enddt"] == ["2026-06-15T19:30:00Z"]
 
     def test_venue_without_address(self):
         event = EventFactory.build(

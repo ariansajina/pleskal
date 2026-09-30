@@ -68,8 +68,9 @@ def event_jsonld(event: Event, request) -> str:
         "url": origin + event.get_absolute_url(),
     }
 
-    if event.end_datetime:
-        data["endDate"] = timezone.localtime(event.end_datetime).isoformat()
+    # Google's Event rich results recommend endDate; many listings have no end
+    # time, so use the assumed default duration rather than leave it out.
+    data["endDate"] = timezone.localtime(event.effective_end).isoformat()
 
     # The scraped-event disclaimer is for readers of the page; leaving it out
     # keeps it from becoming the event summary in search results.
