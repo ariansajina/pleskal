@@ -418,17 +418,18 @@ class Event(models.Model):
             and bool(self.description_en)
         )
 
-    def get_display_description(self):
-        """Return the English description with scraped event disclaimer prepended."""
-        from django.conf import settings
+    @property
+    def source_name(self) -> str:
+        """Name of the venue/source a scraped event was imported from."""
+        submitter = self.submitted_by
+        if submitter:
+            return str(submitter.public_name)  # ty: ignore[unresolved-attribute]
+        return str(self.external_source)
 
-        description = self.description_for(DescriptionLanguage.ENGLISH)
-        if not self.external_source or not settings.SCRAPED_EVENT_DISCLAIMER:
-            return description
-        disclaimer = settings.SCRAPED_EVENT_DISCLAIMER
-        if description:
-            return f"{disclaimer}\n\n{description}"
-        return disclaimer
+    def get_display_description(self):
+        """Return the English description (the scraped-event notice is rendered
+        separately by the detail template)."""
+        return self.description_for(DescriptionLanguage.ENGLISH)
 
     def save(self, *args, **kwargs):
         if not self.slug:

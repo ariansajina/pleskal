@@ -919,6 +919,28 @@ class TestEventDetailView:
         assert resp.status_code == 200
         assert str(event.title).encode() in resp.content
 
+    def test_scraped_notice_names_source_and_translation(self, client):
+        source = UserFactory.create(
+            display_name="Dansehallerne", is_system_account=True
+        )
+        event = EventFactory.create(
+            submitted_by=source,
+            external_source="dansehallerne",
+            source_url="https://dansehallerne.dk/x",
+            description="Dansk",
+            description_language="da",
+            description_en="English",
+            description_en_is_machine=True,
+        )
+        html = client.get(event.get_absolute_url()).content.decode()
+        assert "Imported from Dansehallerne and automatically translated" in html
+        assert "Automatically translated from Danish" not in html
+
+    def test_no_scraped_notice_for_user_event(self, client):
+        event = EventFactory.create()
+        html = client.get(event.get_absolute_url()).content.decode()
+        assert "Imported from" not in html
+
     def test_nonexistent_slug_returns_404(self, client):
         resp = client.get(reverse("event_detail", kwargs={"slug": "does-not-exist"}))
         assert resp.status_code == 404
