@@ -155,14 +155,21 @@ details[open] summary::after { content: ''; }
         </div>
 
         {# Description #}
-        {% if event.get_display_description %}
+        {% if event.external_source or event.get_display_description %}
             <hr class="rule">
-            {% if event.is_machine_translated %}
-                <p class="text-sm text-muted" style="margin-bottom:var(--space-3);">Automatically translated from Danish</p>
+            {% if event.external_source %}
+                <p class="source-notice text-sm">
+                    Imported from {{ event.source_name }}{% if event.is_machine_translated %} and automatically translated from Danish{% endif %}, so it may be partly inaccurate.
+                    {% if event.source_url %}Check the <a href="{{ event.source_url }}" target="_blank" rel="noopener noreferrer">source page</a> before you plan your visit.{% else %}Check the source before you plan your visit.{% endif %}
+                </p>
+            {% elif event.is_machine_translated %}
+                <p class="source-notice text-sm">Automatically translated from Danish.</p>
             {% endif %}
-            <div class="prose-content" style="margin-bottom:var(--space-6);">
-                {{ event.get_display_description|render_markdown }}
-            </div>
+            {% if event.get_display_description %}
+                <div class="prose-content" style="margin-bottom:var(--space-6);">
+                    {{ event.get_display_description|render_markdown }}
+                </div>
+            {% endif %}
         {% endif %}
 
         {# Source link #}

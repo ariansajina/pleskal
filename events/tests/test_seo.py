@@ -148,8 +148,7 @@ class TestEventJsonLd:
         )
         assert "images/logo" in data["image"][0]
 
-    def test_jsonld_description_omits_scraped_disclaimer(self, client, settings):
-        settings.SCRAPED_EVENT_DISCLAIMER = "Scraped disclaimer."
+    def test_jsonld_description_omits_scraped_notice(self, client):
         event = EventFactory.create(
             external_source="dansehallerne", description="A solo about milk."
         )

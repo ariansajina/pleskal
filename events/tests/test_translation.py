@@ -338,8 +338,7 @@ class TestEventDescriptionFor:
         assert event.description_for("da") == "dansk"
         assert not event.is_machine_translated
 
-    def test_display_description_uses_english(self, settings):
-        settings.SCRAPED_EVENT_DISCLAIMER = "> Disclaimer"
+    def test_display_description_uses_english(self):
         event = Event(
             description=DANISH,
             external_source="faar302",
@@ -347,7 +346,7 @@ class TestEventDescriptionFor:
             description_en="Translated",
             description_en_is_machine=True,
         )
-        assert event.get_display_description() == "> Disclaimer\n\nTranslated"
+        assert event.get_display_description() == "Translated"
 
 
 # ── Importer ─────────────────────────────────────────────────────────────────
@@ -515,7 +514,7 @@ class TestDisplay:
         event = self._translated_event()
         response = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
         content = response.content.decode()
-        assert "Automatically translated from Danish" in content
+        assert "automatically translated from Danish" in content
         assert "Machine translated English text." in content
         assert "Forestillingen undersøger" not in content
 

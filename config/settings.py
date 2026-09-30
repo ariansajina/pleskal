@@ -223,12 +223,6 @@ IMAGE_WEBP_QUALITY = 70
 SCRAPED_EVENT_RETENTION_DAYS = env.int("SCRAPED_EVENT_RETENTION_DAYS", default=90)
 USER_EVENT_HIDE_AFTER_DAYS = env.int("USER_EVENT_HIDE_AFTER_DAYS", default=730)
 
-SCRAPED_EVENT_DISCLAIMER = (
-    "> This event was scraped and may be partly inaccurate. "
-    "Follow the more info link to read the source page when "
-    "planning your visit/participation."
-)
-
 # Geocoding (OpenStreetMap / Nominatim)
 # Defaults to disabled in DEBUG so local dev never hits Nominatim unexpectedly.
 GEOCODING_ENABLED = env.bool("GEOCODING_ENABLED", default=not DEBUG)
