@@ -3,6 +3,11 @@
 Fetches all event listing URLs, visits each detail page, and outputs a JSON
 array of event dicts ready for ingestion into the pleskal database.
 
+Wheelchair access follows the place: HAUT is in Thoravej 29, whose accessibility
+page (thoravej29.dk/da/tilgaengelighed) describes a ramped main entrance, a level
+ground floor (black box, studio 0.1), wide lifts to the other floors and
+accessible toilets on every floor. An event held anywhere else isn't claimed.
+
 Usage:
     uv run python scrapers/hautscene.py
     uv run python scrapers/hautscene.py --output events.json
@@ -35,6 +40,7 @@ BASE_URL = "https://www.hautscene.dk"
 CALENDAR_URL = f"{BASE_URL}/en/calendar"
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
 EXTERNAL_SOURCE = "hautscene"
+HOME_BUILDING = "thoravej"
 
 # Map hautscene format strings → pleskal EventCategory values
 CATEGORY_MAP = {
@@ -404,6 +410,8 @@ def scrape_detail(
     place_text = _get_info_row_value(info_div, "place")
     venue_name = "HAUT scene"
     venue_address = place_text[:MAX_VENUE_LENGTH]
+    # No place means HAUT's own rooms; another building is not assessed.
+    is_wheelchair_accessible = not place_text or HOME_BUILDING in place_text.lower()
 
     # ── Description ───────────────────────────────────────────────────────────
     # Detail pages have a hero (short tagline) plus zero or more body sections
@@ -458,7 +466,7 @@ def scrape_detail(
         "venue_address": venue_address,
         "category": category,
         "is_free": is_free,
-        "is_wheelchair_accessible": False,
+        "is_wheelchair_accessible": is_wheelchair_accessible,
         "price_note": price_note,
         "source_url": url,
         "external_source": EXTERNAL_SOURCE,

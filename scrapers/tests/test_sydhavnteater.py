@@ -498,3 +498,69 @@ def test_parse_description_falls_back_to_danish():
 def test_build_records_cleans_title():
     event = _make_event(title="Skæbnen  \u200d- en spøgelseshistorie i VR")
     assert build_records(event)[0]["title"] == "Skæbnen - en spøgelseshistorie i VR"
+
+
+# ── wheelchair access ─────────────────────────────────────────────────────────
+
+
+def _access_section(text_da: str = "", text_en: str = "") -> dict:
+    return {"headlineEnglish": "accessibility", "text": text_da, "textEnglish": text_en}
+
+
+def test_wheelchair_access_default_is_not_claimed():
+    records = build_records(_make_event(stage=[{"title": "Annex scenen"}]))
+    assert records[0]["is_wheelchair_accessible"] is False
+
+
+def test_wheelchair_access_site_specific_event_is_not_claimed():
+    records = build_records(_make_event(stage=[{"title": "Site Specific"}]))
+    assert records[0]["is_wheelchair_accessible"] is False
+
+
+def test_wheelchair_access_spor10_stage_is_documented():
+    records = build_records(_make_event(stage=[{"title": "spor10"}]))
+    assert records[0]["is_wheelchair_accessible"] is True
+
+
+def test_wheelchair_access_spor10_where_row_beats_site_specific_stage():
+    sections = [{"data": [{"titleEnglish": "Where", "textEnglish": "Spor10"}]}]
+    event = _make_event(stage=[{"title": "Site Specific"}], sections=sections)
+    assert build_records(event)[0]["is_wheelchair_accessible"] is True
+
+
+def test_wheelchair_access_own_statement_is_used():
+    section = _access_section(
+        "<p>Forestillingen er tilgængelig for kørestolsbrugere</p>",
+        "<p>Accessible for non-Danish speakers</p>"
+        "<p>The performance is accessible for wheelchair users.</p>",
+    )
+    event = _make_event(stage=[{"title": "Site Specific"}], sections=[section])
+    assert build_records(event)[0]["is_wheelchair_accessible"] is True
+
+
+def test_wheelchair_access_statement_in_danish_only():
+    section = _access_section("<p>ISNÆTTER er tilgængelig for kørestolsbrugere.</p>")
+    event = _make_event(stage=[{"title": "Site Specific"}], sections=[section])
+    assert build_records(event)[0]["is_wheelchair_accessible"] is True
+
+
+def test_wheelchair_access_denial_beats_the_stage():
+    section = _access_section(text_en="<p>Not accessible for wheelchair users.</p>")
+    event = _make_event(stage=[{"title": "spor10"}], sections=[section])
+    assert build_records(event)[0]["is_wheelchair_accessible"] is False
+
+
+def test_wheelchair_access_statement_without_a_verdict_falls_back_to_the_stage():
+    section = _access_section(text_en="<p>Strobe lights and haze are used.</p>")
+    event = _make_event(stage=[{"title": "spor10"}], sections=[section])
+    assert build_records(event)[0]["is_wheelchair_accessible"] is True
+
+
+def test_wheelchair_access_ignores_sections_that_are_not_about_access():
+    section = {
+        "headlineEnglish": "About",
+        "text": "",
+        "textEnglish": "<p>Wheelchair accessible: a rumour.</p>",
+    }
+    event = _make_event(stage=[{"title": "Site Specific"}], sections=[section])
+    assert build_records(event)[0]["is_wheelchair_accessible"] is False

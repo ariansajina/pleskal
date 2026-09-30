@@ -229,6 +229,12 @@ def test_extract_image_url_missing():
 
 # ── build_record ──────────────────────────────────────────────────────────────
 
+_ACCESS_NOTE = (
+    "Access Information Warehouse9 has level free entrance to the space and a "
+    "gender neutral accessible toilet that can be accessed via a certified "
+    "stairlift."
+)
+
 
 def test_build_record_full():
     component = _vevent()
@@ -237,7 +243,7 @@ def test_build_record_full():
     assert record["title"] == "Work presentation: Tender Routes"
     assert record["category"] == "worksharing"
     assert record["is_free"] is True
-    # Every Warehouse9 event is wheelchair accessible.
+    # Held at Warehouse9, which is step-free.
     assert record["is_wheelchair_accessible"] is True
     assert record["venue_name"] == "Warehouse9"
     assert record["venue_address"].startswith("Rosenlunds Allé 5")
@@ -300,3 +306,34 @@ def test_is_upcoming_uses_end_when_running():
     # Started in the past but ends in the future → still upcoming.
     record = {"start_datetime": PAST.isoformat(), "end_datetime": FUTURE.isoformat()}
     assert is_upcoming(record) is True
+
+
+def test_build_record_no_location_is_warehouse9_and_accessible():
+    record = build_record(_vevent(location=""))
+    assert record is not None
+    assert record["venue_name"] == "Warehouse9"
+    assert record["is_wheelchair_accessible"] is True
+
+
+def test_build_record_other_venue_is_not_claimed():
+    record = build_record(_vevent(location="Kunsthal X, Nyhavn 1, Copenhagen"))
+    assert record is not None
+    assert record["venue_name"] == "Kunsthal X"
+    assert record["is_wheelchair_accessible"] is False
+
+
+def test_build_record_access_note_in_description_is_used():
+    record = build_record(
+        _vevent(
+            location="Kunsthal X, Nyhavn 1, Copenhagen",
+            description=f"Party. {_ACCESS_NOTE}",
+        )
+    )
+    assert record is not None
+    assert record["is_wheelchair_accessible"] is True
+
+
+def test_build_record_stated_denial_beats_the_venue():
+    record = build_record(_vevent(description="The loft is not wheelchair accessible."))
+    assert record is not None
+    assert record["is_wheelchair_accessible"] is False

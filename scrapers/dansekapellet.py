@@ -7,7 +7,9 @@ events are published under a Dansekapellet account.  Every genre is taken.
 Dansekapellet's site has no show pages, so events keep their
 teaterbilletter.dk links.
 
-Wheelchair access is unconfirmed, so it isn't claimed.
+Step-free: level access from the entrance to the ground floor (theatre hall,
+halls 1-3, accessible toilet), a platform lift to the first floor and mobile
+ramps for the dome hall's 14 cm step (godadgang.dk factsheet for Dansekapellet).
 
 Usage:
     uv run python scrapers/dansekapellet.py --dry-run
@@ -22,6 +24,7 @@ VENUE = TeaterbilletterVenue(
     external_source="dansekapellet",
     venue_codes=("VN0000720",),
     venue_names={"VN0000720": "Dansekapellet"},
+    is_wheelchair_accessible=True,
 )
 # There is no programme page to check against: the venue's listing lives on
 # teaterbilletter.dk, which renders with JavaScript.

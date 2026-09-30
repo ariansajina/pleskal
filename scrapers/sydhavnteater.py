@@ -10,6 +10,11 @@ have performances and at what time(s); "Duration" gives the end time.  The
 English columns are often left empty, so the Danish ones ("Spilletid",
 "Varighed", "Sted") are the fallback.
 
+Sydhavn Teater plays on several stages and in many site-specific places (parks,
+streets, flats, boat tours), so wheelchair access is decided per event: its own
+"Accessibility" section wins when it has one, else the stage's documented
+access (see WHEELCHAIR_ACCESSIBLE_STAGES). Anything else isn't claimed.
+
 Usage:
     uv run python scrapers/sydhavnteater.py
     uv run python scrapers/sydhavnteater.py --output events.json
@@ -25,6 +30,7 @@ import zoneinfo
 
 import markdownify
 
+from scrapers.accessibility import wheelchair_access_from_text
 from scrapers.base import build_arg_parser, make_session, write_output
 
 BASE_URL = "https://sydhavnteater.dk"
@@ -87,10 +93,22 @@ STAGE_ADDRESSES = {
 }
 
 
+# Stages with documented wheelchair access, keyed like STAGE_ADDRESSES. Spor10:
+# ramp at the rear entrance, level access, wheelchair spaces and an accessible
+# toilet (the venue's own ISNÆTTER page; cphstage.dk's access listing). The other
+# stages publish nothing, and site-specific events are outdoors or in borrowed
+# rooms, so they need a statement of their own.
+WHEELCHAIR_ACCESSIBLE_STAGES = frozenset({"spor10"})
+
+
+def _stage_key(venue_name: str) -> str:
+    """Normalise a stage/space name: whitespace stripped, lowercased."""
+    return re.sub(r"\s+", "", venue_name).lower()
+
+
 def _stage_address(venue_name: str) -> str:
     """Look up the physical address for a stage/space name, if known."""
-    normalized = re.sub(r"\s+", "", venue_name).lower()
-    return STAGE_ADDRESSES.get(normalized, "")
+    return STAGE_ADDRESSES.get(_stage_key(venue_name), "")
 
 
 # Map Craft CMS category titles → pleskal EventCategory values
@@ -234,6 +252,29 @@ def _extract_when(event: dict) -> str:
 def _extract_where(event: dict) -> str:
     """Return the 'Where' string from the dataTable sections, or ''."""
     return _extract_row(event, "where", {"sted", "hvor"})
+
+
+def _accessibility_note(event: dict) -> str:
+    """Return the event's own "Accessibility" text section as plain text, or ''.
+
+    Editors write these per event ("ISNÆTTER is accessible for wheelchair users
+    ..."), in both languages; both are kept so either can carry the statement.
+    """
+    for section in event.get("sections") or []:
+        section = section or {}
+        if "accessib" not in (section.get("headlineEnglish") or "").lower():
+            continue
+        html = f"{section.get('text') or ''}\n{section.get('textEnglish') or ''}"
+        return re.sub(r"<[^>]+>", "\n", html)
+    return ""
+
+
+def _is_wheelchair_accessible(event: dict, venue_name: str) -> bool:
+    """Whether the event is wheelchair accessible: its own statement, else its stage."""
+    stated = wheelchair_access_from_text(_accessibility_note(event))
+    if stated is not None:
+        return stated
+    return _stage_key(venue_name).split(",")[0] in WHEELCHAIR_ACCESSIBLE_STAGES
 
 
 def _extract_duration(event: dict) -> datetime.timedelta | None:
@@ -586,7 +627,9 @@ def build_records(event: dict) -> list[dict]:
                     "venue_address": venue_address,
                     "category": category,
                     "is_free": is_free,
-                    "is_wheelchair_accessible": False,
+                    "is_wheelchair_accessible": _is_wheelchair_accessible(
+                        event, venue_name
+                    ),
                     "price_note": "",
                     "source_url": source_url,
                     "external_source": EXTERNAL_SOURCE,

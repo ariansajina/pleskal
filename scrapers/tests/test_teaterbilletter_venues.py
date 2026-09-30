@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from bs4 import BeautifulSoup
 
-from scrapers import afukscene, blaagaardteater, dansekapellet, teaterbilletter
+from scrapers import afukscene, blaagaardteater, dansekapellet, faar302, teaterbilletter
 from scrapers.registry import SOURCES
 from scrapers.teaterbilletter import ticket_links
 
@@ -90,3 +90,12 @@ def test_registry_matches_venue_configs():
         venue = importlib.import_module(module).VENUE
         assert source.external_source == venue.external_source
         assert source.allowed_image_domains == frozenset({"tereba.dk"})
+
+
+def test_wheelchair_access_per_venue():
+    # Documented step-free (Blaagaard's ramp, Dansekapellet's level access and lift).
+    assert blaagaardteater.VENUE.is_wheelchair_accessible is True
+    assert dansekapellet.VENUE.is_wheelchair_accessible is True
+    # FÅR302 says it isn't; AFUK publishes nothing, so it isn't claimed.
+    assert faar302.VENUE.is_wheelchair_accessible is False
+    assert afukscene.VENUE.is_wheelchair_accessible is False

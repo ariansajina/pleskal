@@ -12,6 +12,8 @@ import requests
 from bs4 import BeautifulSoup
 
 from scrapers.kbhdanser import (
+    VENUE_ADDRESSES,
+    WHEELCHAIR_ACCESSIBLE_VENUES,
     _extract_description,
     _extract_image,
     _extract_performances,
@@ -629,7 +631,8 @@ def test_scrape_detail_returns_records(mock_dt):
     assert r["external_source"] == "kbhdanser"
     assert r["category"] == "performance"
     assert r["is_free"] is False
-    assert r["is_wheelchair_accessible"] is False
+    assert r["venue_name"] == "Østre Gasværk Teater"
+    assert r["is_wheelchair_accessible"] is True
     assert r["source_url"] == "https://kbhdanser.dk/chroniques/"
     # The detail page's own image wins over the card thumbnail
     assert (
@@ -1228,3 +1231,38 @@ def test_extract_performances_venue_per_block(fixed_today):
         ("2027-01-15", "Østre Gasværk Teater"),
         ("2027-01-17", "Østre Gasværk Teater"),
     ]
+
+
+def test_wheelchair_venues_are_known_venues():
+    """Every venue claimed accessible is one lookup_venue can resolve."""
+    known = {display for display, _ in VENUE_ADDRESSES.values()}
+    assert known >= WHEELCHAIR_ACCESSIBLE_VENUES
+
+
+@pytest.mark.parametrize(
+    ("heading", "expected"),
+    [
+        ("ØSTRE GASVÆRK TEATER", True),
+        ("REPUBLIQUE / REVOLVER", True),
+        ("GAMLE SCENE", True),
+        # A venue the scraper has no documented access for isn't claimed.
+        ("Dansehuset Ukendt", False),
+    ],
+)
+@patch("scrapers.kbhdanser.datetime")
+def test_scrape_detail_wheelchair_access_is_per_venue(mock_dt, heading, expected):
+    mock_dt.date.today.return_value = _FIXED_TODAY
+    mock_dt.date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+    mock_dt.time.side_effect = lambda *a, **kw: datetime.time(*a, **kw)
+    mock_dt.datetime.side_effect = lambda *a, **kw: datetime.datetime(*a, **kw)
+    mock_dt.UTC = datetime.UTC
+    card = {
+        "title": "Chroniques",
+        "artists": "Peeping Tom",
+        "detail_url": "https://kbhdanser.dk/chroniques/",
+        "image_url": "",
+    }
+    page = _DETAIL_HTML.replace("ØSTRE GASVÆRK TEATER", heading)
+    records = scrape_detail(card, _mock_session(page))
+    assert records
+    assert {r["is_wheelchair_accessible"] for r in records} == {expected}

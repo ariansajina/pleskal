@@ -10,7 +10,9 @@ billet" button carries the ticketing ``data-event_no``; that links each event
 to its page on faar302.dk.  Only the front page is fetched: faar302.dk serves
 a bot challenge to many requests for its show pages.
 
-The theatre is not wheelchair accessible (stated on its /billetter/ page).
+The theatre is not wheelchair accessible (stated on its /billetter/ page). That
+covers its Toldbodgade stage; the site-specific locations (SKURET) publish
+nothing about access, so they aren't claimed either.
 
 Usage:
     uv run python scrapers/faar302.py
