@@ -263,10 +263,16 @@ class TestEventICalSingleView:
         resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
         assert b"DTEND" in resp.content
 
-    def test_omits_dtend_when_no_end_datetime(self, client):
+    def test_dtend_defaults_to_one_hour_when_no_end_datetime(self, client):
+        from icalendar import Calendar
+
         event = EventFactory.create(end_datetime=None)
         resp = client.get(reverse("event_ical_single", kwargs={"slug": event.slug}))
-        assert b"DTEND" not in resp.content
+        cal = Calendar.from_ical(resp.content)
+        vevent = next(iter(cal.walk("VEVENT")))
+        assert vevent.decoded("DTEND") - vevent.decoded(
+            "DTSTART"
+        ) == timezone.timedelta(hours=1)
 
     def test_includes_source_url(self, client):
         event = EventFactory.create(source_url="https://example.com/event")

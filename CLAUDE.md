@@ -345,7 +345,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | `thumbnail` | Not editable: list-card rendition of `image` (WebP, shorter side scaled to 360px), content-addressed under `events/thumbs/`; kept in sync by `save()` (regenerated when `image` changes, reused from another event with the same image, cleared with it). Generation failures leave it empty and the card falls back to the full image; `backfill_thumbnails` retries. Deleted with the event unless another event shares it |
 | `image_source_url` | Scraped events only (not editable): source URL `image` was downloaded from; the importer re-downloads when the scraped `image_url` differs (e.g. a venue replaces an "image coming soon" placeholder) |
 | `start_datetime` | Must be future on creation, max 1 year out (not for system accounts) |
-| `end_datetime` | Optional, must be after start |
+| `end_datetime` | Optional, must be after start; consumers that need an end (iCal `DTEND`, calendar links, JSON-LD `endDate`) use `Event.effective_end` = start + `DEFAULT_EVENT_DURATION` (1 hour) when unset |
 | `venue_name` | Max 200 chars |
 | `venue_address` | Optional, max 200 chars |
 | `category` | Enum: performance, worksharing, workshop, openpractice, talk, social, other |

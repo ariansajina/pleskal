@@ -167,12 +167,15 @@ class TestEventJsonLd:
         assert data["url"] == f"https://pleskal.example{event.get_absolute_url()}"
         assert data["organizer"]["url"].startswith("https://pleskal.example/")
 
-    def test_jsonld_end_date_falls_back_to_start(self, client):
+    def test_jsonld_end_date_defaults_to_one_hour(self, client):
         event = EventFactory.create(end_datetime=None)
         data = json.loads(
             self._extract_jsonld(client.get(event.get_absolute_url()).content.decode())
         )
-        assert data["endDate"] == data["startDate"]
+        start = datetime.datetime.fromisoformat(data["startDate"])
+        assert datetime.datetime.fromisoformat(data["endDate"]) - start == (
+            datetime.timedelta(hours=1)
+        )
 
     def test_jsonld_keeps_end_date(self, client):
         start = timezone.now() + datetime.timedelta(days=5)

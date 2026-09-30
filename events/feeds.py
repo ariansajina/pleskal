@@ -104,8 +104,7 @@ def _build_vevent(event: Event) -> ICalEvent:
     vevent.add("last-modified", event.updated_at)
     vevent.add("summary", event.title)
     vevent.add("dtstart", event.start_datetime)
-    if event.end_datetime:
-        vevent.add("dtend", event.end_datetime)
+    vevent.add("dtend", event.effective_end)
     location_parts: list[str] = [str(event.venue_name)]
     if event.venue_address:
         location_parts.append(str(event.venue_address))

@@ -38,7 +38,7 @@ def _plain_description(event: Event) -> str:
 
 def _start_end(event: Event) -> tuple[datetime, datetime]:
     start = cast(datetime, event.start_datetime)
-    end = cast(datetime, event.end_datetime) if event.end_datetime else start
+    end = event.effective_end
     return start, end
 
 
