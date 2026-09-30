@@ -3,13 +3,12 @@ by test_teaterbilletter.py)."""
 
 from __future__ import annotations
 
-import datetime
 from unittest.mock import patch
 
 from bs4 import BeautifulSoup
 
 from scrapers import faar302
-from scrapers.faar302 import parse_description, parse_duration, scrape
+from scrapers.faar302 import scrape
 from scrapers.teaterbilletter import ticket_links
 
 
@@ -39,82 +38,31 @@ def _card(slug: str, event_no: str | None) -> str:
     """
 
 
+def _links_kwargs() -> dict:
+    with (
+        patch("scrapers.faar302.teaterbilletter.venue_page_links") as links,
+        patch("scrapers.faar302.teaterbilletter.scrape"),
+    ):
+        scrape()
+    return {"url": links.call_args.args[0], **links.call_args.kwargs}
+
+
 def test_front_page_cards_link_ticket_numbers():
     html = _card("gazed", "147686") + _card("skuret", "151582") + _card("gratis", None)
-    enrich_kwargs = _enricher_kwargs()
+    kwargs = _links_kwargs()
     links = ticket_links(
-        _soup(html),
-        faar302.PROGRAM_URL,
-        enrich_kwargs["card_selector"],
-        enrich_kwargs["link_selector"],
+        _soup(html), kwargs["url"], kwargs["card_selector"], kwargs["link_selector"]
     )
+    assert kwargs["url"] == "https://www.faar302.dk/"
     assert links == {
         "147686": "https://www.faar302.dk/forestilling/gazed/",
         "151582": "https://www.faar302.dk/forestilling/skuret/",
     }
 
 
-def _enricher_kwargs() -> dict:
-    with (
-        patch("scrapers.faar302.teaterbilletter.listing_enricher") as enricher,
-        patch("scrapers.faar302.teaterbilletter.scrape"),
-    ):
-        scrape(delay=0.25)
-    return {"url": enricher.call_args.args[0], **enricher.call_args.kwargs}
-
-
-def test_scrape_takes_every_genre_at_both_venues_and_enriches():
-    kwargs = _enricher_kwargs()
-    assert kwargs["url"] == "https://www.faar302.dk/"
-    assert kwargs["duration_from_page"] is parse_duration
-    assert kwargs["description_from_page"] is parse_description
-    assert kwargs["delay"] == 0.25
+def test_takes_every_genre_at_both_venues():
     venue = faar302.VENUE
     assert venue.venue_codes == ("VN0000120", "VN0003980")
     assert venue.genres is None and venue.categories is None
     assert venue.venue_names["VN0000120"] == "Teater FÅR302"
     assert venue.is_wheelchair_accessible is False
-
-
-def test_parse_description_takes_the_textbox_with_credits():
-    html = """
-    <div class="forestilling"><h1>Gazed</h1></div>
-    <div class="textbox">
-      <p>GAZED er et soloværk.</p>
-      <p>&nbsp;</p>
-      <p><strong>Koncept og koreografi</strong> Þórunn Guðmundsdóttir<br>
-         <strong>Lysdesign</strong> Ida Herring</p>
-      <p><img src="https://www.faar302.dk/wp-content/uploads/foto.jpg"></p>
-    </div>
-    <footer>TEATER FÅR302</footer>
-    """
-    assert parse_description(_soup(html)) == (
-        "GAZED er et soloværk.\n\n"
-        "**Koncept og koreografi** Þórunn Guðmundsdóttir  \n"
-        "**Lysdesign** Ida Herring"
-    )
-
-
-def test_parse_description_of_a_bot_challenge_is_empty():
-    html = "<html><head><title>Et øjeblik…</title></head><body></body></html>"
-    assert parse_description(_soup(html)) == ""
-
-
-class TestParseDuration:
-    def test_label_and_value_on_one_line(self):
-        html = "<div><p>Varighed ca. 35 min</p></div>"
-        assert parse_duration(_soup(html)) == datetime.timedelta(minutes=35)
-
-    def test_value_on_next_line(self):
-        html = "<div><strong>Varighed:</strong><br>ca. 1 time og 45 minutter</div>"
-        assert parse_duration(_soup(html)) == datetime.timedelta(minutes=105)
-
-    def test_english_label(self):
-        html = "<p>Duration 75 min.</p>"
-        assert parse_duration(_soup(html)) == datetime.timedelta(minutes=75)
-
-    def test_label_without_value(self):
-        assert parse_duration(_soup("<p>Varighed</p><p>kommer snart</p>")) is None
-
-    def test_missing(self):
-        assert parse_duration(_soup("<p>Om forestillingen</p>")) is None
