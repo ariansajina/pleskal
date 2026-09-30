@@ -388,7 +388,36 @@ def test_scrape_detail_returns_event():
     assert result is not None
     assert result["title"] == "My Workshop"
     assert result["external_source"] == "hautscene"
-    assert result["is_wheelchair_accessible"] is False
+    # No separate place: HAUT's own rooms in Thoravej 29, which is step-free.
+    assert result["is_wheelchair_accessible"] is True
+
+
+def _event_html_at(place: str) -> str:
+    return _MINIMAL_EVENT_HTML.replace(
+        '<div class="info-row">',
+        f"""<div class="info-row">
+      <div class="row-title">Place</div>
+      <div class="size-medium">{place}</div>
+    </div>
+    <div class="info-row">""",
+        1,
+    )
+
+
+@pytest.mark.parametrize(
+    ("place", "expected"),
+    [
+        ("HAUT, Blackbox, Thoravej 29", True),
+        ("Thoravej 29, lokale 3.1", True),
+        ("Kunsthal Charlottenborg, Nyhavn 2", False),
+    ],
+)
+def test_scrape_detail_wheelchair_access_follows_the_place(place, expected):
+    session = _mock_session(_event_html_at(place))
+    result = scrape_detail("https://www.hautscene.dk/en/events/my-workshop", session)
+    assert result is not None
+    assert result["venue_address"] == place
+    assert result["is_wheelchair_accessible"] is expected
 
 
 def test_scrape_detail_listing_date_used_when_detail_has_none():

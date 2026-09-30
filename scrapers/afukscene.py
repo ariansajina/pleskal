@@ -6,7 +6,8 @@ and events are taken (the Dans/Events genres plus the matching categories).
 AFUK's own scene page links straight to teaterbilletter.dk, so events keep
 their teaterbilletter.dk links.
 
-Wheelchair access is unconfirmed, so it isn't claimed.
+Wheelchair access is unconfirmed, so it isn't claimed: afuk.dk's practical-info
+page and godadgang.dk say nothing about the scene (last checked 2026-09).
 
 Usage:
     uv run python scrapers/afukscene.py --dry-run

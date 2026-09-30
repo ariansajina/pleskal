@@ -315,6 +315,21 @@ def test_scrape_detail_returns_list_of_events():
     assert result[0]["title"] == "Test Performance"
     assert result[0]["external_source"] == "sort-hvid"
     assert result[0]["venue_name"] == "Sort/Hvid"
+    # Generally good wheelchair access (ticket page), unless the show says otherwise.
+    assert result[0]["is_wheelchair_accessible"] is True
+
+
+def test_scrape_detail_show_page_exception_withdraws_wheelchair_access():
+    html = _MINIMAL_EVENT_HTML.replace(
+        "</body>",
+        """<div class="performance-content">
+        <p>The audience sits on the floor. The show is not wheelchair accessible.</p>
+        </div></body>""",
+    )
+    result = scrape_detail(
+        "https://sort-hvid.dk/en/forestilling/test/", _mock_session(html)
+    )
+    assert result is not None
     assert result[0]["is_wheelchair_accessible"] is False
 
 

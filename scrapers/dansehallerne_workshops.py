@@ -156,6 +156,9 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict]:
                 "venue_address": address,
                 "category": "workshop",
                 "is_free": is_free,
+                # All stages and studios are step-free (dansehallerne.dk/en/about/
+                # accessibility/): step-free entrance 35 m left of the main one, lift,
+                # accessible toilet.
                 "is_wheelchair_accessible": True,
                 "price_note": price_note,
                 "source_url": event_url,

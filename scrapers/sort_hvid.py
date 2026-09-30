@@ -10,6 +10,11 @@ Each detail page carries a date range and a recurring weekly schedule, e.g.:
 
 The scraper expands this into one record per matching performance date.
 
+Wheelchair access: the theatre's ticket page (sort-hvid.dk/billetter/) says
+access is generally good for wheelchairs (reserve a space with the box office),
+with any exception noted on the individual show's page. So a show is marked
+accessible unless its page says otherwise.
+
 Usage:
     uv run python scrapers/sort_hvid.py
     uv run python scrapers/sort_hvid.py --output events.json
@@ -28,6 +33,7 @@ import markdownify
 import requests
 
 from events.limits import MAX_VENUE_LENGTH
+from scrapers.accessibility import wheelchair_access_from_text
 from scrapers.base import (
     build_arg_parser,
     get_crawl_delay,
@@ -413,6 +419,10 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
             category = CATEGORY_MAP[tag_text]
             break
 
+    # ── Wheelchair access ─────────────────────────────────────────────────────
+    page_text = content_el.get_text("\n") if content_el else ""
+    is_wheelchair_accessible = wheelchair_access_from_text(page_text) is not False
+
     # ── Venue ─────────────────────────────────────────────────────────────────
     venue_name = VENUE_NAME[:MAX_VENUE_LENGTH]
     venue_address = (address or VENUE_ADDRESS)[:MAX_VENUE_LENGTH]
@@ -432,7 +442,7 @@ def scrape_detail(url: str, session: requests.Session) -> list[dict] | None:
                 "venue_address": venue_address,
                 "category": category,
                 "is_free": False,
-                "is_wheelchair_accessible": False,
+                "is_wheelchair_accessible": is_wheelchair_accessible,
                 "price_note": "",
                 "source_url": url,
                 "external_source": EXTERNAL_SOURCE,

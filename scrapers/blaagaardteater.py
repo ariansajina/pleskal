@@ -9,8 +9,8 @@ The programme page (``/program``) lists each show as a ``div.teaser`` card
 whose "Køb billet" button carries the ticketing ``data-event_no``; that links
 each event to its page on blaagaardteater.dk.
 
-Step-free: its "Om os" page offers a ramp into both the foyer and the
-auditorium (though there is no accessible toilet).
+Step-free: its "Om" page (blaagaardteater.dk/om) offers a ramp into both the
+foyer and the auditorium (though there is no accessible toilet).
 
 Usage:
     uv run python scrapers/blaagaardteater.py --dry-run

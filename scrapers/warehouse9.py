@@ -7,9 +7,11 @@ detail pages — it is the cleanest, most stable source and gives us titles,
 timezone-aware dates, descriptions, location, source URLs, and a poster image
 (via ATTACH) in one request.
 
-All Warehouse9 events are marked wheelchair accessible: the venue has a level
-entrance and a gender-neutral accessible toilet (stated in every event's
-ACCESSIBILITY note).
+Warehouse9 events are marked wheelchair accessible: the venue has a level
+entrance and a gender-neutral accessible toilet (stated in an "Access
+Information" note that every event's description carries). An event the feed
+places somewhere other than Warehouse9, and whose description lacks the note or
+denies access, isn't claimed.
 
 Usage:
     uv run python scrapers/warehouse9.py
@@ -27,6 +29,7 @@ import zoneinfo
 from icalendar import Calendar
 
 from events.limits import MAX_VENUE_LENGTH
+from scrapers.accessibility import wheelchair_access_from_text
 from scrapers.base import HEADERS, build_arg_parser, make_session, write_output
 
 BASE_URL = "https://warehouse9.dk"
@@ -209,14 +212,26 @@ def build_record(component) -> dict | None:
         "venue_address": venue_address,
         "category": _determine_category(title, description),
         "is_free": _is_free(title, description),
-        # Warehouse9 is wheelchair accessible for all events (level entrance,
-        # accessible toilet via certified stairlift).
-        "is_wheelchair_accessible": True,
+        "is_wheelchair_accessible": _is_wheelchair_accessible(description, venue_name),
         "price_note": "",
         "source_url": source_url,
         "external_source": EXTERNAL_SOURCE,
         "image_url": _extract_image_url(component),
     }
+
+
+def _is_wheelchair_accessible(description: str, venue_name: str) -> bool:
+    """Whether the event is accessible: the note in its description, else the venue.
+
+    The note ("level free entrance ... accessible toilet ... via a certified
+    stairlift") describes Warehouse9's own space, so an event held elsewhere
+    counts only if its description carries it too. A blank feed LOCATION is
+    Warehouse9 (see _split_location).
+    """
+    stated = wheelchair_access_from_text(description)
+    if stated is not None:
+        return stated
+    return venue_name.lower() == VENUE_NAME.lower()
 
 
 def is_upcoming(record: dict, now: datetime.datetime | None = None) -> bool:

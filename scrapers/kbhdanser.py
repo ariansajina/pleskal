@@ -8,6 +8,9 @@ venues.  The scraper flattens these into individual records — one per
 performance date — so the standard base_import machinery can upsert them using
 (source_url, start_datetime) as a unique key.
 
+Wheelchair access is decided per performance, from its venue (see
+WHEELCHAIR_ACCESSIBLE_VENUES); a venue that isn't listed there isn't claimed.
+
 Usage:
     uv run python scrapers/kbhdanser.py
     uv run python scrapers/kbhdanser.py --output events.json
@@ -75,6 +78,26 @@ VENUE_ADDRESSES: dict[str, tuple[str, str]] = {
         "Thomas Jensens Allé 2, 8000 Aarhus C",
     ),
 }
+
+# Venues (by canonical display name above) with documented wheelchair access, from
+# their own accessibility pages (and godadgang.dk where noted):
+#   - Østre Gasværk Teater: wheelchair spaces on all three stages, accessible
+#     toilet in the foyer; only the front row is step-free.
+#   - Republique / Revolver: level entrance, hall and toilets on one floor,
+#     wheelchair spaces and companion tickets on both stages.
+#   - Gamle Scene: ramp and lift, two wheelchair spaces in the stalls (book ahead
+#     via customer service); step-free to the stalls/1st floor on the left side.
+#   - Musikhuset Aarhus: level access and wheelchair spaces in every hall
+#     (godadgang.dk), accessible toilets on every floor.
+WHEELCHAIR_ACCESSIBLE_VENUES = frozenset(
+    {
+        "Østre Gasværk Teater",
+        "Republique",
+        "Republique – Revolver",
+        "Det Kongelige Teater – Gamle Scene",
+        "Musikhuset Aarhus",
+    }
+)
 
 DANISH_MONTHS: dict[str, int] = {
     "januar": 1,
@@ -644,7 +667,9 @@ def scrape_detail(
                 "venue_address": perf["venue_address"],
                 "category": "performance",
                 "is_free": False,
-                "is_wheelchair_accessible": False,
+                "is_wheelchair_accessible": (
+                    perf["venue_name"] in WHEELCHAIR_ACCESSIBLE_VENUES
+                ),
                 "price_note": "",
                 "source_url": detail_url,
                 "external_source": EXTERNAL_SOURCE,
