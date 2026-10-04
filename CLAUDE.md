@@ -8,8 +8,8 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 
 ## Tech Stack
 
-- **Framework:** Django 6.0.3+ (Python 3.14+)
-- **Database:** PostgreSQL (production), SQLite (dev default)
+- **Framework:** Django 6.1+ (Python 3.14+)
+- **Database:** PostgreSQL (production; `docker-compose.yml` for local), SQLite (fallback; the whole app incl. search works on it)
 - **Frontend:** Django templates + HTMX (no JS framework)
 - **Styling:** Tailwind CSS 4.0 (built via CLI)
 - **Theming:** light + dark themes; follows `prefers-color-scheme` unless the header toggle (`static/js/theme.js`) picked one. Colors are CSS custom properties in `templates/base.html` `:root`; dark values live in `templates/partials/dark_theme_tokens.css`
@@ -37,7 +37,7 @@ scrapers/        # Per-source scrapers (afukscene, blaagaardteater, dansehallern
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX, PWA icons, JS shims)
 scripts/         # Standalone scripts (backup_db.py for the backup cron; download_translation_model.py, run at Docker build time)
-conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, translation off, ANALYTICS_ENABLED off)
+conftest.py      # pytest-django autouse fixtures (SSL off, fixed pepper, geocoding off, translation off, ANALYTICS_ENABLED off, plain static storage, cache cleared per test)
 deployment-notes.md  # Production deployment guidance
 docker-compose.yml   # Local PostgreSQL for development
 ```
@@ -48,7 +48,8 @@ docker-compose.yml   # Local PostgreSQL for development
 events/
   models.py            # Event, EventSeries, EventCategory, FeedHit models
   limits.py            # Field length limits (Django-free, so scrapers run standalone)
-  views.py             # CRUD + list + subscribe views
+  views.py             # CRUD + list + subscribe + guide views
+  content/guide.md     # Markdown source of the /guide/ page (directory of Copenhagen dance institutions, collectives and spaces)
   forms.py             # EventForm (markdownx; repeat fields + edit scope for recurring events)
   recurrence.py        # Repeat rules (no DB): Pattern <-> RRULE, describe(), date-dependent presets, expand() within the one-year / per-series limits
   series.py            # Series: plan + apply recurring-event creation and scoped edits (this / following / all), scope_queryset for delete/toggle, scraped-show linking (scraped_series_key, link_scraped_series), listing helpers (first_per_series, attach_series_cards), detail date strip (series_context)
@@ -218,7 +219,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 
 - **Line length:** 88 (ruff default)
 - **Python target:** 3.14 (ruff target; matches `requires-python`)
-- **Ruff rules:** E, F, I (isort), UP (pyupgrade), B (bugbear), SIM (simplify), S (security); E501 ignored
+- **Ruff rules:** E, F, I (isort), UP (pyupgrade), B (bugbear), SIM (simplify), S (security), LOG (logging), ISC (implicit str concat), DJ (django); E501 and DJ012 (model member order) ignored
 - **Per-file ignores:** tests allow S101 (assert), S106 (hardcoded password), S314
 - **Migrations excluded** from linting
 - **Pre-commit hooks:** ruff check+fix, ruff format, ty check, pytest, check-yaml, check-toml, trailing-whitespace, end-of-file-fixer
@@ -250,7 +251,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - Use `factory_boy` factories for test data, not raw model creation
 - Tests live in `<app>/tests/` directories with `test_*.py` naming
 - Each app has `factories.py` for shared test factories
-- `conftest.py` (root) provides autouse fixture: disables SSL redirect, sets `PASSWORD_PEPPER`, uses simple static storage
+- `conftest.py` (root) provides autouse fixtures: disables SSL redirect, sets `PASSWORD_PEPPER`, turns off geocoding, translation and analytics (tests that exercise them re-enable them), uses simple static storage, and clears the cache (rate-limit counters) around each test
 
 ### Theming (light/dark)
 
@@ -339,7 +340,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | Field | Notes |
 |---|---|
 | `id` | UUID PK |
-| `slug` | Auto-generated, immutable, collision-safe (random 2-byte hex suffix) |
+| `slug` | Auto-generated from the title, immutable; a random 2-byte hex suffix is appended only on collision |
 | `title` | Max 250 chars, min 3 chars |
 | `description` | Markdown |
 | `image` | Optional; WebP, max 10 MB, 1200px max dimension, EXIF stripped |
@@ -446,13 +447,15 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `MyEventsView` | `/my-events/` | Login required (redirects to publisher profile) |
 | `SubscribeView` | `/subscribe/` | Public |
 | `TemplateView` (about) | `/about/` | Public (static `about.html`) |
+| `TemplateView` (privacy) | `/privacy/` | Public (static `privacy.html`) |
+| `GuideView` | `/guide/` | Public (renders `events/content/guide.md`; linked in the nav) |
 | `EventICalFeed` | `/feed/events.ics` | Public |
 | `EventRSSFeed` | `/feed/events.rss` | Public |
 | `EventICalSingleView` | `/events/<slug>/calendar.ics` | Public |
 | `EventICalSeriesView` | `/events/<slug>/all-dates.ics` | Public; every upcoming published date of the event's series (404 for a single event); counted as a calendar download by analytics |
 
 - Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity
-- Event list filters (`_filtered_event_queryset` + `events/partials/event_filter_panel.html`) support: category (multi-value), date range, is_free, is_wheelchair_accessible, search (title/venue/description/submitter)
+- Event list filters (`_filtered_event_queryset` + `events/partials/event_filter_panel.html`) support: category (multi-value), publisher (multi-value), date range, is_free, is_wheelchair_accessible, search (`icontains` per word over title/venue/description/English description/submitter, so it works on SQLite too)
 - Quick date filters: this_week, next_week, this_month, next_month
 - Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting); a repeating event counts each occurrence and is cut off at the remaining allowance. This cap and the one-year limit apply to private users only: system (scraper) accounts are exempt, and the importer never runs them
 - The event list and publisher profile show a series as one card (see EventSeries → Display)
@@ -467,6 +470,8 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `/manifest.webmanifest` | PWA manifest (`config.pwa.manifest_view`) |
 | `/service-worker.js` | PWA service worker (`config.pwa.service_worker_view`); served at root so SW scope covers the whole site |
 | `/offline/` | Offline fallback rendered when SW intercepts a navigation with no network |
+| `/robots.txt` | Generated in `config/urls.py`; disallows the private/auth `/accounts/` paths, `/admin/`, `/claim/`, `/markdownx/`, `/events/submit/` and `/stats/`; points at the sitemap |
+| `/sitemap.xml` | `events/sitemaps.py` (events, publishers, static pages) |
 | `/stats/` | `analytics.views.StatsDashboardView`: staff-only analytics dashboard (anonymous → login, non-staff → 403); linked in the nav for staff, network-only in the service worker, disallowed in robots.txt |
 
 ### accounts/
@@ -492,10 +497,10 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 
 This repo ships `.claude/hooks/` + `.claude/settings.json` for remote/web sessions (gated on `CLAUDE_CODE_REMOTE=true`, no-op locally):
 
-- **`session-start.sh`** (`SessionStart`): runs `uv sync --dev`, `npm install`, and `pre-commit install --install-hooks` at session start, so dependencies are ready without spending turns on setup.
-- **`pre-pr-check.sh`** (`PreToolUse`, matches `create_pull_request`): runs `pre-commit run --all-files` — ruff format, ruff check, ty check, and the full `pytest -n 8` suite (see `.pre-commit-config.yaml`) — and blocks PR creation with the failure output until it's clean.
+- **`session-start.sh`** (`SessionStart`): installs the Python from `.python-version` (via `uvx uv@latest python install`, since the container ships no 3.14 and its own uv is too old to know current 3.14 releases), then runs `uv sync --dev`, `npm install`, and `pre-commit install --install-hooks`, so dependencies are ready without spending turns on setup.
+- **`pre-pr-check.sh`** (`PreToolUse`, matches `mcp__github__create_pull_request`): blocks PR creation while tracked files have uncommitted changes (the checks must run on what's pushed), then runs `pre-commit run --all-files` — ruff format, ruff check --fix, ty check, and the full `pytest -n 8` suite (see `.pre-commit-config.yaml`; about 2 minutes) — and blocks with the failure output until it's clean. When ruff rewrote files, commit and push those fixes before retrying.
 
-Project skills live in `.claude/skills/`: `run-pleskal` (run + smoke-test the app locally) and `scraper-health` (samples 1–3 scraped events per active scraper from the live site, compares them with the venues' pages, checks start times for time-zone shifts (against the teaterbilletter.dk API for the venues scraped from it, and against the clock times on each source page), and reports a Healthy / Needs work / Unhealthy table; meant to run as a periodic routine; evidence gathered by `collect.py`, which reads public pages only and never the feeds, so FeedHit counts stay clean).
+Project skills live in `.claude/skills/`: `run-pleskal` (run + smoke-test the app locally on SQLite: `driver.sh full` sets up, seeds a user + event, starts the dev server and checks health, home, search, detail, iCal feed and login) and `scraper-health` (samples 1–3 scraped events per active scraper from the live site, compares them with the venues' pages, checks start times for time-zone shifts (against the teaterbilletter.dk API for the venues scraped from it, and against the clock times on each source page), and reports a Healthy / Needs work / Unhealthy table; meant to run as a periodic routine; evidence gathered by `collect.py`, which reads public pages only and never the feeds, so FeedHit counts stay clean).
 
 Because of this hook, **do not manually run `ruff format`, `ruff check`, `ty check`, or `pytest` before opening a PR** — the hook runs them automatically and will block the PR creation tool call if anything fails, feeding the failure output back for you to fix and retry. Manually re-running these first just duplicates the check. Only run them ad hoc if you want a mid-task sanity check on a single file, or if the hook itself surfaces a failure to diagnose.
 
@@ -533,6 +538,7 @@ See `.env.example` for the full list. Key variables:
 | `APP_VERSION` | Application version, used as the Sentry release tag (set automatically by deploy workflow from the git tag) |
 | `SENTRY_CRON_SCHEDULE` | Cron services only: overrides the Sentry Crons schedule in code when the service's Railway cron schedule differs |
 | `ADMINS` | Comma-separated admin emails (notified on new signups) |
+| `DEFAULT_FROM_EMAIL` / `SERVER_EMAIL` | Sender addresses (default `pleskal <noreply@contact.pleskal.dk>`; `.env.example` uses Resend's `onboarding@resend.dev` for testing) |
 | `CSRF_TRUSTED_ORIGINS` | Required in production |
 | `SITE_DOMAIN` | Site domain for allauth |
 | `SITE_NAME` | Site name for allauth |

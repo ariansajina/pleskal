@@ -15,5 +15,5 @@ cd "$CLAUDE_PROJECT_DIR"
 # interpreter from .python-version with an up-to-date uv first.
 uvx uv@latest python install
 uv sync --dev
-npm install
+npm install --no-audit --no-fund
 uv run pre-commit install --install-hooks
