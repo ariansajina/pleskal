@@ -60,7 +60,7 @@ For every sampled event, read `$OUT/sources/<slug>.txt` (or fetch the
 `source_url` with WebFetch when the text dump is thin — some venues render
 dates with JavaScript: Sydhavn Teater takes them from its CMS API, Warehouse9
 from an iCal feed; read the scraper module in `scrapers/` to see where a field
-really comes from before calling it wrong). Check:
+really comes from before calling it wrong).
 
 FÅR302, Blaagaard Teater, AFUK Scene and Dansekapellet are scraped entirely
 from the teaterbilletter.dk API (`scrapers/teaterbilletter.py`; each module's
@@ -72,6 +72,8 @@ instead: its `scheduledShows[].dateTime` is **UTC**, so a 20:00 show reads
 `18:00:00` in summer and `19:00:00` in winter. Blaagaard and AFUK take only
 dance/performance/new-circus shows, so a play missing from pleskal is not a
 fault.
+
+Check:
 
 | Check | Healthy when |
 |---|---|

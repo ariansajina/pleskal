@@ -1,10 +1,10 @@
 #!/bin/bash
 # Driver for running pleskal locally and smoke-testing the event flow.
 # Usage: driver.sh <setup|seed|start|smoke|stop|full>
-#   setup  - create .venv (py3.13, --ignore-requires-python) + install deps, build CSS
+#   setup  - uv sync --dev (versions from uv.lock), npm install, build CSS
 #   seed   - migrate DB, create a smoke-test user + event
 #   start  - start the dev server in the background, write PID to .smoke-server.pid
-#   smoke  - curl the home page, event detail, and iCal feed; verify the seeded event appears
+#   smoke  - curl health, home, search, event detail, iCal feed, login; verify the seeded event appears
 #   stop   - kill the background dev server
 #   full   - setup + seed + start + smoke + stop (default end-to-end run)
 set -euo pipefail
@@ -81,32 +81,28 @@ do_start() {
 
 do_smoke() {
   local base="http://127.0.0.1:$PORT"
-  local fail=0
+  local fail=0 code body
 
-  code=$(curl -sS -o /dev/null -w "%{http_code}" "$base/health/")
-  [ "$code" = "200" ] && echo "PASS /health/ -> 200" || { echo "FAIL /health/ -> $code"; fail=1; }
+  # Fetch each body into a variable before grepping: `curl | grep -q` fails
+  # under pipefail whenever grep exits before curl has written everything
+  # (curl error 23), which turns a passing check into a FAIL.
+  check() {  # check <label> <path> <needle or empty>
+    body=$(curl -sS -w '\n%{http_code}' "$base$2")
+    code=${body##*$'\n'}
+    body=${body%$'\n'*}
+    if [ "$code" = "200" ] && { [ -z "$3" ] || grep -qF -- "$3" <<<"$body"; }; then
+      echo "PASS $2 -> 200${3:+, contains \"$3\"}"
+    else
+      echo "FAIL $2 -> $code${3:+ (expected \"$3\")} ($1)"; fail=1
+    fi
+  }
 
-  if curl -sS "$base/" | grep -q "Smoke Test Event"; then
-    echo "PASS / lists seeded event"
-  else
-    echo "FAIL / does not list seeded event"; fail=1
-  fi
-
-  code=$(curl -sS -o /dev/null -w "%{http_code}" "$base/events/smoke-test-event/")
-  if [ "$code" = "200" ] && curl -sS "$base/events/smoke-test-event/" | grep -q "Smoke Test Event"; then
-    echo "PASS /events/smoke-test-event/ -> 200, shows title"
-  else
-    echo "FAIL /events/smoke-test-event/ -> $code"; fail=1
-  fi
-
-  if curl -sS "$base/feed/events.ics" | grep -q "SUMMARY:Smoke Test Event"; then
-    echo "PASS /feed/events.ics contains seeded event"
-  else
-    echo "FAIL /feed/events.ics missing seeded event"; fail=1
-  fi
-
-  code=$(curl -sS -o /dev/null -w "%{http_code}" "$base/accounts/login/")
-  [ "$code" = "200" ] && echo "PASS /accounts/login/ -> 200" || { echo "FAIL /accounts/login/ -> $code"; fail=1; }
+  check "health check" /health/ ""
+  check "home page lists seeded event" / "Smoke Test Event"
+  check "search finds seeded event" "/?q=smoke" "Smoke Test Event"
+  check "detail page shows title" /events/smoke-test-event/ "Smoke Test Event"
+  check "iCal feed has seeded event" /feed/events.ics "SUMMARY:Smoke Test Event"
+  check "login page" /accounts/login/ ""
 
   return $fail
 }

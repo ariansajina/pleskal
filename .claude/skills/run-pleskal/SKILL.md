@@ -23,10 +23,10 @@ Individual steps (useful when iterating):
 ```
 
 `smoke` PASS/FAIL output checks: `/health/` returns 200, the home page
-lists the seeded "Smoke Test Event", its detail page
-(`/events/smoke-test-event/`) returns 200 and shows the title, the
+and a search (`/?q=smoke`) list the seeded "Smoke Test Event", its detail
+page (`/events/smoke-test-event/`) returns 200 and shows the title, the
 iCal feed (`/feed/events.ics`) contains a `SUMMARY:Smoke Test Event`
-line, and `/accounts/login/` returns 200. Server logs go to
+line, and `/accounts/login/` returns 200. It exits non-zero on any FAIL. Server logs go to
 `/tmp/pleskal-smoke-server.log`; the PID is tracked in
 `.smoke-server.pid`.
 
@@ -39,8 +39,8 @@ direct model access (see the seed step in `driver.sh` for the pattern:
 
 - `uv` (already on PATH in this environment)
 - `npm` (for the Tailwind CSS build)
-- No Postgres needed — the driver uses SQLite (`DATABASE_URL=sqlite:///db.sqlite3`).
-  Full-text search doesn't work on SQLite, but the rest of the app does.
+- No Postgres needed — the driver uses SQLite (`DATABASE_URL=sqlite:///db.sqlite3`),
+  on which the whole app works, search included.
 
 ## Build
 
@@ -94,8 +94,13 @@ are all optional and unset here).
 - **No `PASSWORD_PEPPER` / `SECRET_KEY` in `.env` locally** → Django
   raises on startup. The driver generates a throwaway pepper and uses
   a fixed dev secret key; don't reuse these for anything real.
-- Search (`?q=`) silently returns nothing on SQLite — Postgres-only
-  feature. Not a bug if you're testing on the SQLite fallback.
+- Search (`?q=`) is `icontains` per word, which on SQLite is
+  case-insensitive for ASCII only: `ø` won't match `Ø` there (it does on
+  Postgres). Not a bug if you're testing on the SQLite fallback.
+- In shell scripts, don't pipe `curl` into `grep -q` under `set -o
+  pipefail`: grep exits on the first match, curl fails writing the rest
+  (error 23) and the check reports FAIL. Capture the body first, as
+  `driver.sh` does.
 
 ## Troubleshooting
 
