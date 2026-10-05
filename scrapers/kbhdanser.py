@@ -258,6 +258,8 @@ _DATE_ONLY_RES = (
     ),
 )
 _TIME_RE = re.compile(r"(\d{1,2})[.:](\d{2})\s*(AM|PM)?", re.IGNORECASE)
+# A press citation under a review quote: "Fjord Review · 15. juli 2020 · Standby".
+_CITATION_SEPARATOR = "·"
 # What may surround a date on a performance line besides times: "kl.", "og",
 # dashes, and a short note like "EXTRA SHOW" or "Udsolgt". Anything longer is
 # a sentence that happens to mention a date, not a performance.
@@ -284,7 +286,8 @@ def parse_performance_line(
 
     A performance line is a date plus its time(s): "September 26, 2026 –
     8:00 PM", "21. maj 2026 – kl. 19:30", "24. maj 2025. kl. 15:00 og 19:30"
-    (two shows). Headline ranges and prose mentioning a date yield nothing.
+    (two shows). Headline ranges, press citations and prose mentioning a date
+    yield nothing.
     """
     if _DATE_RANGE_RE.search(line):
         return []
@@ -292,6 +295,11 @@ def parse_performance_line(
     if len(matches) != 1:
         return parse_dates(line) if len(matches) > 1 else []
     date_m = matches[0]
+    if (
+        _CITATION_SEPARATOR in line[: date_m.start()]
+        and _CITATION_SEPARATOR in line[date_m.end() :]
+    ):
+        return []
     dates = parse_dates(date_m.group(0))
     if not dates:
         return []
@@ -307,15 +315,22 @@ def parse_performance_line(
 
 
 _DURATION_LINE_RE = re.compile(r"^(?:duration|varighed)\s*:?\s*(.+)$", re.IGNORECASE)
+_DURATION_LABEL_RE = re.compile(r"^(?:duration|varighed)\s*:?$", re.IGNORECASE)
 
 
 def parse_duration(text: str) -> datetime.timedelta | None:
-    """Return the running time from a "Duration: 1h15m" / "Varighed: 75 min" line."""
-    for line in text.split("\n"):
-        m = _DURATION_LINE_RE.match(line.strip())
-        if not m:
+    """Return the running time from a "Duration: 1h15m" / "Varighed: 75 min" line.
+
+    The value may also sit on the line after a bare "Duration:" label.
+    """
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    for i, line in enumerate(lines):
+        if _DURATION_LABEL_RE.match(line):
+            value = lines[i + 1].lower() if i + 1 < len(lines) else ""
+        elif m := _DURATION_LINE_RE.match(line):
+            value = m.group(1).lower()
+        else:
             continue
-        value = m.group(1).lower()
         hours = re.search(r"(\d+)\s*(?:hours?|timer?|h|t)(?![a-zæøå])", value)
         minutes = re.search(r"(\d+)\s*(?:minutes?|minutter|min|m)(?![a-zæøå])", value)
         if hours or minutes:
@@ -413,8 +428,9 @@ def collect_event_cards(soup: BeautifulSoup) -> list[dict]:
         h1 = a.find("h1")
         if not h1:
             continue
-        # Skip duplicates (same link may appear in carousel + card section)
-        if href in seen_urls:
+        # Skip duplicates (same link may appear in carousel + card section,
+        # with or without the trailing slash)
+        if href.rstrip("/") in seen_urls:
             continue
 
         title = h1.get_text(strip=True)
@@ -426,7 +442,7 @@ def collect_event_cards(soup: BeautifulSoup) -> list[dict]:
 
         image_url = _first_photo(a)
 
-        seen_urls.add(href)
+        seen_urls.add(href.rstrip("/"))
         cards.append(
             {
                 "title": title,
@@ -507,6 +523,11 @@ _NOT_A_VENUE_RE = re.compile(
     r"show|forestilling|premiere|ticket|billet|sold out|udsolgt|ekstra|extra",
     re.IGNORECASE,
 )
+# A review quote ("“The NDT dancers are phenomenal.”") above its citation.
+_QUOTE_CHARS = "\"'“”„«»‘’"
+# A credits entry naming where the work premiered ("WORLD PREMIERE" /
+# "11. februar 2027," / "Amare, Den Haag, Holland"), not a show on sale here.
+_PREMIERE_HEADING_RE = re.compile(r"premiere\b", re.IGNORECASE)
 
 
 def _is_known_venue(line: str) -> bool:
@@ -514,29 +535,41 @@ def _is_known_venue(line: str) -> bool:
     return any(key in lower for key in VENUE_ADDRESSES)
 
 
-def _block_venue(lines: list[str], i: int, title: str) -> str | None:
-    """Return the venue heading above the performance list starting at line *i*.
+def _block_heading(lines: list[str], i: int) -> str:
+    """Return the line heading the performance list starting at line *i*.
 
-    Each list sits under its venue: "GAMLE SCENE", "Østre Gasværk Teater", or a
-    heading split over two lines ("Republique /" + "Revolver"). Returns None
-    when the line above isn't a venue heading (a label such as "ARTISTIC
-    TEAM:", a note such as "EXTRA SHOW", the page title), so the list keeps
-    the venue of the one before it.
+    That is the line just above the list, past a headline date range, joined
+    with the line before it when a heading is split over two lines
+    ("Republique /" + "Revolver"). Returns "" at the top of the page.
     """
     j = i - 1
     while j >= 0 and _DATE_RANGE_RE.search(lines[j]):
         j -= 1  # skip the headline range between venue and list
     if j < 0:
-        return None
+        return ""
     heading = lines[j]
     if j > 0 and lines[j - 1].endswith("/"):
         heading = f"{lines[j - 1]} {heading}"
+    return heading
+
+
+def _block_venue(heading: str, title: str) -> str | None:
+    """Return *heading* if it names the venue of the performance list below it.
+
+    Each list sits under its venue: "GAMLE SCENE", "Østre Gasværk Teater",
+    "Republique / Revolver". Returns None when the heading isn't a venue (a
+    label such as "ARTISTIC TEAM:", a note such as "EXTRA SHOW", a review
+    quote, the page title), so the list keeps the venue of the one before it.
+    """
+    if not heading:
+        return None
     if _is_known_venue(heading):
         return heading
     if (
         len(heading) <= 40
         and not re.search(r"\d", heading)
         and not heading.endswith((":", ".", "!", "?"))
+        and not heading.startswith(tuple(_QUOTE_CHARS))
         and not _NOT_A_VENUE_RE.search(heading)
         and heading.casefold() != title.casefold()
     ):
@@ -551,7 +584,9 @@ def _extract_performances(soup: BeautifulSoup) -> list[dict]:
     Returns a flat list of performance dicts (venue_name, venue_address,
     start_datetime, end_datetime), one per date/time entry. Pages render the
     performance list twice (desktop and mobile layouts); each start time is
-    returned once, with the venue of its first occurrence.
+    returned once, with the venue of its first occurrence. A date without a
+    time under a premiere heading is a credits entry (where and when the work
+    premiered, often abroad), not a performance.
     """
     full_text = soup.get_text("\n")
     lines = [line.strip() for line in full_text.split("\n") if line.strip()]
@@ -564,14 +599,19 @@ def _extract_performances(soup: BeautifulSoup) -> list[dict]:
     seen: set[str] = set()
     current_venue: str | None = None
     in_block = False
+    premiere_credit = False
     for i, line in enumerate(lines):
         pairs = parse_performance_line(line)
         if not pairs:
             in_block = False
             continue
         if not in_block:
-            current_venue = _block_venue(lines, i, title) or current_venue
+            heading = _block_heading(lines, i)
+            current_venue = _block_venue(heading, title) or current_venue
+            premiere_credit = bool(_PREMIERE_HEADING_RE.search(heading))
             in_block = True
+        if premiere_credit and all(t is None for _, t in pairs):
+            continue
         for d, t in pairs:
             if d < today:
                 continue

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import zoneinfo
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
@@ -18,7 +18,10 @@ from scrapers.hautscene import (
     combine_dt,
     parse_date,
     parse_time,
+    scrape,
     scrape_detail,
+    split_sessions,
+    text_dates,
 )
 
 CPH_TZ = zoneinfo.ZoneInfo("Europe/Copenhagen")
@@ -258,6 +261,8 @@ def test_collect_event_listing_data_extracts_dates():
     assert data[1]["url"] == "https://www.hautscene.dk/en/events/show-two"
     assert data[1]["start_date_str"] == "June 20, 2026"
     assert data[1]["end_date_str"] == "June 22, 2026"  # visible → multi-day
+    assert data[0]["hidden_end_date_str"] == "June 18, 2026"
+    assert data[1]["hidden_end_date_str"] == ""
 
 
 def test_collect_event_listing_data_skips_invisible_links():
@@ -730,3 +735,98 @@ def test_scrape_detail_multi_day_event_uses_end_date():
     end = datetime.datetime.fromisoformat(result["end_datetime"])
     end_cph = end.astimezone(CPH_TZ)
     assert end_cph.day == 26
+
+
+# ── Courses of separate sessions ──────────────────────────────────────────────
+
+
+def test_text_dates_danish_and_english():
+    text = (
+        "**23. september 2026: Økonomiske infrastrukturer** – ...\n"
+        "**11. november 2026: Opkvalificering**\n"
+        "On March 3, 2027 and 4 May 2027 too. Not a date: 31. februar 2027."
+    )
+    assert text_dates(text) == {
+        datetime.date(2026, 9, 23),
+        datetime.date(2026, 11, 11),
+        datetime.date(2027, 3, 3),
+        datetime.date(2027, 5, 4),
+    }
+
+
+# Shape of hautscene.dk/en/events/rene-penge---…: three sessions, the card
+# showing only the first date (the end date is hidden), 10.00-12.00.
+_COURSE_RECORD = {
+    "title": "Rene penge?",
+    "description": (
+        "Forløbet er to miniseminarer og en workshop.\n\n"
+        "**23. september 2026: Økonomiske infrastrukturer** – ...\n\n"
+        "**11. november 2026: Opkvalificering** - ...\n\n"
+        "**3. marts 2027:  Kunstnerisk praksis.** – ...\n\n"
+        "Gode Penge blev stiftet 14. april 2014."
+    ),
+    "start_datetime": "2026-09-23T08:00:00+00:00",
+    "end_datetime": "2026-09-23T10:00:00+00:00",
+    "source_url": "https://www.hautscene.dk/en/events/rene-penge",
+}
+
+
+def test_split_sessions_one_record_per_session():
+    records = split_sessions(_COURSE_RECORD, datetime.date(2027, 3, 3))
+    # Each session at 10.00-12.00 Copenhagen time, across the DST change.
+    assert [(r["start_datetime"], r["end_datetime"]) for r in records] == [
+        ("2026-09-23T08:00:00+00:00", "2026-09-23T10:00:00+00:00"),
+        ("2026-11-11T09:00:00+00:00", "2026-11-11T11:00:00+00:00"),
+        ("2027-03-03T09:00:00+00:00", "2027-03-03T11:00:00+00:00"),
+    ]
+    assert {r["source_url"] for r in records} == {_COURSE_RECORD["source_url"]}
+    assert {r["title"] for r in records} == {"Rene penge?"}
+
+
+def test_split_sessions_without_end_time():
+    record = {**_COURSE_RECORD, "end_datetime": None}
+    records = split_sessions(record, datetime.date(2027, 3, 3))
+    assert len(records) == 3
+    assert all(r["end_datetime"] is None for r in records)
+
+
+@pytest.mark.parametrize(
+    "last_date",
+    [
+        None,  # no hidden end date
+        datetime.date(2026, 9, 23),  # hidden end date is the start date
+        datetime.date(2027, 4, 1),  # last date not named in the description
+    ],
+)
+def test_split_sessions_leaves_other_listings_alone(last_date):
+    assert split_sessions(_COURSE_RECORD, last_date) == [_COURSE_RECORD]
+
+
+def test_split_sessions_needs_the_first_date_named():
+    record = {**_COURSE_RECORD, "start_datetime": "2026-09-22T08:00:00+00:00"}
+    assert split_sessions(record, datetime.date(2027, 3, 3)) == [record]
+
+
+@patch("scrapers.hautscene.time.sleep")
+@patch("scrapers.hautscene.get_crawl_delay", return_value=None)
+@patch("scrapers.hautscene.make_session")
+@patch("scrapers.hautscene.scrape_detail")
+@patch("scrapers.hautscene.collect_event_listing_data")
+def test_scrape_splits_a_course_by_its_hidden_end_date(
+    mock_listing, mock_detail, _session, _delay, _sleep
+):
+    mock_listing.return_value = [
+        {
+            "url": _COURSE_RECORD["source_url"],
+            "start_date_str": "September 23, 2026",
+            "end_date_str": "",
+            "hidden_end_date_str": "March 3, 2027",
+        }
+    ]
+    mock_detail.return_value = _COURSE_RECORD
+    records = scrape()
+    assert [r["start_datetime"][:10] for r in records] == [
+        "2026-09-23",
+        "2026-11-11",
+        "2027-03-03",
+    ]

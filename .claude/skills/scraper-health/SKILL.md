@@ -62,6 +62,16 @@ dates with JavaScript: Sydhavn Teater takes them from its CMS API, Warehouse9
 from an iCal feed; read the scraper module in `scrapers/` to see where a field
 really comes from before calling it wrong).
 
+Sydhavn Teater shows whose ticket link points to teaterbilletter.dk take their
+performance times from that show in the ticketing API
+(`https://teaterbilletter.dk/api/events/<eventNo>`, the number ending the
+ticket link; times **UTC**), which wins over the "When" on the venue's page:
+the page often gives only a date range or one time for every day. Only shows
+without such a link fall back to the page's schedule, or to a 00:00
+placeholder per day when it has none. HAUT courses whose card shows only the
+first date (the last kept as a hidden end date) are split into one event per
+session date named in the description.
+
 FÅR302, Blaagaard Teater, AFUK Scene and Dansekapellet are scraped entirely
 from the teaterbilletter.dk API (`scrapers/teaterbilletter.py`; each module's
 `VENUE` has its venue codes and genre filter), and the collector already

@@ -1,6 +1,10 @@
 """Unit tests for scrapers/sydhavnteater.py helper functions."""
 
 import datetime
+from unittest.mock import MagicMock, patch
+
+import pytest
+import requests
 
 from scrapers.sydhavnteater import (
     CATEGORY_MAP,
@@ -8,9 +12,12 @@ from scrapers.sydhavnteater import (
     _extract_where,
     _stage_address,
     build_records,
+    fetch_ticket_event,
     is_upcoming,
     parse_description,
     parse_when,
+    scrape,
+    ticket_event_no,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -564,3 +571,155 @@ def test_wheelchair_access_ignores_sections_that_are_not_about_access():
     }
     event = _make_event(stage=[{"title": "Site Specific"}], sections=[section])
     assert build_records(event)[0]["is_wheelchair_accessible"] is False
+
+
+# ── teaterbilletter.dk showtimes ──────────────────────────────────────────────
+
+_TICKET_LINK = "https://teaterbilletter.dk/forestillinger/kalk-fald-152710"
+
+# Shape of https://teaterbilletter.dk/api/events/152710 (KALK FALD): the CMS
+# gives only "12.03-31.03.2027"; the ticketing API lists each performance in
+# UTC, including a cancelled one and one closed to the public.
+_TICKET_EVENT = {
+    "eventNo": 152710,
+    "title": "KALK FALD",
+    "durationInMinutes": 75,
+    "scheduledShows": [
+        {"dateTime": "2027-03-12T19:00:00", "state": "Active", "type": "Normal"},
+        {"dateTime": "2027-03-13T15:00:00", "state": "Active", "type": "Normal"},
+        {"dateTime": "2027-03-14T15:00:00", "state": "Cancelled", "type": "Normal"},
+        {
+            "dateTime": "2027-03-16T09:00:00",
+            "state": "Active",
+            "type": "Lukket forestilling",
+        },
+        {"dateTime": "2027-03-30T18:00:00", "state": "Active", "type": "Normal"},
+    ],
+}
+
+
+def _kalk_fald(**overrides) -> dict:
+    return _make_range_event(
+        "2027-03-12", "2027-03-31", ticketLink=_TICKET_LINK, **overrides
+    )
+
+
+@pytest.mark.parametrize(
+    ("link", "expected"),
+    [
+        (_TICKET_LINK, "152710"),
+        ("https://www.teaterbilletter.dk/forestillinger/stigma-147063/", "147063"),
+        ("https://teaterbilletter.dk/forestillinger/kalk-fald-152710?ref=x", "152710"),
+        ("https://billetto.dk/e/kalk-fald-152710", None),
+        ("https://teaterbilletter.dk/", None),
+        (None, None),
+    ],
+)
+def test_ticket_event_no(link, expected):
+    assert ticket_event_no(_make_event(ticketLink=link)) == expected
+
+
+def test_fetch_ticket_event_returns_the_event():
+    session = MagicMock()
+    session.get.return_value.json.return_value = _TICKET_EVENT
+    assert fetch_ticket_event(session, "152710") == _TICKET_EVENT
+    assert session.get.call_args.args[0] == (
+        "https://teaterbilletter.dk/api/events/152710"
+    )
+
+
+@pytest.mark.parametrize(
+    "configure",
+    [
+        lambda s: setattr(
+            s.get.return_value,
+            "raise_for_status",
+            MagicMock(side_effect=requests.HTTPError("404")),
+        ),
+        lambda s: setattr(s.get, "side_effect", requests.ConnectionError("down")),
+        lambda s: setattr(
+            s.get.return_value, "json", MagicMock(side_effect=ValueError("not json"))
+        ),
+        lambda s: setattr(s.get.return_value.json, "return_value", {"eventNo": 1}),
+        lambda s: setattr(s.get.return_value.json, "return_value", []),
+    ],
+)
+def test_fetch_ticket_event_failure_returns_none(configure):
+    session = MagicMock()
+    configure(session)
+    assert fetch_ticket_event(session, "152710") is None
+
+
+def test_build_records_uses_ticketing_showtimes():
+    records = build_records(_kalk_fald(), _TICKET_EVENT)
+    # Copenhagen time, ending after the API's running time; cancelled and
+    # closed performances left out.
+    assert [(r["start_datetime"], r["end_datetime"]) for r in records] == [
+        ("2027-03-12T19:00:00+00:00", "2027-03-12T20:15:00+00:00"),
+        ("2027-03-13T15:00:00+00:00", "2027-03-13T16:15:00+00:00"),
+        ("2027-03-30T18:00:00+00:00", "2027-03-30T19:15:00+00:00"),
+    ]
+    start = datetime.datetime.fromisoformat(records[0]["start_datetime"])
+    assert start.astimezone(CPH_TZ).hour == 20
+    assert {r["source_url"] for r in records} == {
+        "https://sydhavnteater.dk/event/test-event"
+    }
+
+
+def test_build_records_cms_duration_wins_over_ticketing():
+    event = _kalk_fald(
+        sections=[
+            {
+                "data": [
+                    {
+                        "title": "Varighed",
+                        "text": "1 time",
+                        "titleEnglish": "Duration",
+                        "textEnglish": "",
+                    }
+                ]
+            }
+        ]
+    )
+    records = build_records(event, _TICKET_EVENT)
+    assert records[0]["end_datetime"] == "2027-03-12T20:00:00+00:00"
+
+
+def test_build_records_ticketing_without_duration_has_no_end():
+    records = build_records(_kalk_fald(), {**_TICKET_EVENT, "durationInMinutes": 0})
+    assert len(records) == 3
+    assert all(r["end_datetime"] is None for r in records)
+
+
+def test_build_records_ticketing_without_shows_falls_back_to_cms():
+    records = build_records(_kalk_fald(), {**_TICKET_EVENT, "scheduledShows": []})
+    # 12.03-31.03 with no "When": one midnight placeholder per day
+    assert len(records) == 20
+    assert records[0]["start_datetime"] == "2027-03-11T23:00:00+00:00"
+
+
+@patch("scrapers.sydhavnteater.is_upcoming", return_value=True)
+@patch("scrapers.sydhavnteater.make_session")
+@patch("scrapers.sydhavnteater.fetch_ticket_event")
+@patch("scrapers.sydhavnteater.fetch_events")
+def test_scrape_looks_up_ticketing_showtimes(
+    mock_events, mock_ticket, _session, _upcoming
+):
+    without_link = _make_event(title="Open stage")
+    mock_events.return_value = [_kalk_fald(), without_link]
+    mock_ticket.return_value = _TICKET_EVENT
+    records = scrape()
+    assert mock_ticket.call_count == 1
+    assert mock_ticket.call_args.args[1] == "152710"
+    assert [r["title"] for r in records] == ["Test Event"] * 3 + ["Open stage"]
+
+
+@patch("scrapers.sydhavnteater.is_upcoming", return_value=True)
+@patch("scrapers.sydhavnteater.make_session")
+@patch("scrapers.sydhavnteater.fetch_ticket_event", return_value=None)
+@patch("scrapers.sydhavnteater.fetch_events")
+def test_scrape_falls_back_to_cms_when_ticketing_fails(
+    mock_events, _ticket, _session, _upcoming
+):
+    mock_events.return_value = [_kalk_fald()]
+    assert len(scrape()) == 20
