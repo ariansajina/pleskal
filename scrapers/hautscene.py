@@ -3,6 +3,12 @@
 Fetches all event listing URLs, visits each detail page, and outputs a JSON
 array of event dicts ready for ingestion into the pleskal database.
 
+A course of separate sessions (e.g. three seminars between September and
+March) can be listed with only its first date showing, its last date kept as a
+hidden end date and the session dates named in the description; such a listing
+is split into one record per session (see ``split_sessions``), so it isn't
+dated on its long-past first session alone.
+
 Wheelchair access follows the place: HAUT is in Thoravej 29, whose accessibility
 page (thoravej29.dk/da/tilgaengelighed) describes a ramped main entrance, a level
 ground floor (black box, studio 0.1), wide lifts to the other floors and
@@ -123,13 +129,25 @@ def _listing_date_strs(card: Tag) -> tuple[str, str]:
     return start_date_str, end_date_str
 
 
+def _listing_hidden_end_str(card: Tag) -> str:
+    """Return the end date Webflow hides on the card, or "".
+
+    A course of sessions can carry its last session as the end date while the
+    card shows only the first ("September 23, 2026, 10.00-12.00").  Used only
+    to bound ``split_sessions``, never as the event's end.
+    """
+    end_el = card.select_one("div.event-teaser-date .end-date.w-condition-invisible")
+    return end_el.get_text(strip=True) if end_el else ""
+
+
 def collect_event_listing_data(
     session: requests.Session, delay: float = 0.5
 ) -> list[dict]:
     """
     Return listing metadata for all upcoming events.
 
-    Each dict contains ``url``, ``start_date_str``, and ``end_date_str``.
+    Each dict contains ``url``, ``start_date_str``, ``end_date_str`` and
+    ``hidden_end_date_str`` (an end date the card doesn't show).
     Dates are the rendered text from the calendar page (e.g. "June 18, 2026").
     """
     seen: set[str] = set()
@@ -174,6 +192,7 @@ def collect_event_listing_data(
                     "url": url,
                     "start_date_str": start_date_str,
                     "end_date_str": end_date_str,
+                    "hidden_end_date_str": _listing_hidden_end_str(card),
                 }
             )
             found_on_page += 1
@@ -266,6 +285,83 @@ def combine_dt(date: datetime.date, t: datetime.time) -> datetime.datetime:
     return datetime.datetime(
         date.year, date.month, date.day, t.hour, t.minute, tzinfo=CPH_TZ
     ).astimezone(datetime.UTC)
+
+
+_MONTHS = {
+    name: number
+    for number, names in enumerate(
+        (
+            ("january", "januar"),
+            ("february", "februar"),
+            ("march", "marts"),
+            ("april",),
+            ("may", "maj"),
+            ("june", "juni"),
+            ("july", "juli"),
+            ("august",),
+            ("september",),
+            ("october", "oktober"),
+            ("november",),
+            ("december",),
+        ),
+        start=1,
+    )
+    for name in names
+}
+_MONTH_ALT = "|".join(sorted(_MONTHS, key=len, reverse=True))
+# "23. september 2026" / "23 September 2026" / "September 23, 2026"
+_TEXT_DATE_RE = re.compile(
+    rf"\b(?:(\d{{1,2}})\.?\s+({_MONTH_ALT})|({_MONTH_ALT})\s+(\d{{1,2}}),?)\s+(\d{{4}})\b",
+    re.IGNORECASE,
+)
+
+
+def text_dates(text: str) -> set[datetime.date]:
+    """Return every full date written out in *text*, in Danish or English."""
+    dates: set[datetime.date] = set()
+    for m in _TEXT_DATE_RE.finditer(text):
+        day = m.group(1) or m.group(4)
+        month = _MONTHS[(m.group(2) or m.group(3)).lower()]
+        try:
+            dates.add(datetime.date(int(m.group(5)), month, int(day)))
+        except ValueError:
+            continue
+    return dates
+
+
+def split_sessions(record: dict, last_date: datetime.date | None) -> list[dict]:
+    """Split a listing of separate sessions into one record per session.
+
+    *last_date* is the listing's hidden end date.  When the description names
+    both the first date and that last one, the listing is read as sessions on
+    the dates the description names in that range, each at the listing's time
+    of day.  Anything else is returned as is.
+    """
+    start = datetime.datetime.fromisoformat(record["start_datetime"]).astimezone(CPH_TZ)
+    if last_date is None or last_date <= start.date():
+        return [record]
+    sessions = sorted(
+        d for d in text_dates(record["description"]) if start.date() <= d <= last_date
+    )
+    if len(sessions) < 2 or sessions[0] != start.date() or sessions[-1] != last_date:
+        return [record]
+
+    end = (
+        datetime.datetime.fromisoformat(record["end_datetime"]).astimezone(CPH_TZ)
+        if record["end_datetime"]
+        else None
+    )
+    records = []
+    for day in sessions:
+        session_end = combine_dt(day, end.time()) if end else None
+        records.append(
+            {
+                **record,
+                "start_datetime": combine_dt(day, start.time()).isoformat(),
+                "end_datetime": session_end.isoformat() if session_end else None,
+            }
+        )
+    return records
 
 
 # ── Detail page ───────────────────────────────────────────────────────────────
@@ -499,7 +595,8 @@ def scrape(delay: float = 0.5) -> list[dict]:
             listing_end_date=entry["end_date_str"],
         )
         if result is not None:
-            events.append(result)
+            last_date = parse_date(entry.get("hidden_end_date_str", ""))
+            events.extend(split_sessions(result, last_date))
         if i < len(listing):
             time.sleep(delay)
     log.info("Scraped %d event records from %d pages", len(events), len(listing))

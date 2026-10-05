@@ -10,6 +10,12 @@ have performances and at what time(s); "Duration" gives the end time.  The
 English columns are often left empty, so the Danish ones ("Spilletid",
 "Varighed", "Sted") are the fallback.
 
+Most shows sell tickets through teaterbilletter.dk.  When an event's ticket
+link points there, its performances come from that show's entry in the public
+teaterbilletter.dk API instead (``/api/events/<eventNo>``): the ticketing
+system lists every performance with its real time, where the CMS often gives
+only a date range ("12.03-31.03.2027", no "When") or one time for every day.
+
 Sydhavn Teater plays on several stages and in many site-specific places (parks,
 streets, flats, boat tours), so wheelchair access is decided per event: its own
 "Accessibility" section wins when it has one, else the stage's documented
@@ -29,8 +35,11 @@ import re
 import zoneinfo
 
 import markdownify
+import requests
 
+from scrapers import teaterbilletter
 from scrapers.accessibility import wheelchair_access_from_text
+from scrapers.base import HEADERS as PAGE_HEADERS
 from scrapers.base import build_arg_parser, make_session, write_output
 
 BASE_URL = "https://sydhavnteater.dk"
@@ -42,6 +51,13 @@ HEADERS = {
     "User-Agent": "pleskalScraper/1.0 (+https://pleskal.dk/about/)",
     "Content-Type": "application/json",
 }
+
+# A teaterbilletter.dk show page ends in the show's eventNo:
+# https://teaterbilletter.dk/forestillinger/kalk-fald-152710
+_TICKET_EVENT_NO_RE = re.compile(
+    r"^https?://(?:www\.)?teaterbilletter\.dk/forestillinger/[^/?#]*?-(\d+)/?(?:[?#]|$)",
+    re.IGNORECASE,
+)
 
 GRAPHQL_QUERY = """
 {
@@ -169,9 +185,9 @@ log = logging.getLogger(__name__)
 # ── API fetch ─────────────────────────────────────────────────────────────────
 
 
-def fetch_events() -> list[dict]:
+def fetch_events(session: requests.Session | None = None) -> list[dict]:
     """POST the GraphQL query and return the raw list of event dicts."""
-    session = make_session()
+    session = session or make_session()
     resp = session.post(
         API_URL,
         headers=HEADERS,
@@ -183,6 +199,35 @@ def fetch_events() -> list[dict]:
     if "errors" in data:
         raise RuntimeError(f"GraphQL errors: {data['errors']}")
     return data["data"]["eventsEntries"]
+
+
+def ticket_event_no(event: dict) -> str | None:
+    """Return the teaterbilletter.dk eventNo of the event's ticket link, if any."""
+    m = _TICKET_EVENT_NO_RE.match((event.get("ticketLink") or "").strip())
+    return m.group(1) if m else None
+
+
+def fetch_ticket_event(session: requests.Session, event_no: str) -> dict | None:
+    """Return the teaterbilletter.dk API entry for *event_no*, or None.
+
+    A failure is logged and leaves the event to the CMS schedule, so one
+    unreachable show doesn't fail the whole scrape.
+    """
+    try:
+        resp = session.get(
+            f"{teaterbilletter.API_URL}/{event_no}",
+            headers=PAGE_HEADERS,
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except (requests.RequestException, ValueError) as exc:
+        log.warning("Cannot fetch teaterbilletter.dk event %s: %s", event_no, exc)
+        return None
+    if not isinstance(data, dict) or str(data.get("eventNo")) != event_no:
+        log.warning("Unexpected teaterbilletter.dk response for event %s", event_no)
+        return None
+    return data
 
 
 # ── Filtering ─────────────────────────────────────────────────────────────────
@@ -515,15 +560,85 @@ def _dt_at_time(date: datetime.date, t: datetime.time) -> datetime.datetime:
     ).astimezone(datetime.UTC)
 
 
-def build_records(event: dict) -> list[dict]:
+Slot = tuple[datetime.datetime, datetime.datetime | None]
+
+
+def _schedule_slots(
+    start_date: datetime.date,
+    end_date: datetime.date,
+    schedule: dict[int, list[datetime.time]] | None,
+    duration: datetime.timedelta | None,
+) -> list[Slot]:
+    """Expand the CMS date range and "When" schedule into (start, end) slots.
+
+    Without a schedule every day of the run gets an all-day placeholder at
+    midnight with no end.
+    """
+    slots: list[Slot] = []
+    current = start_date
+    while current <= end_date:
+        if schedule is None:
+            times: list[datetime.time] = []
+        elif -1 in schedule:
+            # All-days wildcard
+            times = schedule[-1]
+        else:
+            times = schedule.get(current.weekday(), [])
+            if not times:
+                current += datetime.timedelta(days=1)
+                continue
+
+        if times:
+            slots.extend(
+                (start_dt, start_dt + duration if duration else None)
+                for start_dt in (_dt_at_time(current, t) for t in times)
+            )
+        else:
+            # Midnight fallback: an all-day placeholder, so no end time
+            midnight = datetime.datetime(
+                current.year,
+                current.month,
+                current.day,
+                0,
+                0,
+                tzinfo=CPH_TZ,
+            ).astimezone(datetime.UTC)
+            slots.append((midnight, None))
+
+        current += datetime.timedelta(days=1)
+    return slots
+
+
+def _ticket_slots(
+    ticket_event: dict, duration: datetime.timedelta | None
+) -> list[Slot]:
+    """Return a (start, end) slot per public performance in the ticketing API.
+
+    The CMS "Duration" row wins; else the API's running time; else no end.
+    """
+    if duration is None:
+        minutes = ticket_event.get("durationInMinutes") or 0
+        duration = datetime.timedelta(minutes=minutes) if minutes > 0 else None
+    return [
+        (start_dt, start_dt + duration if duration else None)
+        for start_dt in (
+            t.astimezone(datetime.UTC) for t in teaterbilletter.show_times(ticket_event)
+        )
+    ]
+
+
+def build_records(event: dict, ticket_event: dict | None = None) -> list[dict]:
     """
     Map a raw API event dict to a list of pleskal event record dicts — one per
-    performance day.  Returns an empty list if essential fields are missing.
+    performance.  Returns an empty list if essential fields are missing.
 
-    Date ranges (dateFrom→dateTo) are expanded day by day.  The "When" field
-    determines which weekdays have performances and at what time(s); a day
-    with several shows (e.g. "at 16.00 & 18.00") gets one record per show.
-    The "Duration" row, when present, sets each timed record's end.
+    *ticket_event* is the show's teaterbilletter.dk API entry (see
+    ``fetch_ticket_event``); when it lists performances, those are the
+    records.  Otherwise date ranges (dateFrom→dateTo) are expanded day by day:
+    the "When" field determines which weekdays have performances and at what
+    time(s); a day with several shows (e.g. "at 16.00 & 18.00") gets one
+    record per show.  The "Duration" row, when present, sets each timed
+    record's end.
     """
     # CMS titles carry editor artefacts: zero-width joiners and doubled spaces
     # ("Skæbnen  \u200d- en spøgelseshistorie i VR").
@@ -582,64 +697,29 @@ def build_records(event: dict) -> list[dict]:
     schedule = parse_when(when_str)  # {weekday: [times]} or None
     duration = _extract_duration(event)
 
-    records: list[dict] = []
-    current = start_date
-    while current <= end_date:
-        wd = current.weekday()
+    slots = _ticket_slots(ticket_event, duration) if ticket_event else []
+    if not slots:
+        slots = _schedule_slots(start_date, end_date, schedule, duration)
 
-        if schedule is None:
-            # No schedule info — one record per day at midnight CPH
-            times: list[datetime.time] = []
-        elif -1 in schedule:
-            # All-days wildcard
-            times = schedule[-1]
-        else:
-            times = schedule.get(wd, [])
-            if not times:
-                current += datetime.timedelta(days=1)
-                continue
-
-        if times:
-            slots = [
-                (start_dt, start_dt + duration if duration else None)
-                for start_dt in (_dt_at_time(current, t) for t in times)
-            ]
-        else:
-            # Midnight fallback: an all-day placeholder, so no end time
-            midnight = datetime.datetime(
-                current.year,
-                current.month,
-                current.day,
-                0,
-                0,
-                tzinfo=CPH_TZ,
-            ).astimezone(datetime.UTC)
-            slots = [(midnight, None)]
-
-        for start_dt, end_dt in slots:
-            records.append(
-                {
-                    "title": title,
-                    "description": description,
-                    "start_datetime": start_dt.isoformat(),
-                    "end_datetime": end_dt.isoformat() if end_dt else None,
-                    "venue_name": venue_name,
-                    "venue_address": venue_address,
-                    "category": category,
-                    "is_free": is_free,
-                    "is_wheelchair_accessible": _is_wheelchair_accessible(
-                        event, venue_name
-                    ),
-                    "price_note": "",
-                    "source_url": source_url,
-                    "external_source": EXTERNAL_SOURCE,
-                    "image_url": image_url,
-                }
-            )
-
-        current += datetime.timedelta(days=1)
-
-    return records
+    is_wheelchair_accessible = _is_wheelchair_accessible(event, venue_name)
+    return [
+        {
+            "title": title,
+            "description": description,
+            "start_datetime": start_dt.isoformat(),
+            "end_datetime": end_dt.isoformat() if end_dt else None,
+            "venue_name": venue_name,
+            "venue_address": venue_address,
+            "category": category,
+            "is_free": is_free,
+            "is_wheelchair_accessible": is_wheelchair_accessible,
+            "price_note": "",
+            "source_url": source_url,
+            "external_source": EXTERNAL_SOURCE,
+            "image_url": image_url,
+        }
+        for start_dt, end_dt in slots
+    ]
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -647,7 +727,8 @@ def build_records(event: dict) -> list[dict]:
 
 def scrape() -> list[dict]:
     """Fetch all events from the API, filter to upcoming, and return records."""
-    raw_events = fetch_events()
+    session = make_session()
+    raw_events = fetch_events(session)
     log.info("Fetched %d events from API", len(raw_events))
 
     upcoming = [e for e in raw_events if is_upcoming(e)]
@@ -655,7 +736,9 @@ def scrape() -> list[dict]:
 
     records: list[dict] = []
     for event in upcoming:
-        event_records = build_records(event)
+        event_no = ticket_event_no(event)
+        ticket_event = fetch_ticket_event(session, event_no) if event_no else None
+        event_records = build_records(event, ticket_event)
         records.extend(event_records)
         if event_records:
             log.debug(

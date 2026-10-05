@@ -328,6 +328,17 @@ def test_collect_event_cards_deduplicates():
     assert len(cards) == 1
 
 
+def test_collect_event_cards_deduplicates_trailing_slash():
+    html = """
+    <html><body>
+      <a href="https://kbhdanser.dk/ndt"><h1>GONE</h1></a>
+      <a href="https://kbhdanser.dk/ndt/"><h1>GONE</h1></a>
+    </body></html>
+    """
+    cards = collect_event_cards(_soup(html))
+    assert [c["detail_url"] for c in cards] == ["https://kbhdanser.dk/ndt"]
+
+
 def test_collect_event_cards_extracts_artists():
     soup = _soup(_HOMEPAGE_HTML)
     cards = collect_event_cards(soup)
@@ -1139,6 +1150,8 @@ def test_parse_performance_line(line, expected):
             "November 3, 2026 at the Sophiensæle in Berlin."
         ),
         "Duration: 1h15m",
+        # Press citation under a review quote
+        "Fjord Review · 15. juli 2020 · Standby",
     ],
 )
 def test_parse_performance_line_ignores_non_performances(line):
@@ -1152,6 +1165,11 @@ def test_parse_duration():
     )
     assert parse_duration("x\nDuration: 45 min\n") == datetime.timedelta(minutes=45)
     assert parse_duration("No running time given") is None
+    # Label and value on separate lines (kbhdanser.dk/en/ndt/)
+    assert parse_duration(
+        "Duration:\n2 hours, including one intermission\nGet your ticket"
+    ) == datetime.timedelta(hours=2)
+    assert parse_duration("Duration:") is None
 
 
 @pytest.fixture
@@ -1230,6 +1248,63 @@ def test_extract_performances_venue_per_block(fixed_today):
         ("2027-01-10", "Musikhuset Aarhus"),
         ("2027-01-15", "Østre Gasværk Teater"),
         ("2027-01-17", "Østre Gasværk Teater"),
+    ]
+
+
+def test_extract_performances_skips_quotes_and_premiere_credit(fixed_today):
+    # Shape of kbhdanser.dk/en/ndt/: review quotes with citations, then a
+    # credits entry for the world premiere abroad (a date without a time).
+    # Neither is a performance, and a quote is never a venue.
+    html = """
+    <html><body>
+      <h1>GONE</h1>
+      <p>Østre Gasværk Teater</p>
+      <p>June 17, 2027 – 7:30 PM</p>
+      <p>June 19, 2027 – 2:00 PM</p>
+      <p>Duration:</p>
+      <p>2 hours, including one intermission</p>
+      <p>“The NDT dancers are phenomenal.”</p>
+      <p>Fjord Review · 15. juli 2020 · Standby</p>
+      <p>WORLD PREMIERE</p>
+      <p>11. februar 2027,</p>
+      <p>Amare, Den Haag, Holland</p>
+      <p>Østre Gasværk Teater</p>
+      <p>June 17, 2027 – 7:30 PM</p>
+      <p>June 19, 2027 – 2:00 PM</p>
+    </body></html>
+    """
+    perfs = _extract_performances(_soup(html))
+    assert [
+        (p["start_datetime"], p["end_datetime"], p["venue_name"]) for p in perfs
+    ] == [
+        (
+            "2027-06-17T17:30:00+00:00",
+            "2027-06-17T19:30:00+00:00",
+            "Østre Gasværk Teater",
+        ),
+        (
+            "2027-06-19T12:00:00+00:00",
+            "2027-06-19T14:00:00+00:00",
+            "Østre Gasværk Teater",
+        ),
+    ]
+
+
+def test_extract_performances_premiere_heading_with_times_is_kept(fixed_today):
+    # A premiere label above a list with showtimes is a real performance list,
+    # at the venue of the list before it (like "EXTRA SHOW").
+    html = """
+    <html><body>
+      <p>Østre Gasværk Teater</p>
+      <p>June 16, 2027 – 7:30 PM</p>
+      <p>DANISH PREMIERE</p>
+      <p>June 17, 2027 – 7:30 PM</p>
+    </body></html>
+    """
+    perfs = _extract_performances(_soup(html))
+    assert [(p["start_datetime"], p["venue_name"]) for p in perfs] == [
+        ("2027-06-16T17:30:00+00:00", "Østre Gasværk Teater"),
+        ("2027-06-17T17:30:00+00:00", "Østre Gasværk Teater"),
     ]
 
 
