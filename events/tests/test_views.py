@@ -937,6 +937,29 @@ class TestEventListView:
 
 @pytest.mark.django_db
 class TestEventDetailView:
+    def test_venue_publisher_links_venue_instead_of_by_line(self, client):
+        venue_owner = UserFactory.create(display_name="FÅR302")
+        event = EventFactory.create(
+            submitted_by=venue_owner, venue_name="Teater FÅR302"
+        )
+        content = client.get(
+            reverse("event_detail", args=[event.slug])
+        ).content.decode()
+        profile = reverse("publisher_profile", args=[venue_owner.display_name_slug])
+        assert f'href="{profile}" class="event-meta--venue' in content
+        # No "by" line: the venue name is the only link to the profile.
+        assert content.count(f'href="{profile}"') == 1
+
+    def test_other_publisher_keeps_by_line(self, client):
+        user = UserFactory.create(display_name="Half of Things")
+        event = EventFactory.create(submitted_by=user, venue_name="Bunkeren")
+        content = client.get(
+            reverse("event_detail", args=[event.slug])
+        ).content.decode()
+        profile = reverse("publisher_profile", args=[user.display_name_slug])
+        assert '<span class="event-meta--venue">Bunkeren</span>' in content
+        assert f'href="{profile}" class="link-accent"' in content
+
     def test_event_accessible_by_anyone(self, client):
         event = EventFactory.create()
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
