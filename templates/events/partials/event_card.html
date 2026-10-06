@@ -19,9 +19,9 @@
                 </div>
                 {% endwith %}
                 <div class="event-meta event-meta--two-line">
-                    <span class="event-meta--venue">{{ event.venue_name }}</span>{% if event.venue_address %}<span style="opacity:0.5;" aria-hidden="true"> · </span><span>{{ event.venue_address }}</span>{% endif %}
+                    <span class="event-meta--venue">{{ event.venue_name }}</span>
                 </div>
-                {% if event.submitted_by %}
+                {% if event.submitted_by and not hide_publisher and not event.publisher_is_venue %}
                     <div class="event-meta event-meta--single-line">
                         <span style="opacity:0.5;">by</span> <span style="color:var(--blue);font-weight:500;">{{ event.submitted_by.public_name }}</span>
                     </div>

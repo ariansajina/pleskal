@@ -381,6 +381,30 @@ class TestEventListView:
         assert resp.status_code == 200
         assert str(event.title).encode() in resp.content
 
+    def test_card_leaves_out_address_and_publisher_named_like_venue(self, client):
+        venue_owner = UserFactory.create(display_name="Warehouse9")
+        EventFactory.create(
+            submitted_by=venue_owner,
+            venue_name="Warehouse9",
+            venue_address="Halmtorvet 11A, 1700 København V",
+        )
+        EventFactory.create(
+            submitted_by=UserFactory.create(display_name="Anna Holm"),
+            venue_name="Sort/Hvid",
+        )
+        content = client.get(reverse("event_list")).content.decode()
+        assert "Halmtorvet" not in content
+        # Only the user's event names its publisher: Warehouse9 is the venue.
+        assert content.count(">by</span>") == 1
+        assert ">Anna Holm</span>" in content
+
+    def test_publisher_profile_cards_leave_out_publisher(self, client):
+        user = UserFactory.create(display_name="Anna Holm")
+        EventFactory.create(submitted_by=user, venue_name="Sort/Hvid")
+        resp = client.get(reverse("publisher_profile", args=[user.display_name_slug]))
+        assert resp.status_code == 200
+        assert ">by</span>" not in resp.content.decode()
+
     def test_category_filter(self, client):
         e1 = EventFactory.create(category="workshop")
         e2 = EventFactory.create(category="social")

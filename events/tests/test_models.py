@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 from django.templatetags.static import static
 from django.utils import timezone
 
+from accounts.tests.factories import UserFactory
+
 from ..models import DEFAULT_EVENT_IMAGE, MAX_SLUG_LENGTH
 from .factories import EventFactory
 
@@ -273,3 +275,28 @@ class TestDisplayImageUrl:
     def test_user_event_falls_back_to_logo(self):
         event = EventFactory.build(image=None, external_source="")
         assert event.display_image_url == static(DEFAULT_EVENT_IMAGE)
+
+
+@pytest.mark.django_db
+class TestPublisherIsVenue:
+    @pytest.mark.parametrize(
+        ("publisher", "venue", "expected"),
+        [
+            ("Warehouse9", "Warehouse9", True),
+            ("Sort/Hvid", "sort/hvid", True),
+            ("HAUT", "HAUT scene", True),
+            ("FÅR302", "Teater FÅR302", True),
+            ("Dansehallerne", "Sort/Hvid", False),
+            ("Sydhavn Teater", "Spor10", False),
+            ("Anna", "Annas Studio", False),
+            ("", "Warehouse9", False),
+        ],
+    )
+    def test_matches_on_whole_words(self, publisher, venue, expected):
+        user = UserFactory.create(display_name=publisher)
+        event = EventFactory.create(submitted_by=user, venue_name=venue)
+        assert event.publisher_is_venue is expected
+
+    def test_false_without_publisher(self):
+        event = EventFactory.create(submitted_by=None, venue_name="Warehouse9")
+        assert event.publisher_is_venue is False
