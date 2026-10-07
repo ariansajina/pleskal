@@ -113,7 +113,7 @@ scrapers/
   blaagaardteater.py           # Blaagaard Teater (teaterbilletter.dk; dance/performance/new-circus only; links to blaagaardteater.dk show pages)
   dansekapellet.py             # Dansekapellet (teaterbilletter.dk; every genre; links to teaterbilletter.dk)
   faar302.py                   # Teater FÅR302 (teaterbilletter.dk; every genre, incl. its site-specific venue; links to faar302.dk show pages)
-  hautscene.py                 # HAUT Scene scraper (Webflow calendar; a course listed by its first date with a hidden end date is split into the session dates its description names)
+  hautscene.py                 # HAUT Scene scraper (Webflow calendar; description = hero tagline, every section's lead + body, then the artists' bios; a course listed by its first date with a hidden end date is split into the session dates its description names)
   kbhdanser.py                 # KBH Danser scraper
   sort_hvid.py                 # Sort/Hvid scraper
   sydhavnteater.py             # Sydhavn Teater scraper (Craft CMS GraphQL API; performance times from the teaterbilletter.dk API, /api/events/<eventNo>, when the ticket link points there, else the CMS "When" row)

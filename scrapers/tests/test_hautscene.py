@@ -119,6 +119,13 @@ def test_parse_time_dot_separator():
     assert end == datetime.time(17, 0)
 
 
+@pytest.mark.parametrize("dash", ["–", "—"])
+def test_parse_time_en_and_em_dash(dash):
+    start, end = parse_time(f"15:00 {dash} 17:00")
+    assert start == datetime.time(15, 0)
+    assert end == datetime.time(17, 0)
+
+
 def test_parse_time_invalid_raises():
     with pytest.raises(ValueError):
         parse_time("not-a-time")
@@ -735,6 +742,105 @@ def test_scrape_detail_multi_day_event_uses_end_date():
     end = datetime.datetime.fromisoformat(result["end_datetime"])
     end_cph = end.astimezone(CPH_TZ)
     assert end_cph.day == 26
+
+
+# ── Description ───────────────────────────────────────────────────────────────
+
+# Mirrors the structure of hautscene.dk/en/events/in-seed-ulykkesfugl.
+_FULL_EVENT_HTML = """
+<html><body>
+  <section class="section-hero-event">
+    <div class="hero-text-content">
+      <div class="section-tag">IN SEED: ULYKKESFUGL</div>
+      <div class="w-richtext"><p>Is it somewhere between <strong>distortion</strong>?</p></div>
+    </div>
+    <div class="event-info">
+      <div class="info-row"><div class="row-title">DATE</div>
+        <div class="size-medium">October 15, 2026</div></div>
+      <div class="info-row"><div class="row-title">time</div>
+        <div class="size-medium">15:00 – 17:00</div></div>
+    </div>
+  </section>
+  <div class="section-event-research">
+    <div class="hero-text-content">
+      <div class="section-tag">Den kunstneriske undersøgelse</div>
+      <div class="w-richtext"><p>ULYKKESFUGL explores grief.</p></div>
+    </div>
+    <div class="body-text-container"><div class="w-richtext"><p>The project.</p></div></div>
+  </div>
+  <div class="section-event-artists">
+    <div class="hero-text-content">
+      <div class="section-tag">Kunstnerne</div>
+      <div class="w-richtext"><p>Each artist works with body and voice.</p></div>
+    </div>
+    <div class="artists-list">
+      <div class="artist-item">
+        <div class="size-small-medium text-campton">Sigrid Stigsdatter</div>
+        <div class="w-richtext"><p>Sigrid Stigsdatter (b. 1990) is a choreographer.</p></div>
+        <a class="link-button-cta" href="https://sigrid.example">Website</a>
+      </div>
+      <div class="artist-item">
+        <div class="size-small-medium text-campton">Helene Ridderberg</div>
+        <div class="w-richtext"><p>Helene Ridderberg is a maker.</p></div>
+        <a class="link-button-cta w-condition-invisible" href="#">Website</a>
+      </div>
+    </div>
+  </div>
+  <div class="section-event-about">
+    <div class="hero-text-content-alt">
+      <div class="section-tag">Formatet</div>
+      <div class="w-richtext"><p>The worksharing concludes a residency.</p></div>
+    </div>
+    <div class="body-text-container"><div class="w-richtext"><p>Curated by Lili Blum.</p></div></div>
+  </div>
+</body></html>
+"""
+
+
+def test_scrape_detail_reads_an_en_dash_time_range():
+    session = _mock_session(_FULL_EVENT_HTML)
+    result = scrape_detail("https://www.hautscene.dk/en/events/x", session)
+    assert result is not None
+    start = datetime.datetime.fromisoformat(result["start_datetime"]).astimezone(CPH_TZ)
+    end = datetime.datetime.fromisoformat(result["end_datetime"]).astimezone(CPH_TZ)
+    assert (start.date(), start.time()) == (
+        datetime.date(2026, 10, 15),
+        datetime.time(15, 0),
+    )
+    assert end.time() == datetime.time(17, 0)
+
+
+def test_scrape_detail_description_has_every_section_and_the_bios():
+    session = _mock_session(_FULL_EVENT_HTML)
+    result = scrape_detail("https://www.hautscene.dk/en/events/x", session)
+    assert result is not None
+    assert result["description"] == (
+        "Is it somewhere between **distortion**?\n\n"
+        "## Den kunstneriske undersøgelse\n\n"
+        "ULYKKESFUGL explores grief.\n\n"
+        "The project.\n\n"
+        "## Formatet\n\n"
+        "The worksharing concludes a residency.\n\n"
+        "Curated by Lili Blum.\n\n"
+        "## Kunstnerne\n\n"
+        "Each artist works with body and voice.\n\n"
+        "**Sigrid Stigsdatter**\n\n"
+        "Sigrid Stigsdatter (b. 1990) is a choreographer.\n\n"
+        "[Website](https://sigrid.example)\n\n"
+        "**Helene Ridderberg**\n\n"
+        "Helene Ridderberg is a maker."
+    )
+
+
+def test_scrape_detail_skips_a_hidden_artists_section():
+    html = _FULL_EVENT_HTML.replace(
+        'class="section-event-artists"',
+        'class="section-event-artists w-condition-invisible"',
+    )
+    result = scrape_detail("https://www.hautscene.dk/en/events/x", _mock_session(html))
+    assert result is not None
+    assert "Kunstnerne" not in result["description"]
+    assert "Sigrid" not in result["description"]
 
 
 # ── Courses of separate sessions ──────────────────────────────────────────────

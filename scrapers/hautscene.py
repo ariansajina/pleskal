@@ -259,15 +259,19 @@ def parse_date(date_str: str) -> datetime.date | None:
     return None
 
 
+_TIME_RANGE_SEP_RE = re.compile(r"[-–—]")
+
+
 def parse_time(time_str: str) -> tuple[datetime.time, datetime.time | None]:
     """
     Parse a time range string like "15:00 - 18:00" or "15:00".
 
-    Also accepts dot-separated times like "15.00 - 17.00".
+    Also accepts dot-separated times like "15.00 - 17.00" and an en or em dash
+    between the times ("15:00 – 17:00").
     Returns (start_time, end_time) where end_time may be None.
     Raises ValueError if start_time cannot be parsed.
     """
-    parts = [p.strip() for p in time_str.split("-")]
+    parts = [p.strip() for p in _TIME_RANGE_SEP_RE.split(time_str)]
     m_start = re.match(r"^(\d{1,2})[:.](\d{2})$", parts[0])
     if not m_start:
         raise ValueError(f"Cannot parse time: {time_str!r}")
@@ -367,6 +371,9 @@ def split_sessions(record: dict, last_date: datetime.date | None) -> list[dict]:
 # ── Detail page ───────────────────────────────────────────────────────────────
 
 _DESCRIPTION_SELECTOR = "div.section-event-research, div.section-event-about"
+# The lead text sits in .hero-text-content, or .hero-text-content-alt in the
+# "about" section of most events.
+_LEAD_SELECTOR = ".hero-text-content .w-richtext, .hero-text-content-alt .w-richtext"
 _ZWJ_LINE_RE = re.compile(r"^[\s​‌‍]+$", re.MULTILINE)
 _BLANK_LINES_RE = re.compile(r"\n{3,}")
 _FREE_RE = re.compile(r"\bfree\b(?!\s+for\b)|\bgratis\b|no charge")
@@ -391,7 +398,7 @@ def _section_markdown(section: Tag) -> str:
     """Render one event-detail section (heading + lead + body) as markdown."""
     heading_el = section.select_one(".section-tag")
     heading = heading_el.get_text(strip=True) if heading_el else ""
-    lead = _richtext_markdown(section.select_one(".hero-text-content .w-richtext"))
+    lead = _richtext_markdown(section.select_one(_LEAD_SELECTOR))
     body = _richtext_markdown(section.select_one(".body-text-container .w-richtext"))
     if not (lead or body):
         return ""
@@ -402,6 +409,42 @@ def _section_markdown(section: Tag) -> str:
         parts.append(lead)
     if body:
         parts.append(body)
+    return "\n\n".join(parts)
+
+
+def _artists_markdown(soup: BeautifulSoup) -> str:
+    """Render the artists section: its lead, then each artist's name and bio."""
+    section = soup.select_one("div.section-event-artists")
+    if not section or "w-condition-invisible" in (section.get("class") or []):
+        return ""
+    parts: list[str] = []
+    lead = _richtext_markdown(section.select_one(_LEAD_SELECTOR))
+    if lead:
+        parts.append(lead)
+    for item in section.select(".artist-item"):
+        name_el = item.select_one(".size-small-medium")
+        name = name_el.get_text(" ", strip=True) if name_el else ""
+        bio = _richtext_markdown(item.select_one(".w-richtext"))
+        if not (name or bio):
+            continue
+        if name:
+            parts.append(f"**{name}**")
+        if bio:
+            parts.append(bio)
+        link = item.select_one("a.link-button-cta[href]")
+        href = str(link["href"]) if link else ""
+        if (
+            link
+            and "w-condition-invisible" not in (link.get("class") or [])
+            and href.startswith(("http://", "https://"))
+        ):
+            parts.append(f"[Website]({href})")
+    if not parts:
+        return ""
+    heading_el = section.select_one(".section-tag")
+    heading = heading_el.get_text(strip=True) if heading_el else ""
+    if heading:
+        parts.insert(0, f"## {heading}")
     return "\n\n".join(parts)
 
 
@@ -512,13 +555,15 @@ def scrape_detail(
     # ── Description ───────────────────────────────────────────────────────────
     # Detail pages have a hero (short tagline) plus zero or more body sections
     # (".section-event-research" for artistic research, ".section-event-about"
-    # for the format/practice). Each contains an optional lead richtext in
-    # .hero-text-content and an optional long-form richtext in
-    # .body-text-container. We collect both, skipping the artists section.
+    # for the format/practice). Each contains an optional lead richtext and an
+    # optional long-form richtext in .body-text-container; we collect both.
+    # The artists' bios (".section-event-artists") go last, after the
+    # practical "about" text.
+    hero = soup.select_one("section.section-hero-event") or soup
+    tagline = _richtext_markdown(hero.select_one(".hero-text-content .w-richtext"))
+    sections = [_section_markdown(s) for s in soup.select(_DESCRIPTION_SELECTOR)]
     description = "\n\n".join(
-        part
-        for part in (_section_markdown(s) for s in soup.select(_DESCRIPTION_SELECTOR))
-        if part
+        part for part in (tagline, *sections, _artists_markdown(soup)) if part
     ).strip()
 
     # ── Image ─────────────────────────────────────────────────────────────────
