@@ -8,7 +8,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.db.models import FETCH_RAISE
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import dateformat, timezone
 from PIL import Image
 
 from accounts.tests.factories import UserFactory
@@ -397,6 +397,15 @@ class TestEventListView:
         # Only the user's event names its publisher: Warehouse9 is the venue.
         assert content.count(">by</span>") == 1
         assert ">Anna Holm</span>" in content
+
+    def test_card_date_is_abbreviated(self, client):
+        start = timezone.localtime() + datetime.timedelta(days=10)
+        start = start.replace(hour=12, minute=0, second=0, microsecond=0)
+        EventFactory.create(start_datetime=start)
+        content = client.get(reverse("event_list")).content.decode()
+        # "Mon 3 Oct · 12:00", not "Monday, 3 October · 12:00".
+        assert dateformat.format(start, "D j M · H:i") in content
+        assert dateformat.format(start, "l, j F · H:i") not in content
 
     def test_publisher_profile_cards_leave_out_publisher(self, client):
         user = UserFactory.create(display_name="Anna Holm")

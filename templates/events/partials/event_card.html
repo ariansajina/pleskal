@@ -7,9 +7,9 @@
                 <div class="event-meta{% if card %} event-meta--series{% endif %}">
                     {% if card and not card.showtimes %}<span class="series-next">{% if show_past and not date_range_active %}Last{% else %}Next{% endif %}</span>{% endif %}
                     {% if event.start_datetime|date:"H:i" == "00:00" %}
-                        <span>{{ event.start_datetime|date:"l, j F" }}</span>
+                        <span>{{ event.start_datetime|date:"D j M" }}</span>
                     {% else %}
-                        <span>{{ event.start_datetime|date:"l, j F · H:i" }}</span>
+                        <span>{{ event.start_datetime|date:"D j M · H:i" }}</span>
                         {% if event.end_datetime %}
                             <span>–</span>
                             <span>{{ event.end_datetime|date:"H:i" }}</span>
