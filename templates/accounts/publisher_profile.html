@@ -38,7 +38,7 @@
             <h2 class="heading-section">Drafts</h2>
             <div class="event-list">
                 {% for event in drafts %}
-                    {% include "events/partials/event_card.html" with event=event %}
+                    {% include "events/partials/event_card.html" with event=event hide_publisher=True %}
                 {% endfor %}
             </div>
         </section>
@@ -54,7 +54,7 @@
     {% if events %}
         <div class="event-list">
             {% for event in events %}
-                {% include "events/partials/event_card.html" with event=event %}
+                {% include "events/partials/event_card.html" with event=event hide_publisher=True %}
             {% endfor %}
         </div>
     {% else %}

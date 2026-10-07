@@ -8,7 +8,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.db.models import FETCH_RAISE
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import dateformat, timezone
 from PIL import Image
 
 from accounts.tests.factories import UserFactory
@@ -380,6 +380,39 @@ class TestEventListView:
         resp = client.get(reverse("event_list"))
         assert resp.status_code == 200
         assert str(event.title).encode() in resp.content
+
+    def test_card_leaves_out_address_and_publisher_named_like_venue(self, client):
+        venue_owner = UserFactory.create(display_name="Warehouse9")
+        EventFactory.create(
+            submitted_by=venue_owner,
+            venue_name="Warehouse9",
+            venue_address="Halmtorvet 11A, 1700 København V",
+        )
+        EventFactory.create(
+            submitted_by=UserFactory.create(display_name="Anna Holm"),
+            venue_name="Sort/Hvid",
+        )
+        content = client.get(reverse("event_list")).content.decode()
+        assert "Halmtorvet" not in content
+        # Only the user's event names its publisher: Warehouse9 is the venue.
+        assert content.count(">by</span>") == 1
+        assert ">Anna Holm</span>" in content
+
+    def test_card_date_is_abbreviated(self, client):
+        start = timezone.localtime() + datetime.timedelta(days=10)
+        start = start.replace(hour=12, minute=0, second=0, microsecond=0)
+        EventFactory.create(start_datetime=start)
+        content = client.get(reverse("event_list")).content.decode()
+        # "Mon 3 Oct · 12:00", not "Monday, 3 October · 12:00".
+        assert dateformat.format(start, "D j M · H:i") in content
+        assert dateformat.format(start, "l, j F · H:i") not in content
+
+    def test_publisher_profile_cards_leave_out_publisher(self, client):
+        user = UserFactory.create(display_name="Anna Holm")
+        EventFactory.create(submitted_by=user, venue_name="Sort/Hvid")
+        resp = client.get(reverse("publisher_profile", args=[user.display_name_slug]))
+        assert resp.status_code == 200
+        assert ">by</span>" not in resp.content.decode()
 
     def test_category_filter(self, client):
         e1 = EventFactory.create(category="workshop")
@@ -913,6 +946,29 @@ class TestEventListView:
 
 @pytest.mark.django_db
 class TestEventDetailView:
+    def test_venue_publisher_links_venue_instead_of_by_line(self, client):
+        venue_owner = UserFactory.create(display_name="FÅR302")
+        event = EventFactory.create(
+            submitted_by=venue_owner, venue_name="Teater FÅR302"
+        )
+        content = client.get(
+            reverse("event_detail", args=[event.slug])
+        ).content.decode()
+        profile = reverse("publisher_profile", args=[venue_owner.display_name_slug])
+        assert f'href="{profile}" class="event-meta--venue' in content
+        # No "by" line: the venue name is the only link to the profile.
+        assert content.count(f'href="{profile}"') == 1
+
+    def test_other_publisher_keeps_by_line(self, client):
+        user = UserFactory.create(display_name="Half of Things")
+        event = EventFactory.create(submitted_by=user, venue_name="Bunkeren")
+        content = client.get(
+            reverse("event_detail", args=[event.slug])
+        ).content.decode()
+        profile = reverse("publisher_profile", args=[user.display_name_slug])
+        assert '<span class="event-meta--venue">Bunkeren</span>' in content
+        assert f'href="{profile}" class="link-accent"' in content
+
     def test_event_accessible_by_anyone(self, client):
         event = EventFactory.create()
         resp = client.get(reverse("event_detail", kwargs={"slug": event.slug}))

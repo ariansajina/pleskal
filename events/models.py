@@ -1,5 +1,6 @@
 import datetime
 import logging
+import re
 import secrets
 import uuid
 from typing import cast
@@ -106,6 +107,11 @@ class DescriptionLanguage(models.TextChoices):
     DANISH = "da", "Danish"
     ENGLISH = "en", "English"
     MIXED = "mixed", "Danish and English"
+
+
+def _name_words(name: str) -> list[str]:
+    """The words of a venue or publisher name, case-folded, for comparing."""
+    return re.findall(r"\w+", name.casefold())
 
 
 class EventSeries(models.Model):
@@ -333,6 +339,21 @@ class Event(models.Model):
         """True for events published by a scraper (system) account."""
         submitter = self.submitted_by
         return bool(submitter and submitter.is_system_account)  # ty: ignore[unresolved-attribute]
+
+    @property
+    def publisher_is_venue(self) -> bool:
+        """True when the publisher's name is the venue's, give or take a word
+        ("HAUT" at "HAUT scene", "FÅR302" at "Teater FÅR302"): the list card
+        then leaves out its "by" line, which would repeat the venue."""
+        submitter = self.submitted_by
+        if not submitter or not submitter.display_name:  # ty: ignore[unresolved-attribute]
+            return False
+        publisher = _name_words(submitter.display_name)  # ty: ignore[unresolved-attribute]
+        venue = _name_words(str(self.venue_name))
+        short, long = sorted((publisher, venue), key=len)
+        return bool(short) and any(
+            long[i : i + len(short)] == short for i in range(len(long) - len(short) + 1)
+        )
 
     @property
     def has_map_location(self) -> bool:

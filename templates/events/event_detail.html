@@ -90,7 +90,12 @@ details[open] summary::after { content: ''; }
 
         {# Venue #}
         <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
-            <span class="event-meta--venue">{{ event.venue_name }}</span>
+            {% if event.publisher_is_venue %}
+                {# The venue is the publisher: its name links to the profile in place of a "by" line repeating it. #}
+                <a href="{% url 'publisher_profile' event.submitted_by.display_name_slug %}" class="event-meta--venue link-accent" title="More events from {{ event.submitted_by.public_name }}">{{ event.venue_name }}</a>
+            {% else %}
+                <span class="event-meta--venue">{{ event.venue_name }}</span>
+            {% endif %}
             {% if event.venue_address %}
                 <span style="opacity:0.4;">·</span>
                 <span>{{ event.venue_address }}</span>
@@ -109,7 +114,7 @@ details[open] summary::after { content: ''; }
         </div>
 
         {# Publisher attribution #}
-        {% if event.submitted_by %}
+        {% if event.submitted_by and not event.publisher_is_venue %}
             <div class="event-meta text-sm text-muted" style="margin-bottom:var(--space-4);">
                 by
                 <a href="{% url 'publisher_profile' event.submitted_by.display_name_slug %}" class="link-accent" style="font-weight:600;">

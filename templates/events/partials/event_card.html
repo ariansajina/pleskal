@@ -7,9 +7,9 @@
                 <div class="event-meta{% if card %} event-meta--series{% endif %}">
                     {% if card and not card.showtimes %}<span class="series-next">{% if show_past and not date_range_active %}Last{% else %}Next{% endif %}</span>{% endif %}
                     {% if event.start_datetime|date:"H:i" == "00:00" %}
-                        <span>{{ event.start_datetime|date:"l, j F" }}</span>
+                        <span>{{ event.start_datetime|date:"D j M" }}</span>
                     {% else %}
-                        <span>{{ event.start_datetime|date:"l, j F · H:i" }}</span>
+                        <span>{{ event.start_datetime|date:"D j M · H:i" }}</span>
                         {% if event.end_datetime %}
                             <span>–</span>
                             <span>{{ event.end_datetime|date:"H:i" }}</span>
@@ -19,9 +19,9 @@
                 </div>
                 {% endwith %}
                 <div class="event-meta event-meta--two-line">
-                    <span class="event-meta--venue">{{ event.venue_name }}</span>{% if event.venue_address %}<span style="opacity:0.5;" aria-hidden="true"> · </span><span>{{ event.venue_address }}</span>{% endif %}
+                    <span class="event-meta--venue">{{ event.venue_name }}</span>
                 </div>
-                {% if event.submitted_by %}
+                {% if event.submitted_by and not hide_publisher and not event.publisher_is_venue %}
                     <div class="event-meta event-meta--single-line">
                         <span style="opacity:0.5;">by</span> <span style="color:var(--blue);font-weight:500;">{{ event.submitted_by.public_name }}</span>
                     </div>
