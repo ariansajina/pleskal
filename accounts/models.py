@@ -34,7 +34,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     objects = UserManager()
 
-    class Meta:
+    class Meta:  # ty: ignore[invalid-attribute-override]
         db_table = "accounts_user"
 
     def __str__(self):
