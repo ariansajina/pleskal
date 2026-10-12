@@ -504,6 +504,14 @@ Project skills live in `.claude/skills/`: `run-pleskal` (run + smoke-test the ap
 
 Because of this hook, **do not manually run `ruff format`, `ruff check`, `ty check`, or `pytest` before opening a PR** — the hook runs them automatically and will block the PR creation tool call if anything fails, feeding the failure output back for you to fix and retry. Manually re-running these first just duplicates the check. Only run them ad hoc if you want a mid-task sanity check on a single file, or if the hook itself surfaces a failure to diagnose.
 
+## Git Workflow
+
+- **Never commit or push to `main`.** Every change, however small (a one-line fix, a docs edit, a test), goes on a feature branch and reaches `main` only through a pull request.
+- **Check the branch before the first commit** of a task: run `git branch --show-current`. If it prints `main`, create a branch first (`git checkout -b claude/<short-description>`), then commit.
+- **Push with an explicit branch name** (`git push -u origin <branch-name>`), never `git push origin HEAD` or a bare `git push`, which push whatever is checked out. Before pushing, confirm the branch is not `main`.
+- After pushing, open a PR for the branch if none exists. The `pre-pr-check.sh` hook only guards PR creation, not pushes, so this rule is the only guard against pushing to `main`.
+- If a commit lands on `main` by mistake, say so immediately and ask before reverting or rewriting anything.
+
 ## CI / CD
 
 `.github/workflows/ci.yml` runs on push/PR to `main` as three parallel jobs (superseded PR runs are cancelled via `concurrency`; `setup-uv` caches the uv download cache and `UV_LOCKED=1` fails on a stale `uv.lock`):
