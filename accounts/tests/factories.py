@@ -5,7 +5,7 @@ User = get_user_model()
 
 
 class UserFactory(factory.django.DjangoModelFactory[User]):
-    class Meta:
+    class Meta:  # ty: ignore[invalid-attribute-override]
         model = User
         skip_postgeneration_save = True
 
