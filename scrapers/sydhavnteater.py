@@ -117,6 +117,16 @@ STAGE_ADDRESSES = {
 WHEELCHAIR_ACCESSIBLE_STAGES = frozenset({"spor10"})
 
 
+def is_open_call(event: dict) -> bool:
+    """True for an open call (a call for applications, not a public event).
+
+    The CMS files these under the stage "Open call" with a date range that is
+    the application window.
+    """
+    stages = event.get("stage") or []
+    return any(_stage_key(st.get("title") or "") == "opencall" for st in stages)
+
+
 def _stage_key(venue_name: str) -> str:
     """Normalise a stage/space name: whitespace stripped, lowercased."""
     return re.sub(r"\s+", "", venue_name).lower()
@@ -640,6 +650,10 @@ def build_records(event: dict, ticket_event: dict | None = None) -> list[dict]:
     record per show.  The "Duration" row, when present, sets each timed
     record's end.
     """
+    if is_open_call(event):
+        log.info("Skipping open call: %s", event.get("slug"))
+        return []
+
     # CMS titles carry editor artefacts: zero-width joiners and doubled spaces
     # ("Skæbnen  \u200d- en spøgelseshistorie i VR").
     title = re.sub(r"[\u200b-\u200d\ufeff]", "", event.get("title") or "")

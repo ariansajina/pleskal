@@ -47,6 +47,16 @@ def _make_event(**overrides) -> dict:
 # ── is_upcoming ───────────────────────────────────────────────────────────────
 
 
+def test_build_records_skips_open_call():
+    event = _make_event(
+        title="ST ART FESTIVAL / OPEN CALL",
+        stage=[{"title": "Open call"}],
+        category=[{"title": "aktiviteter"}],
+        dateTo=f"{FUTURE_DATE}T07:00:00+00:00",
+    )
+    assert build_records(event) == []
+
+
 def test_is_upcoming_future():
     assert is_upcoming(_make_event()) is True
 
