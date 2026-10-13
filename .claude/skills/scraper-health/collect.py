@@ -327,7 +327,7 @@ def inspect_event(
             "address": data.get("location", {}).get("address"),
             "source_url": source_link,
             "image_url": image_url,
-            "machine_translated": "Automatically translated from Danish" in resp.text,
+            "machine_translated": "translated from danish" in resp.text.lower(),
             "description": description,
             "time_flags": time_flags(start, end),
             "language": language_heuristic(description),

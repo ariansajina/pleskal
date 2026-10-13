@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -245,6 +246,24 @@ class TestDescription:
             "I 25 år har hun stået på hænder. Nu undersøger hun det."
         )
 
+    def test_teaser_reworded_from_description_is_dropped(self):
+        event = {
+            "teaser": (
+                "Step into an escape room where the boundaries between game, "
+                "theatre and reality are dissolved."
+            ),
+            "description": (
+                "Step into an escape room where the boundaries between game, "
+                "theatre and reality gradually dissolves.\n"
+                "Second paragraph."
+            ),
+        }
+        assert description(event) == (
+            "Step into an escape room where the boundaries between game, "
+            "theatre and reality gradually dissolves.\n\n"
+            "Second paragraph."
+        )
+
     def test_empty(self):
         assert description({"teaser": None, "description": ""}) == ""
 
@@ -253,7 +272,7 @@ class TestDescription:
         paragraphs = description(event).split("\n\n")
         assert paragraphs[-2] == "Tredje afsnit."
         assert paragraphs[-1] == credits(event)
-        assert paragraphs[-1].startswith("**Instruktør** Saga Gärde")
+        assert paragraphs[-1].startswith("**Director** Saga Gärde")
 
 
 # Trimmed from the API's HUN ER VRED, plus a duplicate and blank entries.
@@ -318,12 +337,35 @@ class TestCredits:
             "organizer": {"code": "OR2", "name": "Blaagaard Teater"},
         }
         assert credits(event) == (
-            "**Instruktør** Saga Gärde  \n"
-            "**Lysdesigner** Ellen Ruge  \n"
-            "**Komponist** Rodrigo y Gabriela  \n"
-            "**Medvirkende** Uma Feed, Daniel Jeremiah Persson  \n"
-            "**Produktion** AMFI"
+            "**Director** Saga Gärde  \n"
+            "**Lighting designer** Ellen Ruge  \n"
+            "**Composer** Rodrigo y Gabriela  \n"
+            "**Cast** Uma Feed, Daniel Jeremiah Persson  \n"
+            "**Production** AMFI"
         )
+
+    def test_trailing_colon_stripped_and_unknown_role_kept(self, caplog):
+        def credit(role, name):
+            return {
+                "positionTypeName": "Production",
+                "lastName": name,
+                "positionName": role,
+            }
+
+        event = {
+            "accreditations": [
+                credit("Oversættelse:", "Johanne Lykke Naderehvandi"),
+                credit("Lydmager", "Ida Holm"),
+                credit("Lydmager", "Bo Holm"),
+            ]
+        }
+        with caplog.at_level(logging.INFO, logger="scrapers.teaterbilletter"):
+            assert credits(event) == (
+                "**Translation** Johanne Lykke Naderehvandi  \n"
+                "**Lydmager** Ida Holm, Bo Holm"
+            )
+            credits(event)
+        assert caplog.text.count("'Lydmager'") == 1
 
     def test_venue_producing_itself_is_not_repeated(self):
         venue = {"code": "OR2", "name": "Blaagaard Teater"}

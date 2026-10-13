@@ -57,6 +57,10 @@ _WRAPPED_EMPHASIS_RE = re.compile(r"^(\*\*|__|\*|_)(.+)\1$")
 _INLINE_EMPHASIS_RE = re.compile(r"(\*\*|__)(.+?)\1")
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+(?=[\"“«(\[]?[A-ZÆØÅ0-9])")
 _LETTER_RE = re.compile(r"[^\W\d_]")
+# A credits line: "**Role** Name, Name" (trailing hard break allowed).
+_CREDIT_LINE_RE = re.compile(r"\*\*([^*\n]+)\*\*[ \t]+(\S.*)")
+# A lowercase word longer than a name particle ("y", "de", "van", "von").
+_LOWERCASE_WORD_RE = re.compile(r"(?<![\w-])[a-zæøåäöü][\w-]{3,}")
 _LEADING_LETTER_RE = re.compile(r"^[\W\d_]+")  # strips up to the first letter
 
 
@@ -303,12 +307,26 @@ def translate_markdown(markdown_text: str) -> str:
     return "\n".join(_assemble(parts, translations) for parts in line_parts)
 
 
+def is_credits(paragraph: str) -> bool:
+    """Return True for a paragraph of credit lines ("**Role** Name, Name").
+
+    Such a paragraph is mostly names, which the model mangles ("Vilde" →
+    "Wild"), so it's kept verbatim. A bold label followed by an ordinary
+    sentence ("**Bemærk** forestillingen er på dansk") isn't a credit.
+    """
+    for line in paragraph.split("\n"):
+        match = _CREDIT_LINE_RE.fullmatch(line.rstrip())
+        if not match or _LOWERCASE_WORD_RE.search(match.group(2)):
+            return False
+    return True
+
+
 def _translate_danish_paragraphs(paragraphs: list[str], langs: list[str]) -> str:
-    """Translate the Danish paragraphs; keep English ones verbatim."""
+    """Translate the Danish paragraphs; keep English ones and credits verbatim."""
     batch = _Batch()
     paragraph_parts = [
         [batch.add_line(line) for line in p.split("\n")]
-        if lang == DANISH
+        if lang == DANISH and not is_credits(p)
         else [[line] for line in p.split("\n")]
         for p, lang in zip(paragraphs, langs, strict=True)
     ]

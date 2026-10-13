@@ -264,6 +264,32 @@ class TestProcessDescription:
         )
         fake_model.assert_not_called()
 
+    def test_credits_after_danish_body_are_kept_verbatim(self, fake_model):
+        credits = (
+            "**Producer** Morten Kippe  \n"
+            "**Sound designer** Vilde Ilkama Nupen  \n"
+            "**Composer** Rodrigo y Gabriela  \n"
+            "**Performer** Solvej Kyung-Sook Christiansen"
+        )
+        result = process_description(f"{DANISH}\n\n{DANISH_2}\n\n{credits}")
+        assert result.language == "da"
+        assert result.en.startswith("EN<Forestillingen")
+        assert result.en.endswith(f"\n\n{credits}")
+
+    @pytest.mark.parametrize(
+        ("paragraph", "expected"),
+        [
+            ("**Dramaturg** Jane Rasch", True),
+            ("**Cast** Uma Feed, Daniel Jeremiah Persson  \n**Production** AMFI", True),
+            ("**Bemærk** forestillingen er på dansk", False),
+            ("**Dramaturg** Jane Rasch\nForestillingen varer en time.", False),
+            ("**Instruktør**", False),
+            (DANISH, False),
+        ],
+    )
+    def test_is_credits(self, paragraph, expected):
+        assert translation.is_credits(paragraph) is expected
+
     def test_undetermined(self, fake_model):
         assert process_description("Koncert") == DescriptionResult()
 
