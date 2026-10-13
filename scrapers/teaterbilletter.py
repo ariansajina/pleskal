@@ -32,6 +32,7 @@ Adding a venue:
 from __future__ import annotations
 
 import datetime
+import difflib
 import logging
 import re
 import time
@@ -206,12 +207,84 @@ def _paragraphs(text: str) -> list[str]:
 # Credits list the crew before the cast, like the venues' own pages.
 _CREDIT_ORDER = {"Production": 0, "Cast": 1}
 
+# English labels for the API's Danish role names (``positionName``). The
+# credits are written in English so they never go through machine translation,
+# which garbles role labels ("Producent" → "Manufacturer") and names with them
+# (events.translation keeps credit paragraphs verbatim). A role missing here
+# keeps its Danish label and is logged once.
+ROLE_EN = {
+    "Instruktør": "Director",
+    "Iscenesætter": "Stage director",
+    "Iscenesættelse": "Staging",
+    "Dramaturg": "Dramaturg",
+    "Dramatiker": "Playwright",
+    "Forfatter": "Writer",
+    "Manuskript": "Script",
+    "Tekst": "Text",
+    "Koreograf": "Choreographer",
+    "Koreografi": "Choreography",
+    "Scenograf": "Set designer",
+    "Scenografi": "Set design",
+    "Kostumedesigner": "Costume designer",
+    "Kostumer": "Costumes",
+    "Lysdesigner": "Lighting designer",
+    "Lysdesign": "Lighting design",
+    "Lyddesigner": "Sound designer",
+    "Lyddesign": "Sound design",
+    "Videodesigner": "Video designer",
+    "Komponist": "Composer",
+    "Musik": "Music",
+    "Skuespiller": "Actor",
+    "Skuespillere": "Actors",
+    "Medvirkende": "Cast",
+    "Danser": "Dancer",
+    "Dansere": "Dancers",
+    "Performer": "Performer",
+    "Performere": "Performers",
+    "Artist": "Artist",
+    "Musiker": "Musician",
+    "Musikere": "Musicians",
+    "Producent": "Producer",
+    "Produktion": "Production",
+    "Produktionsleder": "Production manager",
+    "Produktionsassistent": "Production assistant",
+    "Teknisk ansvarlig": "Technical manager",
+    "Tekniker": "Technician",
+    "Konsulent": "Consultant",
+    "Kunstnerisk konsulent": "Artistic consultant",
+    "Oversættelse": "Translation",
+    "Oversætter": "Translator",
+    "Idé": "Concept",
+    "Koncept": "Concept",
+    "Assistent": "Assistant",
+    "Instruktørassistent": "Assistant director",
+    "Koreografassistent": "Assistant choreographer",
+    "Fotograf": "Photographer",
+    "Grafisk design": "Graphic design",
+    "PR": "PR",
+    "Medskaber": "Co-creator",
+    "Medskabere": "Co-creators",
+}
+_unknown_roles: set[str] = set()
+
+
+def role_en(role: str) -> str:
+    """Return the English label for an API role name ("Lyddesigner:" etc.)."""
+    role = role.rstrip(":").strip()
+    if role in ROLE_EN:
+        return ROLE_EN[role]
+    if role and role not in _unknown_roles:
+        _unknown_roles.add(role)
+        log.info("No English label for teaterbilletter.dk role %r", role)
+    return role
+
 
 def credits(event: dict) -> str:
-    """Return the API's credits as markdown lines, e.g. "**Koreograf** Name".
+    """Return the API's credits as markdown lines, e.g. "**Choreographer** Name".
 
-    One line per role (names in the API's order, crew before cast), then the
-    producing company when it isn't the venue's own organiser.
+    One line per role (English label, see :data:`ROLE_EN`; names in the API's
+    order, crew before cast), then the producing company when it isn't the
+    venue's own organiser.
     """
     roles: dict[str, list[str]] = {}
     accreditations = sorted(
@@ -219,7 +292,9 @@ def credits(event: dict) -> str:
         key=lambda a: _CREDIT_ORDER.get(a.get("positionTypeName"), 2),
     )
     for credit in accreditations:
-        role = _WHITESPACE_RE.sub(" ", str(credit.get("positionName") or "")).strip()
+        role = role_en(
+            _WHITESPACE_RE.sub(" ", str(credit.get("positionName") or "")).strip()
+        )
         name = _WHITESPACE_RE.sub(
             " ", f"{credit.get('firstName') or ''} {credit.get('lastName') or ''}"
         ).strip()
@@ -229,8 +304,16 @@ def credits(event: dict) -> str:
     producer = event.get("producer") or {}
     organizer = event.get("organizer") or {}
     if producer.get("name") and producer.get("code") != organizer.get("code"):
-        lines.append(f"**Produktion** {producer['name'].strip()}")
+        lines.append(f"**Production** {producer['name'].strip()}")
     return "  \n".join(lines)
+
+
+# Teaser and description paragraphs this similar say the same thing.
+_NEAR_DUPLICATE_RATIO = 0.9
+
+
+def _near_duplicate(a: str, b: str) -> bool:
+    return difflib.SequenceMatcher(None, a, b).ratio() >= _NEAR_DUPLICATE_RATIO
 
 
 def description(event: dict) -> str:
@@ -238,12 +321,17 @@ def description(event: dict) -> str:
 
     The API separates paragraphs with single or double newlines, so every line
     becomes a paragraph.  Teaser paragraphs already in the description (venues
-    often reuse the description's opening as teaser) are left out.  The credits
-    (see :func:`credits`) end it as one paragraph of lines.
+    often reuse the description's opening as teaser, sometimes lightly
+    reworded) are left out.  The credits (see :func:`credits`) end it as one
+    paragraph of lines.
     """
     body = _paragraphs(event.get("description") or "")
     body_text = " ".join(body)
-    lead = [p for p in _paragraphs(event.get("teaser") or "") if p not in body_text]
+    lead = [
+        p
+        for p in _paragraphs(event.get("teaser") or "")
+        if p not in body_text and not any(_near_duplicate(p, b) for b in body)
+    ]
     credit_lines = credits(event)
     return "\n\n".join(lead + body + ([credit_lines] if credit_lines else []))
 
