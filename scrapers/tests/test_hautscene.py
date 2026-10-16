@@ -457,6 +457,67 @@ def test_scrape_detail_listing_date_used_when_detail_has_none():
     assert dt.astimezone(CPH_TZ).hour == 17
 
 
+def test_scrape_detail_residency_is_dated_on_its_worksharing():
+    """The "Date" row spans the residency; the worksharing row is the event."""
+    html = """
+    <html><body>
+      <div class="section-tag">In Connection</div>
+      <div class="event-info">
+        <div class="info-row">
+          <div class="row-title">Date</div>
+          <div data-compare-dates="true" data-start="19.10.26" data-end="1.11.26">
+            <div class="size-medium">19.10.26</div>
+            <div class="size-medium">1.11.26</div>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="row-title">Worksharing</div>
+          <div class="size-medium">28.10.26</div>
+        </div>
+        <div class="info-row">
+          <div class="row-title">time</div>
+          <div class="size-medium">15:00 - 17:00</div>
+        </div>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail(
+        "https://www.hautscene.dk/en/events/in-connection",
+        session,
+        listing_start_date="October 19, 2026",
+        listing_end_date="",
+    )
+    assert result is not None
+    start = datetime.datetime.fromisoformat(result["start_datetime"]).astimezone(CPH_TZ)
+    end = datetime.datetime.fromisoformat(result["end_datetime"]).astimezone(CPH_TZ)
+    assert start == datetime.datetime(2026, 10, 28, 15, 0, tzinfo=CPH_TZ)
+    assert end == datetime.datetime(2026, 10, 28, 17, 0, tzinfo=CPH_TZ)
+
+
+def test_scrape_detail_empty_worksharing_row_is_ignored():
+    html = """
+    <html><body>
+      <div class="section-tag">In Process</div>
+      <div class="event-info">
+        <div class="info-row">
+          <div class="row-title">Worksharing</div>
+          <div class="size-medium"></div>
+        </div>
+      </div>
+    </body></html>
+    """
+    session = _mock_session(html)
+    result = scrape_detail(
+        "https://www.hautscene.dk/en/events/x",
+        session,
+        listing_start_date="October 5, 2026",
+    )
+    assert result is not None
+    start = datetime.datetime.fromisoformat(result["start_datetime"])
+    assert start.astimezone(CPH_TZ).date() == datetime.date(2026, 10, 5)
+
+
 def test_scrape_detail_http_error_returns_none():
     session = MagicMock()
     session.get.return_value.raise_for_status.side_effect = requests.HTTPError("404")
