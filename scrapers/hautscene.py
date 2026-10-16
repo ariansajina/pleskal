@@ -9,6 +9,10 @@ hidden end date and the session dates named in the description; such a listing
 is split into one record per session (see ``split_sessions``), so it isn't
 dated on its long-past first session alone.
 
+A residency can list its whole period as the date and its one public moment in
+a separate "Worksharing" row (empty when there is none); the record is then
+dated on the worksharing, which is when the public can come.
+
 Wheelchair access follows the place: HAUT is in Thoravej 29, whose accessibility
 page (thoravej29.dk/da/tilgaengelighed) describes a ramped main entrance, a level
 ground floor (black box, studio 0.1), wide lifts to the other floors and
@@ -521,6 +525,11 @@ def scrape_detail(
     if not start_date:
         log.warning("Cannot parse date %r at %s", start_date_str, url)
         return None
+    # A residency's "Date" is its whole period; the worksharing is the event.
+    worksharing_date = parse_date(_get_info_row_value(info_div, "worksharing"))
+    if worksharing_date:
+        start_date = worksharing_date
+        end_date_str = ""
 
     # Time row: look for a row labelled "time" or "Time"
     time_str = _get_info_row_value(info_div, "time")
