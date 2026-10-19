@@ -20,6 +20,7 @@ from scrapers.hautscene import (
     parse_time,
     scrape,
     scrape_detail,
+    split_days,
     split_sessions,
     text_dates,
 )
@@ -124,6 +125,29 @@ def test_parse_time_en_and_em_dash(dash):
     start, end = parse_time(f"15:00 {dash} 17:00")
     assert start == datetime.time(15, 0)
     assert end == datetime.time(17, 0)
+
+
+@pytest.mark.parametrize(
+    ("text", "start", "end"),
+    [
+        ("10:00 AM - 4:00 PM", (10, 0), (16, 0)),
+        ("12:00 PM - 1:30 PM", (12, 0), (13, 30)),
+        ("12:30 AM - 1:00 AM", (0, 30), (1, 0)),
+        ("10am-4pm", (10, 0), (16, 0)),
+        ("10:00 a.m. – 4:00 p.m.", (10, 0), (16, 0)),
+        ("4 pm", (16, 0), None),
+    ],
+)
+def test_parse_time_am_pm(text, start, end):
+    got_start, got_end = parse_time(text)
+    assert got_start == datetime.time(*start)
+    assert got_end == (datetime.time(*end) if end else None)
+
+
+@pytest.mark.parametrize("text", ["13:00 PM", "0 AM", "10"])
+def test_parse_time_invalid_am_pm_raises(text):
+    with pytest.raises(ValueError):
+        parse_time(text)
 
 
 def test_parse_time_invalid_raises():
@@ -997,3 +1021,61 @@ def test_scrape_splits_a_course_by_its_hidden_end_date(
         "2026-11-11",
         "2027-03-03",
     ]
+
+
+# ── split_days ────────────────────────────────────────────────────────────────
+
+_TWO_DAY_RECORD = {
+    "title": "Perspectives On: Moving Archives",
+    "start_datetime": "2026-11-12T09:00:00+00:00",
+    "end_datetime": "2026-11-13T15:00:00+00:00",
+    "source_url": "https://www.hautscene.dk/en/events/perspectives-on-moving-archives",
+}
+
+
+def test_split_days_one_record_per_day():
+    records = split_days(_TWO_DAY_RECORD)
+    assert [(r["start_datetime"], r["end_datetime"]) for r in records] == [
+        ("2026-11-12T09:00:00+00:00", "2026-11-12T15:00:00+00:00"),
+        ("2026-11-13T09:00:00+00:00", "2026-11-13T15:00:00+00:00"),
+    ]
+    assert {r["source_url"] for r in records} == {_TWO_DAY_RECORD["source_url"]}
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"end_datetime": None},
+        {"end_datetime": "2026-11-12T15:00:00+00:00"},  # same day
+        {"end_datetime": "2026-11-19T15:00:00+00:00"},  # 8 days: too long
+    ],
+)
+def test_split_days_leaves_other_records_alone(overrides):
+    record = {**_TWO_DAY_RECORD, **overrides}
+    assert split_days(record) == [record]
+
+
+def test_split_days_allows_a_week():
+    record = {**_TWO_DAY_RECORD, "end_datetime": "2026-11-18T15:00:00+00:00"}
+    assert len(split_days(record)) == 7
+
+
+@patch("scrapers.hautscene.time.sleep")
+@patch("scrapers.hautscene.get_crawl_delay", return_value=None)
+@patch("scrapers.hautscene.make_session")
+@patch("scrapers.hautscene.scrape_detail")
+@patch("scrapers.hautscene.collect_event_listing_data")
+def test_scrape_splits_a_two_day_event(
+    mock_listing, mock_detail, _session, _delay, _sleep
+):
+    mock_listing.return_value = [
+        {
+            "url": _TWO_DAY_RECORD["source_url"],
+            "start_date_str": "November 12, 2026",
+            "end_date_str": "November 13, 2026",
+            "hidden_end_date_str": "",
+        }
+    ]
+    mock_detail.return_value = {**_TWO_DAY_RECORD, "description": ""}
+    records = scrape()
+    assert [r["start_datetime"][:10] for r in records] == ["2026-11-12", "2026-11-13"]
