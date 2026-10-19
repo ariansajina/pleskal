@@ -264,27 +264,45 @@ def parse_date(date_str: str) -> datetime.date | None:
 
 
 _TIME_RANGE_SEP_RE = re.compile(r"[-–—]")
+# "15:00", "15.00", "10:00 AM", "4 pm", "4:00 p.m."
+_TIME_PART_RE = re.compile(
+    r"^(\d{1,2})(?:[:.](\d{2}))?\s*(?:([ap])\.?m\.?)?$", re.IGNORECASE
+)
+
+
+def _parse_time_part(part: str) -> datetime.time | None:
+    m = _TIME_PART_RE.match(part)
+    if not m:
+        return None
+    hour, minute, meridiem = int(m.group(1)), int(m.group(2) or 0), m.group(3)
+    if meridiem is None:
+        if m.group(2) is None:
+            return None  # a bare number isn't a time
+    else:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
+    try:
+        return datetime.time(hour, minute)
+    except ValueError:
+        return None
 
 
 def parse_time(time_str: str) -> tuple[datetime.time, datetime.time | None]:
     """
     Parse a time range string like "15:00 - 18:00" or "15:00".
 
-    Also accepts dot-separated times like "15.00 - 17.00" and an en or em dash
-    between the times ("15:00 – 17:00").
+    Also accepts dot-separated times like "15.00 - 17.00", an en or em dash
+    between the times ("15:00 – 17:00") and 12-hour times with AM/PM
+    ("10:00 AM - 4:00 PM", "4 pm", "4:00 p.m.").
     Returns (start_time, end_time) where end_time may be None.
     Raises ValueError if start_time cannot be parsed.
     """
     parts = [p.strip() for p in _TIME_RANGE_SEP_RE.split(time_str)]
-    m_start = re.match(r"^(\d{1,2})[:.](\d{2})$", parts[0])
-    if not m_start:
+    start_time = _parse_time_part(parts[0])
+    if start_time is None:
         raise ValueError(f"Cannot parse time: {time_str!r}")
-    start_time = datetime.time(int(m_start.group(1)), int(m_start.group(2)))
-    end_time = None
-    if len(parts) >= 2:
-        m_end = re.match(r"^(\d{1,2})[:.](\d{2})$", parts[1])
-        if m_end:
-            end_time = datetime.time(int(m_end.group(1)), int(m_end.group(2)))
+    end_time = _parse_time_part(parts[1]) if len(parts) >= 2 else None
     return start_time, end_time
 
 
@@ -370,6 +388,38 @@ def split_sessions(record: dict, last_date: datetime.date | None) -> list[dict]:
             }
         )
     return records
+
+
+MAX_DAILY_SPLIT_DAYS = 7
+
+
+def split_days(record: dict) -> list[dict]:
+    """Split a short multi-day listing with a daily time into one record per day.
+
+    The listing's time is a daily time of day ("10:00 - 16:00" on 12-13 Nov),
+    so a record that ends on a later day than it starts becomes one record per
+    day, each at the start and end time of day.  Runs longer than
+    ``MAX_DAILY_SPLIT_DAYS`` days (exhibitions, residencies) are returned as is.
+    """
+    if not record["end_datetime"]:
+        return [record]
+    start = datetime.datetime.fromisoformat(record["start_datetime"]).astimezone(CPH_TZ)
+    end = datetime.datetime.fromisoformat(record["end_datetime"]).astimezone(CPH_TZ)
+    days = (end.date() - start.date()).days + 1
+    if days < 2 or days > MAX_DAILY_SPLIT_DAYS:
+        return [record]
+    return [
+        {
+            **record,
+            "start_datetime": combine_dt(
+                start.date() + datetime.timedelta(days=i), start.time()
+            ).isoformat(),
+            "end_datetime": combine_dt(
+                start.date() + datetime.timedelta(days=i), end.time()
+            ).isoformat(),
+        }
+        for i in range(days)
+    ]
 
 
 # ── Detail page ───────────────────────────────────────────────────────────────
@@ -650,7 +700,8 @@ def scrape(delay: float = 0.5) -> list[dict]:
         )
         if result is not None:
             last_date = parse_date(entry.get("hidden_end_date_str", ""))
-            events.extend(split_sessions(result, last_date))
+            for record in split_days(result):
+                events.extend(split_sessions(record, last_date))
         if i < len(listing):
             time.sleep(delay)
     log.info("Scraped %d event records from %d pages", len(events), len(listing))
