@@ -26,6 +26,7 @@ from scrapers.sydhavnteater import scrape as scrape_sydhavnteater
 from scrapers.taornby import scrape as scrape_taornby
 from scrapers.teaterbilletter import IMAGE_DOMAIN
 from scrapers.toastercph import scrape as scrape_toastercph
+from scrapers.udviklingsplatformen import scrape as scrape_udviklingsplatformen
 from scrapers.warehouse9 import scrape as scrape_warehouse9
 
 
@@ -168,6 +169,14 @@ _ALL_SOURCES = [
         external_source="dansekapellet",
         default_venue_name="Dansekapellet",
         allowed_image_domains=TEATERBILLETTER_IMAGE_DOMAINS,
+    ),
+    ScraperSource(
+        name="udviklingsplatformen",
+        scrape=scrape_udviklingsplatformen,
+        external_source="udviklingsplatformen",
+        default_venue_name="Udviklingsplatformen",
+        # The calendar carries no images.
+        allowed_image_domains=frozenset(),
     ),
 ]
 
