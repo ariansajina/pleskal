@@ -70,5 +70,11 @@
     "display_name": "Dansekapellet",
     "email": "system.dansekapellet@pleskal.internal",
     "website": "https://www.dansekapellet.dk"
+  },
+  {
+    "external_source": "udviklingsplatformen",
+    "display_name": "Udviklingsplatformen",
+    "email": "system.udviklingsplatformen@pleskal.internal",
+    "website": "https://www.udviklingsplatformen.dk"
   }
 ]

@@ -33,7 +33,7 @@ config/          # Django project settings (incl. SECURE_CSP), URLs, rate limiti
 accounts/        # User management app (custom User model, UUID PK, email-based auth, claim codes)
 events/          # Dance events app (CRUD, feeds, image processing, geocoding, sharing)
 analytics/       # Cookieless server-side analytics (daily counters, staff /stats/ dashboard)
-scrapers/        # Per-source scrapers (afukscene, blaagaardteater, dansehallerne, dansehallerne_workshops, dansekapellet, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, warehouse9); teaterbilletter.py is shared by the venues ticketed through teaterbilletter.dk
+scrapers/        # Per-source scrapers (afukscene, blaagaardteater, dansehallerne, dansehallerne_workshops, dansekapellet, faar302, hautscene, kbhdanser, sort_hvid, sydhavnteater, taornby, toastercph, udviklingsplatformen, warehouse9); teaterbilletter.py is shared by the venues ticketed through teaterbilletter.dk
 templates/       # Global Django templates (base, accounts, events, partials)
 static/          # Static assets (Tailwind input CSS, vendored HTMX, PWA icons, JS shims)
 scripts/         # Standalone scripts (backup_db.py for the backup cron; download_translation_model.py, run at Docker build time)
@@ -119,6 +119,7 @@ scrapers/
   sydhavnteater.py             # Sydhavn Teater scraper (Craft CMS GraphQL API; performance times from the teaterbilletter.dk API, /api/events/<eventNo>, when the ticket link points there, else the CMS "When" row)
   taornby.py                   # Tårnby Park Studio festival scraper (single hand-formatted page, overfit to the 2026 edition; retired via SCRAPER_DISABLED_AFTER)
   toastercph.py                # Toaster CPH scraper (retired via SCRAPER_DISABLED_AFTER)
+  udviklingsplatformen.py      # UP (Udviklingsplatformen) calendar, worksharings only: the calendar's own category-filter endpoint (/en/getCalendarEvents?category=worksharing, an HTML fragment); entries give a date only, so the time comes from the body when it names one (else a midnight placeholder), the venue from the organiser link's label; entries linking to a venue another scraper covers (COVERED_HOSTS, kept in sync by a test) are skipped as duplicates; source_url is the entry's #event-<id> anchor on UP's calendar
   warehouse9.py                # Warehouse9 scraper (Tribe Events iCal feed)
   registry.py                  # Scraper source registry (scrape fn, external_source, image-domain allowlist, etc.) consumed by run_scrapers + import_events
   sources.json                 # Source account config (external_source, display_name, email, website) for all scrapers
@@ -185,7 +186,7 @@ uv run python manage.py import_events hautscene                 # default JSON: 
 uv run python manage.py import_events hautscene events.json --dry-run
 
 # Unified scraper (runs all sources; used by Railway scrape-cron service)
-uv run python manage.py run_scrapers              # run all 13 importers
+uv run python manage.py run_scrapers              # run all 14 importers
 uv run python manage.py run_scrapers --dry-run    # preview only (no DB writes)
 uv run python manage.py run_scrapers --skip-images  # skip image downloads
 uv run python manage.py run_scrapers --only hautscene --only sydhavnteater  # subset
