@@ -91,22 +91,48 @@ def test_parse_dates_unparseable():
     assert up.parse_dates("31. Smarch", TODAY) is None
 
 
-# ── parse_time ────────────────────────────────────────────────────────────────
+# ── parse_times ───────────────────────────────────────────────────────────────
+
+T = datetime.time
 
 
-def test_parse_time_formats():
-    assert up.parse_time("Doors at 4:00 PM, then talk") == datetime.time(16, 0)
-    assert up.parse_time("from 6 p.m.") == datetime.time(18, 0)
-    assert up.parse_time("12 pm sharp") == datetime.time(12, 0)
-    assert up.parse_time("Starts 17:30") == datetime.time(17, 30)
-    assert up.parse_time("Visning kl. 17") == datetime.time(17, 0)
-    assert up.parse_time("Visning kl. 19.30") == datetime.time(19, 30)
+def test_parse_times_single():
+    assert up.parse_times("Doors at 4:00 PM, then talk") == (T(16, 0), None)
+    assert up.parse_times("from 6 p.m.") == (T(18, 0), None)
+    assert up.parse_times("12 pm sharp") == (T(12, 0), None)
+    assert up.parse_times("Starts 17:30") == (T(17, 30), None)
+    assert up.parse_times("Visning kl. 17") == (T(17, 0), None)
+    assert up.parse_times("Visning kl. 19.30") == (T(19, 30), None)
 
 
-def test_parse_time_takes_first_and_ignores_bare_dots():
-    assert up.parse_time("4:00 PM showing. 6:00 p.m. dinner") == datetime.time(16, 0)
-    assert up.parse_time("On 23.10 it costs 50.00 kr.") is None
-    assert up.parse_time("No time given") is None
+def test_parse_times_ranges():
+    # Formats from UP's own (Tid i Rum) worksharing announcements.
+    assert up.parse_times("When? August 14, 1:30–3:00 p.m.") == (T(13, 30), T(15))
+    assert up.parse_times("1:45–2:30 PM: Workshop in White Lab") == (
+        T(13, 45),
+        T(14, 30),
+    )
+    assert up.parse_times("Friday, May 9, 13:00 - 13:45") == (T(13, 0), T(13, 45))
+    assert up.parse_times("Visning kl. 13.00-13.45") == (T(13, 0), T(13, 45))
+    assert up.parse_times("kl. 17-19") == (T(17, 0), T(19, 0))
+    # The marker on the end only: an am start before a pm end.
+    assert up.parse_times("11:30-1:00 p.m.") == (T(11, 30), T(13, 0))
+
+
+def test_parse_times_programme_runs_to_last_slot():
+    programme = (
+        "Program: 1:00-1:45 p.m.: Worksharing in The Pit "
+        "1:45-2:30 p.m.: Worksharing in White Lab "
+        "2:30-3:00 p.m.: Coffee and tea in the foyer"
+    )
+    assert up.parse_times(programme) == (T(13, 0), T(15, 0))
+
+
+def test_parse_times_takes_first_and_ignores_dates_and_prices():
+    assert up.parse_times("4:00 PM showing. 6:00 p.m. dinner") == (T(16, 0), None)
+    assert up.parse_times("On 23.10 it costs 50.00 kr.") == (None, None)
+    assert up.parse_times("14-21 August, 23.10-24.10, 2025-2026") == (None, None)
+    assert up.parse_times("No time given") == (None, None)
 
 
 # ── venue / covered hosts ─────────────────────────────────────────────────────
@@ -135,10 +161,11 @@ def test_determine_venue():
     assert up.determine_venue(
         "Sign up", "https://www.udviklingsplatformen.dk/en/x", ""
     ) == (up.VENUE_NAME, up.VENUE_ADDRESS)
-    assert up.determine_venue("Studio Nord", "", "Held at Baldersgade 6") == (
-        up.VENUE_NAME,
-        up.VENUE_ADDRESS,
-    )
+    for body in ("Held at Baldersgade 6", "Workshop in The Pit", "Tid i Rum"):
+        assert up.determine_venue("Studio Nord", "", body) == (
+            up.VENUE_NAME,
+            up.VENUE_ADDRESS,
+        )
 
 
 def test_covered_hosts_match_active_scrapers():
@@ -190,6 +217,34 @@ def test_build_record_without_time_uses_midnight():
     (rec,) = up.build_records(_parse(_item()), TODAY)
     assert rec["start_datetime"] == "2026-10-23T00:00:00+02:00"
     assert rec["is_free"] is False
+
+
+def test_build_record_tid_i_rum_worksharing():
+    """A worksharing at UP, worded like its Tid i Rum announcements."""
+    item = _parse(
+        _item(
+            dates="14. November",
+            title="Tid i Rum: Worksharing with Inga Gerner Nielsen",
+            link=(
+                '<a href="https://www.udviklingsplatformen.dk/en/'
+                'kom-til-worksharings-hos-up">See more</a>'
+            ),
+            content=(
+                "<p><strong>When?</strong> November 14, 1:30–3:00 p.m.</p>"
+                "<p><strong>Where?</strong> The Development Platform for "
+                "Performing Arts, Baldersgade 6, Copenhagen N.</p>"
+                "<p><strong>Registration?</strong> Register for free here</p>"
+            ),
+        )
+    )
+    (rec,) = up.build_records(item, TODAY)
+    assert rec["start_datetime"] == "2026-11-14T13:30:00+01:00"
+    assert rec["end_datetime"] == "2026-11-14T15:00:00+01:00"
+    assert (rec["venue_name"], rec["venue_address"]) == (
+        up.VENUE_NAME,
+        up.VENUE_ADDRESS,
+    )
+    assert rec["is_free"] is True
 
 
 def test_build_records_skips_covered_venue():

@@ -23,9 +23,14 @@ There is no time, venue, price or image:
   day.
 - **Time:** taken from the body when it names one ("4:00 PM", "17:00",
   "kl. 17"), else a midnight placeholder without an end time (as sydhavnteater
-  does for unscheduled days).
-- **Venue:** the organiser link's label when it reads as a name ("Warehouse9"),
-  else UP itself when the link stays on udviklingsplatformen.dk, else the
+  does for unscheduled days). UP's own worksharings give ranges, often as a
+  programme of several slots ("1:00-1:45 p.m.: Worksharing in The Pit ...",
+  "1:45-2:30 p.m.: ...", "13:00 - 13:45"), with the am/pm marker on the end
+  only; the first time is the start and the last range's end the end.
+- **Venue:** UP itself when the link stays on udviklingsplatformen.dk or the
+  body names its address or rooms (its worksharings come out of the Tid i Rum
+  / Time in Space residencies in The Pit and White Lab, Baldersgade 6), else
+  the organiser link's label when it reads as a name ("Warehouse9"), else the
   organiser's domain.
 - **Source URL:** the entry's anchor on UP's calendar (``#event-<id>``, which
   the page scrolls to and opens); the organiser's page is appended to the
@@ -105,12 +110,22 @@ _DATE_RE = re.compile(r"(\d{1,2})\.\s*([A-Za-z]+)(?:,?\s*(\d{4}))?")
 
 # Clock times in the body: "4:00 PM", "6 p.m.", "17:00", "kl. 17", "kl. 17.30".
 # A bare "17.30" is not read as a time (it is as likely a date or a price).
+_AMPM = r"([ap])\.?\s?m\b\.?"
 _TIME_RES = (
-    re.compile(
-        r"\b(1[0-2]|0?[1-9])(?:[:.]([0-5]\d))?\s*([ap])\.?\s?m\b\.?", re.IGNORECASE
-    ),
+    re.compile(rf"\b(1[0-2]|0?[1-9])(?:[:.]([0-5]\d))?\s*{_AMPM}", re.IGNORECASE),
     re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b"),
     re.compile(r"\bkl\.?\s*([01]?\d|2[0-3])(?:[.:]([0-5]\d))?\b", re.IGNORECASE),
+)
+# Time ranges: "1:30–3:00 p.m.", "1:45–2:30 PM", "13:00 - 13:45", "kl. 13-14".
+# Only accepted with an am/pm marker, "kl." or colons on both sides, so date
+# ranges ("14-21 August", "23.10-24.10") aren't read as times.
+_RANGE_RE = re.compile(
+    r"(?P<kl>\bkl\.?\s*)?\b(?P<h1>[01]?\d|2[0-3])(?:(?P<s1>[:.])(?P<m1>[0-5]\d))?"
+    r"(?:\s*(?P<ap1>[ap])\.?\s?m\b\.?)?"
+    r"\s*[-–—]\s*"
+    r"(?P<h2>[01]?\d|2[0-3])(?:(?P<s2>[:.])(?P<m2>[0-5]\d))?"
+    r"(?:\s*(?P<ap2>[ap])\.?\s?m\b\.?)?",
+    re.IGNORECASE,
 )
 
 # Link labels that say nothing about who hosts the event.
@@ -123,8 +138,14 @@ _GENERIC_LABEL_RE = re.compile(
 _FREE_RE = re.compile(
     r"\b(?:free (?:admission|entry|entrance|of charge)"
     r"|(?:admission|entrance|entry)(?: is)?:? free"
+    r"|(?:register|sign up|signup|tilmelding)(?: \w+)? for free"
     r"|gratis)\b",
     re.IGNORECASE,
+)
+
+# UP's own rooms and residency programme, named by its in-house worksharings.
+_UP_VENUE_RE = re.compile(
+    r"\b(?:Baldersgade|The Pit|White Lab|Tid i Rum|Time in Space)\b", re.IGNORECASE
 )
 
 log = logging.getLogger(__name__)
@@ -191,21 +212,55 @@ def parse_dates(
     return start, end
 
 
-def parse_time(text: str) -> datetime.time | None:
-    """Return the first clock time *text* names, or None."""
-    # (position, pattern rank, time): "4:00 PM" matches both the am/pm and the
-    # 24-hour pattern at one position, and the am/pm reading wins.
-    found: list[tuple[int, int, datetime.time]] = []
-    for rank, pattern in enumerate(_TIME_RES):
+def _hour(hour: int, ampm: str | None) -> int:
+    if not ampm:
+        return hour
+    return hour % 12 + (12 if ampm.lower() == "p" else 0)
+
+
+def _parse_range(m: re.Match[str]) -> tuple[datetime.time, datetime.time] | None:
+    ap1, ap2 = m.group("ap1"), m.group("ap2")
+    colons = m.group("s1") == ":" and m.group("s2") == ":"
+    if not (ap1 or ap2 or m.group("kl") or colons):
+        return None
+    h1, h2 = int(m.group("h1")), int(m.group("h2"))
+    if (ap1 or ap2) and not (1 <= h1 <= 12 and 1 <= h2 <= 12):
+        return None
+    m1, m2 = int(m.group("m1") or 0), int(m.group("m2") or 0)
+    end = datetime.time(_hour(h2, ap2 or ap1), m2)
+    start = datetime.time(_hour(h1, ap1 or ap2), m1)
+    if not ap1 and ap2 and start > end:
+        # "11:30-1:00 p.m.": the marker belongs to the end only.
+        start = datetime.time(_hour(h1, "a"), m1)
+    return start, end
+
+
+def parse_times(text: str) -> tuple[datetime.time | None, datetime.time | None]:
+    """Return the (start, end) clock times *text* names.
+
+    The start is the first time named; the end is the latest end of a time
+    range after it (a programme of slots runs until its last one), or None.
+    """
+    # (position, rank, start, end): a range outranks the single times that
+    # match inside it, and "4:00 PM" reads as am/pm before 24-hour time.
+    found: list[tuple[int, int, datetime.time, datetime.time | None]] = []
+    for m in _RANGE_RE.finditer(text):
+        times = _parse_range(m)
+        if times:
+            found.append((m.start(), 0, *times))
+    for rank, pattern in enumerate(_TIME_RES, 1):
         m = pattern.search(text)
         if not m:
             continue
         hour = int(m.group(1))
-        minute = int(m.group(2) or 0)
-        if rank == 0:
-            hour = hour % 12 + (12 if m.group(3).lower() == "p" else 0)
-        found.append((m.start(), rank, datetime.time(hour, minute)))
-    return min(found)[2] if found else None
+        if rank == 1:
+            hour = _hour(hour, m.group(3))
+        found.append((m.start(), rank, datetime.time(hour, int(m.group(2) or 0)), None))
+    if not found:
+        return None, None
+    start = min(found)[2]
+    ends = [end for *_, end in found if end is not None and end > start]
+    return start, max(ends, default=None)
 
 
 def _host(url: str) -> str:
@@ -221,7 +276,7 @@ def is_covered(url: str) -> bool:
 def determine_venue(label: str, url: str, body: str) -> tuple[str, str]:
     """Return (venue_name, venue_address) for an entry."""
     host = _host(url)
-    if host == UP_HOST or "baldersgade" in body.lower():
+    if host == UP_HOST or _UP_VENUE_RE.search(body):
         return VENUE_NAME, VENUE_ADDRESS
     if label and "." not in label and not _GENERIC_LABEL_RE.search(label):
         return label[:MAX_VENUE_LENGTH], ""
@@ -258,7 +313,7 @@ def build_records(item: Tag, today: datetime.date) -> list[dict]:
         description += f"\n\nMore information: [{link_label or link_url}]({link_url})"
 
     venue_name, venue_address = determine_venue(link_label, link_url, body_text)
-    start_time = parse_time(body_text) or datetime.time(0, 0)
+    start_time, end_time = parse_times(body_text)
     first, last = dates
     days = (last - first).days + 1
     day_list = (
@@ -272,14 +327,19 @@ def build_records(item: Tag, today: datetime.date) -> list[dict]:
             "title": title,
             "description": description.strip(),
             "start_datetime": datetime.datetime.combine(
-                day, start_time, tzinfo=CPH_TZ
+                day, start_time or datetime.time(0, 0), tzinfo=CPH_TZ
             ).isoformat(),
-            "end_datetime": None,
+            "end_datetime": (
+                datetime.datetime.combine(day, end_time, tzinfo=CPH_TZ).isoformat()
+                if start_time and end_time
+                else None
+            ),
             "venue_name": venue_name,
             "venue_address": venue_address,
             "category": "worksharing",
             "is_free": bool(_FREE_RE.search(body_text)),
-            # UP doesn't say where an event is held, let alone its access.
+            # Not claimed: even UP's own rooms differ (The Pit has level
+            # access, White Lab is up a flight of stairs with no lift).
             "is_wheelchair_accessible": False,
             "price_note": "",
             "source_url": f"{CALENDAR_URL}#event-{item['data-id']}",
