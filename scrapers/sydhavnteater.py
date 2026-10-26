@@ -76,6 +76,7 @@ GRAPHQL_QUERY = """
       media { url }
       sections {
         ... on text_Entry {
+          headline
           headlineEnglish
           text
           textEnglish
@@ -302,6 +303,22 @@ def _extract_row(event: dict, english_title: str, danish_titles: set[str]) -> st
 def _extract_when(event: dict) -> str:
     """Return the 'When' schedule string from the dataTable sections, or ''."""
     return _extract_row(event, "when", {"spilletid", "hvornår", "tidspunkt"})
+
+
+def _headline_when(event: dict) -> str:
+    """Return the first text-section headline that reads as a schedule, or ''.
+
+    Some entries (e.g. "åben torsdag") give their time only as a heading such as
+    "torsdag kl. 19.30", with no ticket link or "When" row. Ordinary headings
+    don't parse into a schedule and are skipped.
+    """
+    for section in event.get("sections") or []:
+        section = section or {}
+        for field in ("headlineEnglish", "headline"):
+            value = (section.get(field) or "").strip()
+            if value and parse_when(value):
+                return value
+    return ""
 
 
 def _extract_where(event: dict) -> str:
@@ -707,7 +724,7 @@ def build_records(event: dict, ticket_event: dict | None = None) -> list[dict]:
 
     description = parse_description(event)
 
-    when_str = _extract_when(event)
+    when_str = _extract_when(event) or _headline_when(event)
     schedule = parse_when(when_str)  # {weekday: [times]} or None
     duration = _extract_duration(event)
 
