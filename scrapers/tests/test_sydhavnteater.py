@@ -733,3 +733,38 @@ def test_scrape_falls_back_to_cms_when_ticketing_fails(
 ):
     mock_events.return_value = [_kalk_fald()]
     assert len(scrape()) == 20
+
+
+# ── schedule from a section headline ─────────────────────────────────────────
+
+
+def _open_thursday(sections):
+    return _make_event(
+        title="åben torsdag",
+        dateFrom="2027-03-11T07:00:00+00:00",
+        dateTo="2027-03-11T07:00:00+00:00",
+        sections=sections,
+    )
+
+
+def test_build_records_headline_gives_start_time():
+    sections = [{"headline": "torsdag kl. 19.30", "headlineEnglish": None}]
+    records = build_records(_open_thursday(sections))
+    assert len(records) == 1
+    assert records[0]["start_datetime"] == "2027-03-11T18:30:00+00:00"
+
+
+def test_build_records_prose_headline_keeps_placeholder():
+    sections = [{"headline": "Se noget nyt på scenen", "headlineEnglish": None}]
+    records = build_records(_open_thursday(sections))
+    assert len(records) == 1
+    assert records[0]["start_datetime"] == "2027-03-10T23:00:00+00:00"
+
+
+def test_build_records_when_row_wins_over_headline():
+    sections = [
+        {"headline": "torsdag kl. 19.30", "headlineEnglish": None},
+        {"data": [_row("Spilletid", "torsdag kl. 21.00", "When")]},
+    ]
+    records = build_records(_open_thursday(sections))
+    assert records[0]["start_datetime"] == "2027-03-11T20:00:00+00:00"
