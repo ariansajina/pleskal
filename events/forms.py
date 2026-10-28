@@ -360,17 +360,9 @@ class EventForm(forms.ModelForm):
             ) + datetime.timedelta(hours=1)
             self.initial["start_time"] = next_hour.strftime(TIME_FORMAT)
         self.series = None if creation else self.instance.series
-        extra_dates = []
         if self.series is not None:
-            extra_dates = self._init_series_fields(self.series, scope)
-        self.extra_dates = ExtraDateFormSet(
-            self.data if self.is_bound else None,
-            prefix=DATES_PREFIX,
-            initial=extra_dates,
-            form_kwargs={"user": user},
-        )
-        if extra_dates:
-            self.extra_dates.extra = 1
+            self._init_series_fields(self.series, scope)
+        self.extra_dates = self._extra_dates_formset(user)
         label_day = self._label_date()
         self.fields["repeat"].choices = _repeat_choices(label_day)
         self.fields["repeat"].widget.unavailable = _unavailable_presets(label_day)
@@ -408,14 +400,37 @@ class EventForm(forms.ModelForm):
         day = self.initial.get("date")
         return day if isinstance(day, datetime.date) else timezone.localdate()
 
-    def _init_series_fields(self, series, scope) -> list[dict]:
+    def _extra_dates_formset(self, user):
+        """The rows of the specific-dates list; when editing a series, its
+        other upcoming dates (for any series, so a rule can be swapped for
+        its dates)."""
+        initial = []
+        if self.series is not None:
+            others = (
+                Event.objects.filter(
+                    series=self.series, start_datetime__gte=timezone.now()
+                )
+                .exclude(pk=self.instance.pk)
+                .order_by("start_datetime")
+            )
+            initial = [_date_row(other) for other in others]
+        formset = ExtraDateFormSet(
+            self.data if self.is_bound else None,
+            prefix=DATES_PREFIX,
+            initial=initial,
+            form_kwargs={"user": user},
+        )
+        if initial:
+            formset.extra = 1
+        return formset
+
+    def _init_series_fields(self, series, scope):
         """Fill the repeat fields from the series of the event being edited,
         ending on its last date (so a later end date extends it).
 
-        Returns the initial rows of the specific-dates list: the series'
-        other upcoming dates. A series without a rule (dates listed one by
-        one, or a scraped show) has only those, and no "this and following"
-        scope: its edits apply to one date or to all of them.
+        A series without a rule (dates listed one by one, or a scraped show)
+        is shown as specific dates, with no "this and following" scope: its
+        edits apply to one date or to all of them.
         """
         pattern = series.pattern
         if pattern is None:
@@ -424,15 +439,9 @@ class EventForm(forms.ModelForm):
             ]
         if scope == Scope.ALL or (scope == Scope.FOLLOWING and pattern is not None):
             self.initial["scope"] = scope
-        others = (
-            Event.objects.filter(series=series, start_datetime__gte=timezone.now())
-            .exclude(pk=self.instance.pk)
-            .order_by("start_datetime")
-        )
-        extra_dates = [_date_row(other) for other in others]
         if pattern is None:
             self.initial["repeat"] = REPEAT_DATES
-            return extra_dates
+            return
         day = self.initial["date"]
         presets = recurrence.preset_patterns(day)
         preset = next((key for key, p in presets.items() if p == pattern), None)
@@ -453,7 +462,6 @@ class EventForm(forms.ModelForm):
         last = Event.objects.filter(series=series).latest("start_datetime")
         self.initial["repeat_ends"] = ENDS_ON
         self.initial["repeat_until"] = timezone.localtime(last.start_datetime).date()
-        return extra_dates
 
     @property
     def repeat_applies(self) -> bool:
