@@ -9,7 +9,6 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Count, Exists, OuterRef, Q
-from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -34,7 +33,6 @@ from .series import (
     series_group,
 )
 from .sharing import apple_calendar_url, google_calendar_url, outlook_calendar_url
-from .story import render_story
 from .structured_data import event_jsonld, event_meta_description
 
 EVENTS_PER_PAGE = 30
@@ -963,31 +961,6 @@ def _google_subscribe_url(url: str) -> str:
     return "https://calendar.google.com/calendar/r?" + urlencode(
         {"cid": _webcal_url(url)}
     )
-
-
-class EventStoryImageView(RateLimitMixin, View):
-    """The event's list card as a 1080×1920 Instagram story image (JPEG),
-    shared from the detail page's "Instagram story" button."""
-
-    rate_limit_key = "event_story"
-    rate_limit_limit = 30
-    rate_limit_window = 60  # rendering costs CPU and an image read
-    rate_limit_methods = ["GET"]
-
-    def get(self, request, slug):
-        event = get_object_or_404(
-            Event.objects.select_related("submitted_by"), slug=slug
-        )
-        if event.is_draft and request.user != event.submitted_by:
-            raise Http404
-        return HttpResponse(
-            render_story(event),
-            content_type="image/jpeg",
-            headers={
-                "Content-Disposition": f'inline; filename="{event.slug}-story.jpg"',
-                "Cache-Control": "public, max-age=600",
-            },
-        )
 
 
 class SubscribeView(TemplateView):
