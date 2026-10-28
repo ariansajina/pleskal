@@ -225,7 +225,12 @@ def _save_new_event(request, form, event) -> None:
         event.save()
         return
     create_series(event, plan)
-    messages.info(request, f"The event repeats: {len(plan.spans)} dates were created.")
+    if plan.pattern is None:
+        messages.info(request, f"{len(plan.spans)} dates were created.")
+    else:
+        messages.info(
+            request, f"The event repeats: {len(plan.spans)} dates were created."
+        )
     if plan.notice:
         messages.warning(request, plan.notice)
 
@@ -719,13 +724,14 @@ def _plan_series_edit(form, event, user):
     """Plan an edit that goes beyond this one event, or return None.
 
     That's an edit of an occurrence with scope "this and following" / "all",
-    or a single event given a repeat rule.
+    or a single event given a repeat rule or specific dates.
     """
     scope = form.cleaned_data.get("scope") or Scope.THIS
     pattern = form.cleaned_data.get("pattern")
+    dates = form.cleaned_data.get("dates")
     if form.series is not None and scope == Scope.THIS:
         return None
-    if form.series is None and pattern is None:
+    if form.series is None and pattern is None and dates is None:
         return None
     original = Event.objects.select_related("series").get(pk=event.pk)
     return plan_edit(
@@ -737,6 +743,7 @@ def _plan_series_edit(form, event, user):
         ends_changed=form.ends_changed,
         changed_fields=form.changed_data,
         user=user,
+        dates=dates,
     )
 
 

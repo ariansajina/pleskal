@@ -3,6 +3,7 @@ import datetime
 from django import forms
 from django.conf import settings
 from django.utils import timezone
+from django.utils.dateformat import format as date_format
 from markdownx.widgets import MarkdownxWidget
 
 from . import recurrence
@@ -17,12 +18,20 @@ from .recurrence import (
     Pattern,
     nth_weekday_of,
 )
-from .series import SCOPE_CHOICES, Scope, check_conflicts, plan_creation
+from .series import (
+    SCOPE_CHOICES,
+    Scope,
+    check_conflicts,
+    plan_creation,
+    plan_dates,
+)
 
 DATE_FORMAT = "%Y-%m-%d"
 TIME_FORMAT = "%H:%M"
 
 REPEAT_CUSTOM = "custom"
+REPEAT_DATES = "dates"
+DATES_PREFIX = "dates"
 UNIT_DAY, UNIT_WEEK, UNIT_MONTH = "day", "week", "month"
 UNIT_FREQ = {UNIT_DAY: Freq.DAILY, UNIT_WEEK: Freq.WEEKLY, UNIT_MONTH: Freq.MONTHLY}
 MONTHLY_DAY, MONTHLY_NTH, MONTHLY_LAST = "day", "nth", "last"
@@ -91,6 +100,7 @@ def _repeat_choices(day: datetime.date) -> list[tuple[str, str]]:
         ),
         (recurrence.PRESET_MONTHLY_LAST, f"Monthly on the last {weekday}"),
         (REPEAT_CUSTOM, "Custom…"),
+        (REPEAT_DATES, "On specific dates…"),
     ]
 
 
@@ -101,6 +111,90 @@ def _monthly_choices(day: datetime.date) -> list[tuple[str, str]]:
         (MONTHLY_NTH, f"On the {ORDINALS[nth_weekday_of(day)]} {weekday}"),
         (MONTHLY_LAST, f"On the last {weekday}"),
     ]
+
+
+def _date_row(event: Event) -> dict:
+    """Initial values of a specific-dates row for *event*."""
+    start = timezone.localtime(event.start_datetime)
+    row = {"date": start.date(), "start_time": start.strftime(TIME_FORMAT)}
+    if event.end_datetime:
+        row["end_time"] = timezone.localtime(event.end_datetime).strftime(TIME_FORMAT)
+    return row
+
+
+class ExtraDateForm(forms.Form):
+    """One more date of an event listed "on specific dates", each with its
+    own times. A blank row is ignored (clearing a row removes its date); an
+    end time before the start time ends the next day (a night out)."""
+
+    date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(
+            attrs={"type": "date", "class": "form-input", "aria-label": "Date"},
+            format=DATE_FORMAT,
+        ),
+        input_formats=[DATE_FORMAT],
+    )
+    start_time = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(
+            attrs={
+                "type": "time",
+                "class": "form-input",
+                "lang": "en",
+                "aria-label": "Start time",
+            },
+            format=TIME_FORMAT,
+        ),
+        input_formats=[TIME_FORMAT],
+    )
+    end_time = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(
+            attrs={
+                "type": "time",
+                "class": "form-input",
+                "lang": "en",
+                "aria-label": "End time",
+            },
+            format=TIME_FORMAT,
+        ),
+        input_formats=[TIME_FORMAT],
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._user = user
+
+    def clean(self):
+        cleaned = super().clean()
+        day, start_time = cleaned.get("date"), cleaned.get("start_time")
+        cleaned["span"] = None
+        if self.errors or (day is None and start_time is None):
+            return cleaned
+        if day is None:
+            raise forms.ValidationError("Enter the date.")
+        if start_time is None:
+            raise forms.ValidationError("Enter the start time.")
+        start = datetime.datetime.combine(day, start_time)
+        end = None
+        if end_time := cleaned.get("end_time"):
+            end = datetime.datetime.combine(day, end_time)
+            if end == start:
+                raise forms.ValidationError("The end time must differ from the start.")
+            if end < start:
+                end += datetime.timedelta(days=1)
+        start_dt = timezone.make_aware(start)
+        if start_dt <= timezone.now():
+            raise forms.ValidationError("This date is in the past.")
+        unlimited = self._user is not None and self._user.is_system_account
+        if start_dt > timezone.now() + EVENT_HORIZON and not unlimited:
+            raise forms.ValidationError("Dates can be at most one year ahead.")
+        cleaned["span"] = (start_dt, timezone.make_aware(end) if end else None)
+        return cleaned
+
+
+ExtraDateFormSet = forms.formset_factory(ExtraDateForm, extra=2)
 
 
 class EventForm(forms.ModelForm):
@@ -133,7 +227,7 @@ class EventForm(forms.ModelForm):
     )
     end_date = forms.DateField(
         label="End date",
-        help_text="Only needed for events that span multiple days.",
+        help_text="For an event that runs without a break into a later day.",
         widget=forms.DateInput(
             attrs={"type": "date", "class": "form-input"},
             format=DATE_FORMAT,
@@ -266,8 +360,17 @@ class EventForm(forms.ModelForm):
             ) + datetime.timedelta(hours=1)
             self.initial["start_time"] = next_hour.strftime(TIME_FORMAT)
         self.series = None if creation else self.instance.series
+        extra_dates = []
         if self.series is not None:
-            self._init_series_fields(self.series, scope)
+            extra_dates = self._init_series_fields(self.series, scope)
+        self.extra_dates = ExtraDateFormSet(
+            self.data if self.is_bound else None,
+            prefix=DATES_PREFIX,
+            initial=extra_dates,
+            form_kwargs={"user": user},
+        )
+        if extra_dates:
+            self.extra_dates.extra = 1
         label_day = self._label_date()
         self.fields["repeat"].choices = _repeat_choices(label_day)
         self.fields["repeat"].widget.unavailable = _unavailable_presets(label_day)
@@ -305,12 +408,31 @@ class EventForm(forms.ModelForm):
         day = self.initial.get("date")
         return day if isinstance(day, datetime.date) else timezone.localdate()
 
-    def _init_series_fields(self, series, scope):
+    def _init_series_fields(self, series, scope) -> list[dict]:
         """Fill the repeat fields from the series of the event being edited,
-        ending on its last date (so a later end date extends it)."""
-        if scope in (Scope.FOLLOWING, Scope.ALL):
-            self.initial["scope"] = scope
+        ending on its last date (so a later end date extends it).
+
+        Returns the initial rows of the specific-dates list: the series'
+        other upcoming dates. A series without a rule (dates listed one by
+        one, or a scraped show) has only those, and no "this and following"
+        scope: its edits apply to one date or to all of them.
+        """
         pattern = series.pattern
+        if pattern is None:
+            self.fields["scope"].choices = [
+                choice for choice in SCOPE_CHOICES if choice[0] != Scope.FOLLOWING
+            ]
+        if scope == Scope.ALL or (scope == Scope.FOLLOWING and pattern is not None):
+            self.initial["scope"] = scope
+        others = (
+            Event.objects.filter(series=series, start_datetime__gte=timezone.now())
+            .exclude(pk=self.instance.pk)
+            .order_by("start_datetime")
+        )
+        extra_dates = [_date_row(other) for other in others]
+        if pattern is None:
+            self.initial["repeat"] = REPEAT_DATES
+            return extra_dates
         day = self.initial["date"]
         presets = recurrence.preset_patterns(day)
         preset = next((key for key, p in presets.items() if p == pattern), None)
@@ -331,6 +453,7 @@ class EventForm(forms.ModelForm):
         last = Event.objects.filter(series=series).latest("start_datetime")
         self.initial["repeat_ends"] = ENDS_ON
         self.initial["repeat_until"] = timezone.localtime(last.start_datetime).date()
+        return extra_dates
 
     @property
     def repeat_applies(self) -> bool:
@@ -489,14 +612,19 @@ class EventForm(forms.ModelForm):
         )
 
     def _clean_recurrence(self, cleaned, day, start_dt) -> None:
-        """Set cleaned "pattern" and "ends"; on creation also "series_plan"
-        (the occurrences to create). Leaves them None for a single event."""
+        """Set cleaned "pattern" and "ends", or "dates" (the other dates of an
+        event on specific dates); on creation also "series_plan" (the
+        occurrences to create). Leaves them None for a single event."""
         cleaned["pattern"] = cleaned["ends"] = cleaned["series_plan"] = None
+        cleaned["dates"] = None
         if not self.repeat_applies:
             # Editing only this occurrence: the (hidden) repeat fields are
             # ignored, so their errors shouldn't block saving.
             for name in RECURRENCE_FIELDS:
                 self.errors.pop(name, None)
+            return
+        if cleaned.get("repeat") == REPEAT_DATES:
+            self._clean_dates(cleaned, start_dt)
             return
         pattern = self._clean_pattern(cleaned, day)
         ends = self._clean_ends(cleaned, day) if pattern else None
@@ -511,6 +639,52 @@ class EventForm(forms.ModelForm):
         try:
             cleaned["series_plan"] = plan_creation(
                 pattern, ends, start_dt, cleaned.get("end_datetime"), self._user
+            )
+        except forms.ValidationError as exc:
+            self.add_error("repeat", exc)
+
+    def _clean_dates(self, cleaned, start_dt) -> None:
+        """Validate the specific-dates list into cleaned "dates" (sorted spans
+        of the other dates) and, on creation, "series_plan"."""
+        formset = self.extra_dates
+        if not formset.is_valid():
+            # Shown at the repeat field and in the live preview, so each
+            # names its row by date.
+            errors = list(formset.non_form_errors())
+            for form in formset:
+                day = form.cleaned_data.get("date")
+                label = date_format(day, "D j M") if day else "Date"
+                errors += [f"{label}: {error}" for error in form.non_field_errors()]
+                errors += [
+                    f"{label}: {error}"
+                    for name in form.fields
+                    for error in form.errors.get(name, [])
+                ]
+            self.add_error("repeat", errors)
+            return
+        spans = sorted(
+            (
+                form.cleaned_data["span"]
+                for form in formset
+                if form.cleaned_data.get("span")
+            ),
+            key=lambda span: span[0],
+        )
+        if not spans:
+            self.add_error(
+                "repeat",
+                "Add at least one more date, or choose “Does not repeat”.",
+            )
+            return
+        cleaned["dates"] = spans
+        if not self._is_creation or any(
+            name in self.errors
+            for name in ("date", "start_time", "end_time", "end_date")
+        ):
+            return
+        try:
+            cleaned["series_plan"] = plan_dates(
+                [(start_dt, cleaned.get("end_datetime")), *spans], self._user
             )
         except forms.ValidationError as exc:
             self.add_error("repeat", exc)

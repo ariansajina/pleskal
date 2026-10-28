@@ -101,6 +101,7 @@
                 {% if form.end_date.errors %}
                     <p class="form-field-error">{{ form.end_date.errors|join:", " }}</p>
                 {% endif %}
+                <p class="form-help" style="margin-top:var(--space-1);">A course or workshop on several days, each with its own hours? Choose Repeat → “On specific dates…” below instead.</p>
             </div>
 
             {% include "events/partials/repeat_fields.html" %}

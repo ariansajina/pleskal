@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", function () {
   var WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   var ORDINALS = ["first", "second", "third", "fourth", "fifth"];
   var custom = section.querySelector("[data-repeat-custom]");
+  var dates = section.querySelector("[data-repeat-dates]");
   var ends = section.querySelector("[data-repeat-ends]");
   var scopeInputs = document.querySelectorAll("input[name='scope']");
 
@@ -83,7 +84,8 @@ document.addEventListener("DOMContentLoaded", function () {
   function update() {
     var value = select.value;
     custom.hidden = value !== "custom";
-    ends.hidden = value === "";
+    dates.hidden = value !== "dates";
+    ends.hidden = value === "" || value === "dates";
     section.querySelectorAll("[data-repeat-unit]").forEach(function (group) {
       group.hidden = group.getAttribute("data-repeat-unit") !== unitSelect.value;
     });
@@ -136,5 +138,68 @@ document.addEventListener("DOMContentLoaded", function () {
       endDate.value = "";
       endDate.dispatchEvent(new Event("change", { bubbles: true }));
     }
+  });
+});
+
+// "On specific dates" (templates/events/partials/repeat_fields.html): rows
+// of date + times, added from a <template> (a Django formset's empty form)
+// and removed by clearing them, which the form ignores.
+document.addEventListener("DOMContentLoaded", function () {
+  var group = document.querySelector("[data-repeat-dates]");
+  if (!group) return;
+  var rows = group.querySelector("[data-date-rows]");
+  var template = group.querySelector("[data-date-template]");
+  var addButton = group.querySelector("[data-add-date]");
+  var total = group.querySelector("input[name='dates-TOTAL_FORMS']");
+  if (!rows || !template || !addButton || !total) return;
+
+  function field(row, name) {
+    return row.querySelector("input[name$='-" + name + "']");
+  }
+
+  function changed(input) {
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function wireRemove(row) {
+    var button = row.querySelector("[data-remove-date]");
+    button.hidden = false;
+    button.addEventListener("click", function () {
+      row.querySelectorAll("input").forEach(function (input) { input.value = ""; });
+      row.hidden = true;
+      changed(field(row, "date"));
+    });
+  }
+
+  // The day after the latest date listed so far (the event's own included).
+  function nextDay() {
+    var latest = document.getElementById("id_date").value;
+    rows.querySelectorAll("[data-date-row]:not([hidden])").forEach(function (row) {
+      var value = field(row, "date").value;
+      if (value > latest) latest = value;
+    });
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(latest);
+    if (!match) return "";
+    var day = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3] + 1));
+    return day.toISOString().slice(0, 10);
+  }
+
+  rows.querySelectorAll("[data-date-row]").forEach(wireRemove);
+  addButton.hidden = false;
+  addButton.addEventListener("click", function () {
+    var index = parseInt(total.value, 10) || 0;
+    var html = template.innerHTML.replace(/__prefix__/g, String(index));
+    var holder = document.createElement("div");
+    holder.innerHTML = html.trim();
+    var row = holder.firstElementChild;
+    // Start from the next day at the event's own times.
+    field(row, "date").value = nextDay();
+    field(row, "start_time").value = document.getElementById("id_start_time").value;
+    field(row, "end_time").value = document.getElementById("id_end_time").value;
+    rows.appendChild(row);
+    total.value = String(index + 1);
+    wireRemove(row);
+    field(row, "date").focus();
+    changed(field(row, "date"));
   });
 });

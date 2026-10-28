@@ -1,0 +1,6 @@
+{# One row of the event form's specific-dates list (events.forms.ExtraDateForm); also the template event-form.js clones for "+ Add date". #}
+<div class="repeat-row date-row" data-date-row>
+    {{ row.date }}
+    <span class="repeat-row" style="column-gap:var(--space-2);">{{ row.start_time }}<span aria-hidden="true">–</span>{{ row.end_time }}</span>
+    <button type="button" class="btn btn--ghost btn--sm" data-remove-date hidden>Remove</button>
+</div>

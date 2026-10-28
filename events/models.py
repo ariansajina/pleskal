@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 # Assumed length of an event with no end time, for consumers that need one
 # (feeds, calendar links, structured data). Retention still counts from start.
 DEFAULT_EVENT_DURATION = datetime.timedelta(hours=1)
+# An event ending the next day up to this time is a night out ("22:00 – 02:00"),
+# shown without its end date; any later end is shown with it.
+OVERNIGHT_END = datetime.time(6)
 
 # Field length constraints are defined in events.limits (Django-free, so
 # scrapers can use them standalone); need to makemigrations if they change.
@@ -366,6 +369,19 @@ class Event(models.Model):
         if self.end_datetime:
             return cast(datetime.datetime, self.end_datetime)
         return cast(datetime.datetime, self.start_datetime) + DEFAULT_EVENT_DURATION
+
+    @property
+    def ends_on_later_day(self) -> bool:
+        """Whether the end is worth its own date in the listings: it falls on
+        a later local day, other than early the next morning."""
+        if not self.end_datetime:
+            return False
+        start = timezone.localtime(self.start_datetime)
+        end = timezone.localtime(self.end_datetime)
+        if end.date() <= start.date():
+            return False
+        next_day = end.date() == start.date() + datetime.timedelta(days=1)
+        return not (next_day and end.time() <= OVERNIGHT_END)
 
     @property
     def local_start_date(self):

@@ -50,14 +50,23 @@ details[open] summary::after { content: ''; }
         {# Date / time #}
         <div class="event-meta" style="margin-bottom:var(--space-2);font-size:var(--text-base);">
             <span><strong>{{ event.start_datetime|date:"l, j F Y" }}</strong></span>
-            {% if event.start_datetime|date:"H:i" != "00:00" %}
-                <span style="opacity:0.4;">·</span>
-                <span>{{ event.start_datetime|date:"H:i" }}</span>
-                {% if event.end_datetime %}
+            {% with timed=event.start_datetime|date:"H:i" %}
+                {% if timed != "00:00" %}
+                    <span style="opacity:0.4;">·</span>
+                    <span>{{ event.start_datetime|date:"H:i" }}</span>
+                {% endif %}
+                {% if event.ends_on_later_day %}
+                    <span>–</span>
+                    <span><strong>{% if event.end_datetime|date:"Y" != event.start_datetime|date:"Y" %}{{ event.end_datetime|date:"l, j F Y" }}{% else %}{{ event.end_datetime|date:"l, j F" }}{% endif %}</strong></span>
+                    {% if timed != "00:00" %}
+                        <span style="opacity:0.4;">·</span>
+                        <span>{{ event.end_datetime|date:"H:i" }}</span>
+                    {% endif %}
+                {% elif event.end_datetime and timed != "00:00" %}
                     <span>–</span>
                     <span>{{ event.end_datetime|date:"H:i" }}</span>
                 {% endif %}
-            {% endif %}
+            {% endwith %}
         </div>
 
         {# All dates of a series: one scrollable row, the current one highlighted #}
@@ -208,7 +217,7 @@ details[open] summary::after { content: ''; }
                         {% endif %}
                     </form>
                     {% if series %}
-                        <a href="{% url 'event_edit' event.slug %}?scope=all#repeat-section" class="btn btn--ghost btn--sm">Extend series</a>
+                        <a href="{% url 'event_edit' event.slug %}?scope=all#repeat-section" class="btn btn--ghost btn--sm">{% if series.summary %}Extend series{% else %}Edit dates{% endif %}</a>
                     {% endif %}
                     <a href="{% url 'event_duplicate' event.slug %}" class="btn btn--ghost btn--sm">Duplicate</a>
                     <a href="{% url 'event_delete' event.slug %}" class="btn btn--danger btn--sm">Delete</a>

@@ -40,6 +40,20 @@
         </fieldset>
     </div>
 
+    <fieldset class="repeat-fieldset repeat-group" data-repeat-dates>
+        <legend class="form-label">Other dates</legend>
+        <p class="form-help">The date and times above are one date of the event. List the others here, each with its own times.</p>
+        {{ form.extra_dates.management_form }}
+        <div class="repeat-options" data-date-rows>
+            {% for row in form.extra_dates %}
+                {% include "events/partials/date_row.html" %}
+            {% endfor %}
+        </div>
+        <template data-date-template>{% include "events/partials/date_row.html" with row=form.extra_dates.empty_form %}</template>
+        <div><button type="button" class="btn btn--ghost btn--sm" data-add-date hidden>+ Add date</button></div>
+        <p class="form-help">An end time before the start time ends the next day.</p>
+    </fieldset>
+
     <fieldset class="repeat-fieldset repeat-group" data-repeat-ends>
         <legend class="form-label">Ends</legend>
         <div class="repeat-options">
@@ -70,6 +84,6 @@
          aria-live="polite"
          hx-post="{% url 'event_recurrence_preview' %}"
          hx-trigger="load, change from:closest form delay:200ms"
-         hx-include="[name=date],[name=start_time],[name=end_time],[name=end_date],[name=title],[name=venue_name],[name^=repeat],[name=scope],[name=event]"
+         hx-include="[name=date],[name=start_time],[name=end_time],[name=end_date],[name=title],[name=venue_name],[name^=repeat],[name^=dates-],[name=scope],[name=event]"
          hx-swap="innerHTML"></div>
 </div>
