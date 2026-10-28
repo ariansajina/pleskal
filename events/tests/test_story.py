@@ -82,7 +82,16 @@ class TestStoryImageView:
     def test_detail_page_links_to_story_image(self, client):
         event = EventFactory.create()
         response = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
-        assert f'href="{_url(event)}"' in response.content.decode()
+        content = response.content.decode()
+        assert f'href="{_url(event)}"' in content
+
+    def test_story_button_starts_hidden(self, client):
+        # share.js reveals it only on phones/tablets that can share files.
+        event = EventFactory.create()
+        response = client.get(reverse("event_detail", kwargs={"slug": event.slug}))
+        content = response.content.decode()
+        button = content[content.index('id="story-btn"') :]
+        assert " hidden>" in button[: button.index("</a>")]
 
 
 @pytest.mark.django_db

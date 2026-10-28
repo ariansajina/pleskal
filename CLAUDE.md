@@ -455,7 +455,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `EventICalFeed` | `/feed/events.ics` | Public |
 | `EventRSSFeed` | `/feed/events.rss` | Public |
 | `EventICalSingleView` | `/events/<slug>/calendar.ics` | Public |
-| `EventStoryImageView` | `/events/<slug>/story.jpg` | Public (drafts: owner only); the detail page's "Instagram story" button shares it via the Web Share API (files) after copying the event link for a link sticker, else downloads it; `Cache-Control: public, max-age=600` |
+| `EventStoryImageView` | `/events/<slug>/story.jpg` | Public (drafts: owner only); the detail page's "Instagram story" button (hidden unless `static/js/share.js` finds a touch-first device, `pointer: coarse` + `hover: none`, that can share files) shares it via the Web Share API after copying the event link for a link sticker; `Cache-Control: public, max-age=600` |
 | `EventICalSeriesView` | `/events/<slug>/all-dates.ics` | Public; every upcoming published date of the event's series (404 for a single event); counted as a calendar download by analytics |
 
 - Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity

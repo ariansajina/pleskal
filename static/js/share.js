@@ -40,17 +40,20 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-// "Instagram story" button: shares the event's story image (its list card
-// on a 1080x1920 canvas) through the share sheet, where Instagram opens it
-// in the story editor. A web page can't attach Instagram's link sticker, so
-// the event link is copied too, ready to paste into one. Without file
-// sharing (most desktops) the link falls back to downloading the image.
+// "Instagram story" button: shares the event's story image (its card on a
+// 1080x1920 canvas) through the share sheet, where Instagram opens it in the
+// story editor. A web page can't attach Instagram's link sticker, so the
+// event link is copied too, ready to paste into one. The button stays hidden
+// except on phones and tablets that can share files: desktop browsers can
+// share files too, but there's no Instagram app there to share to.
 document.addEventListener("DOMContentLoaded", function () {
   var btn = document.getElementById("story-btn");
   if (!btn || typeof navigator.canShare !== "function") return;
+  if (!window.matchMedia("(pointer: coarse) and (hover: none)").matches) return;
 
   var probe = new File([""], "story.jpg", { type: "image/jpeg" });
   if (!navigator.canShare({ files: [probe] })) return;
+  btn.hidden = false;
 
   var label = btn.textContent;
   var pending = null;
