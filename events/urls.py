@@ -14,6 +14,7 @@ from .views import (
     EventDuplicateView,
     EventListView,
     EventRecurrencePreviewView,
+    EventStoryImageView,
     EventToggleDraftView,
     EventUpdateView,
     GuideView,
@@ -56,6 +57,11 @@ urlpatterns = [
         "events/<slug:slug>/all-dates.ics",
         EventICalSeriesView.as_view(),
         name="event_ical_series",
+    ),
+    path(
+        "events/<slug:slug>/story.jpg",
+        EventStoryImageView.as_view(),
+        name="event_story_image",
     ),
     # Feeds
     path("feed/events.ics", EventICalFeed.as_view(), name="event_ical_feed"),

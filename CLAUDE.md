@@ -58,6 +58,7 @@ events/
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
   translation.py       # Offline per-paragraph EN/DA detection (lingua) + Markdown-preserving da→en translation (CTranslate2)
   sharing.py           # Apple/Google calendar URL builders used by detail page
+  story.py             # Instagram story image: the event's list card redrawn with Pillow (light theme, hover state; colors mirror base.html tokens, keep in sync with the card's CSS) on a 1080×1920 dotted canvas with the logo and SITE_DOMAIN; JPEG
   signals.py           # Event file cleanup: deletes image + thumbnail files on event delete and when an image is replaced/cleared (unless another event references them)
   context_processors.py  # Template context (site_origin = https://SITE_DOMAIN for canonical/og:url)
   structured_data.py   # SEO: schema.org Event JSON-LD + meta description for event detail pages
@@ -292,6 +293,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 | Event duplicate | POST | 20 req/min | per user |
 | Event toggle draft | POST | 20 req/min | per user |
 | Repeat dates preview | POST | 120 req/min | per user |
+| Story image | GET | 30 req/min | per IP |
 
 - `EventDeleteView` is **not** rate-limited (owner-only + confirmation step).
 - Event toggle draft shares the `event_update` cache key, so it draws from the same per-user counter as Event update.
@@ -453,6 +455,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `EventICalFeed` | `/feed/events.ics` | Public |
 | `EventRSSFeed` | `/feed/events.rss` | Public |
 | `EventICalSingleView` | `/events/<slug>/calendar.ics` | Public |
+| `EventStoryImageView` | `/events/<slug>/story.jpg` | Public (drafts: owner only); the detail page's "Instagram story" button shares it via the Web Share API (files) after copying the event link for a link sticker, else downloads it; `Cache-Control: public, max-age=600` |
 | `EventICalSeriesView` | `/events/<slug>/all-dates.ics` | Public; every upcoming published date of the event's series (404 for a single event); counted as a calendar download by analytics |
 
 - Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity
