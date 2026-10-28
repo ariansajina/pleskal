@@ -1,10 +1,14 @@
-"""Instagram story image of an event: its list card on a 1080×1920 canvas.
+"""Instagram story image of an event: its list card, stood upright, on a
+1080×1920 canvas.
 
-The card is redrawn with Pillow from the CSS of `.card` / `.event-row` in
-`templates/base.html` (light theme, hover state), measured in CSS pixels and
-scaled by SCALE. Colors mirror the `:root` tokens there; keep them in sync
-when the card's design changes. Sharing from the web can't attach a link
-sticker, so the canvas leaves room for one under the card and names the site.
+The card keeps the look of `.card` in `templates/base.html` (light theme,
+hover state: blue border and offset shadow; title, date, venue, "by" line,
+badges) but stacks the photo above the text, at sizes made for a phone held
+upright. Measurements are in CSS pixels scaled by SCALE; colors mirror the
+`:root` tokens there, so keep them in sync when the card's design changes.
+The card and the site line under it are centered between the areas
+Instagram covers (progress bar and profile at the top, reply bar at the
+bottom), leaving room for a link sticker, which a web page can't attach.
 """
 
 import functools
@@ -23,7 +27,10 @@ logger = logging.getLogger(__name__)
 
 STORY_SIZE = (1080, 1920)
 SCALE = 2.5  # story pixels per CSS pixel
-CARD_WIDTH = 384  # CSS px; 960 story px
+CARD_WIDTH = 352  # CSS px; 880 story px
+IMAGE_HEIGHT = 224  # CSS px; 560 story px
+SAFE_TOP = 250  # story px Instagram covers at the top ...
+SAFE_BOTTOM = 340  # ... and at the bottom
 JPEG_QUALITY = 90
 
 FONT_DIR = Path(settings.BASE_DIR) / "static" / "fonts"
@@ -37,7 +44,6 @@ BLUE = (0x33, 0x33, 0xCC)
 INK = (0x1A, 0x18, 0x66)
 INK_MUTED = (0x3D, 0x3B, 0x8A)
 BORDER = (0xAA, 0xAA, 0xDD)
-BORDER_LIGHT = (0xCC, 0xCC, 0xEE)
 BY_MUTED = (157, 155, 194)  # --ink-muted at opacity 0.5 on the card
 
 # .badge--<category>: (color, background, border)
@@ -175,25 +181,26 @@ def load_event_image(event: Event) -> Image.Image:
     return Image.open(finders.find(event._default_image_path()))
 
 
-def render_badge(draw, x, y, kind, label):
-    """Draw a `.badge` with its top-left at (x, y); return its width."""
+def render_badge(draw, x, y, kind, label, size):
+    """Draw a `.badge` at *size* CSS px (11.2 on the site) with its top-left
+    at (x, y), padding and border scaled along; return its width."""
     color, background, border = BADGES.get(kind, BADGES["other"])
-    f = font(11.2, bold=True)
+    f = font(size, bold=True)
     text = label.upper()
-    spacing = px(11.2 * 0.08)
+    spacing = px(size * 0.08)
+    stroke = px(size * 1.5 / 11.2)
+    pad_x, pad_y = px(size * 8 / 11.2), px(size * 3.2 / 11.2)
     text_w = sum(f.getlength(c) + spacing for c in text)
-    width = round(text_w) + 2 * px(8) + 2 * px(1.5)
-    height = badge_height()
+    width = round(text_w) + 2 * pad_x + 2 * stroke
+    height = badge_height(size)
     if background:
         draw.rectangle([x, y, x + width - 1, y + height - 1], fill=background)
     draw.rectangle(
-        [x, y, x + width - 1, y + height - 1],
-        outline=border or color,
-        width=px(1.5),
+        [x, y, x + width - 1, y + height - 1], outline=border or color, width=stroke
     )
     draw_text_line(
         draw,
-        (x + px(1.5) + px(8), y + px(1.5) + px(3.2)),
+        (x + stroke + pad_x, y + stroke + pad_y),
         text,
         f,
         color,
@@ -203,51 +210,64 @@ def render_badge(draw, x, y, kind, label):
     return width
 
 
-def badge_height() -> int:
-    return line_height(font(11.2, bold=True)) + 2 * px(3.2) + 2 * px(1.5)
+def badge_height(size: float) -> int:
+    f = font(size, bold=True)
+    return line_height(f) + 2 * px(size * 3.2 / 11.2) + 2 * px(size * 1.5 / 11.2)
 
 
 def render_card(event: Event) -> Image.Image:
-    """The event's list card (event_card.html) as an RGBA image."""
-    border = px(1.5)
-    thumb_w = px(150)
+    """The event's card, photo on top, as an RGBA image."""
+    border = px(2)
+    pad = px(20)
     width = px(CARD_WIDTH)
-    text_w = width - 2 * border - thumb_w - 2 * px(16)
+    image_h = px(IMAGE_HEIGHT)
+    text_w = width - 2 * border - 2 * pad
 
-    title_font = font(16, bold=True)
-    meta_font = font(13)
-    title = clamp(str(event.title), title_font, text_w, 2)
-    venue = clamp(str(event.venue_name), meta_font, text_w, 2)
+    title_font = font(28, bold=True)
+    meta_font = font(17)
+    badge_size = 13
+    title_lh = px(28 * 1.2)
     meta_lh = line_height(meta_font)
+    title = clamp(str(event.title), title_font, text_w, 3)
+    venue = clamp(str(event.venue_name), meta_font, text_w, 2)
     show_by = bool(event.submitted_by) and not event.publisher_is_venue
 
-    content_h = (
-        px(12)
-        + len(title) * px(16 * 1.25)
-        + px(4)
+    text_h = (
+        pad
+        + len(title) * title_lh
+        + px(10)
         + meta_lh
         + px(4)
         + len(venue) * meta_lh
-        + px(4)
-        + ((meta_lh + px(4)) if show_by else 0)
-        + px(4)
+        + ((px(4) + meta_lh) if show_by else 0)
+        + px(14)
+        + badge_height(badge_size)
+        + pad
     )
-    footer_h = badge_height() + px(8)
-    inner_h = max(px(130), content_h + footer_h)
-    height = inner_h + 2 * border
+    height = border + image_h + border + text_h + border
 
     card = Image.new("RGBA", (width, height), CARD_BG)
     draw = ImageDraw.Draw(card)
 
-    # Content column
-    x = border + px(16)
-    y = border + px(12)
-    for line in title:
-        draw_text_line(draw, (x, y), line, title_font, INK, px(16 * 1.25))
-        y += px(16 * 1.25)
-    y += px(4)
+    # Photo: object-fit: cover, over a blue rule
+    try:
+        img = ImageOps.exif_transpose(load_event_image(event)).convert("RGBA")
+        img = ImageOps.fit(img, (width - 2 * border, image_h), Image.Resampling.LANCZOS)
+        card.alpha_composite(img, (border, border))
+    except Exception:
+        logger.warning("Story: no image for event %s", event.pk)
+    draw.rectangle(
+        [0, border + image_h, width - 1, 2 * border + image_h - 1], fill=BLUE
+    )
 
-    # Date line: flex items with an 8px gap, clipped to the column
+    x = border + pad
+    y = 2 * border + image_h + pad
+    for line in title:
+        draw_text_line(draw, (x, y), line, title_font, INK, title_lh)
+        y += title_lh
+    y += px(10)
+
+    # Date line: flex items with a gap, clipped to the column
     meta = Image.new("RGBA", (text_w, meta_lh))
     meta_draw = ImageDraw.Draw(meta)
     mx = 0
@@ -260,10 +280,10 @@ def render_card(event: Event) -> Image.Image:
     for line in venue:
         draw_text_line(draw, (x, y), line, meta_font, BLUE, meta_lh)
         y += meta_lh
-    y += px(4)
 
     if show_by:
         # "by" at opacity 0.5, then the publisher in blue
+        y += px(4)
         by_w = draw_text_line(draw, (x, y), "by ", meta_font, BY_MUTED, meta_lh)
         name = clamp(
             event.submitted_by.public_name,  # ty: ignore[unresolved-attribute]
@@ -272,26 +292,12 @@ def render_card(event: Event) -> Image.Image:
             1,
         )[0]
         draw_text_line(draw, (x + round(by_w), y), name, meta_font, BLUE, meta_lh)
+        y += meta_lh
+    y += px(14)
 
-    # Footer: badges pinned to the bottom of the body
     bx = x
-    by_top = border + inner_h - px(8) - badge_height()
     for kind, label in badges(event):
-        bx += render_badge(draw, bx, by_top, kind, label) + px(4.8)
-
-    # Thumbnail: object-fit: cover, with a light left border
-    thumb_x = width - border - thumb_w
-    try:
-        img = load_event_image(event)
-        img = ImageOps.exif_transpose(img).convert("RGBA")
-        img = ImageOps.fit(img, (thumb_w - border, inner_h), Image.Resampling.LANCZOS)
-        card.alpha_composite(img, (thumb_x + border, border))
-    except Exception:
-        logger.warning("Story: no image for event %s", event.pk)
-    draw.rectangle(
-        [thumb_x, border, thumb_x + border - 1, border + inner_h - 1],
-        fill=BORDER_LIGHT,
-    )
+        bx += render_badge(draw, bx, y, kind, label, badge_size) + px(6)
 
     # Card border (hover state: blue)
     draw.rectangle([0, 0, width - 1, height - 1], outline=BLUE, width=border)
@@ -319,34 +325,44 @@ def render_story(event: Event) -> bytes:
     draw = ImageDraw.Draw(canvas)
     width, height = STORY_SIZE
 
-    logo = Image.open(finders.find(LOGO_PATH)).convert("RGBA")
-    logo.thumbnail((px(150), px(150)), Image.Resampling.LANCZOS)
-    canvas.alpha_composite(logo, ((width - logo.width) // 2, 260))
-
     card = render_card(event)
+    shadow = px(4)
+
+    # Under the card: the logo and the site's domain, side by side
+    site_font = font(18, bold=True)
+    domain = settings.SITE_DOMAIN
+    logo = Image.open(finders.find(LOGO_PATH)).convert("RGBA")
+    logo.thumbnail((px(36), px(36)), Image.Resampling.LANCZOS)
+    gap = px(10)
+    site_w = logo.width + gap + round(site_font.getlength(domain))
+    site_h = logo.height
+
+    # Center card + site line between the areas Instagram covers
+    group_h = card.height + shadow + px(24) + site_h
+    top = SAFE_TOP + max(0, (height - SAFE_TOP - SAFE_BOTTOM - group_h) // 2)
+
     card_x = (width - card.width) // 2
-    card_y = max(260 + logo.height + 120, (height - card.height) // 2 - 80)
     # The card is translucent, so the dots show through as on the site; take
     # its backdrop before the shadow, which CSS doesn't paint under the card.
-    box = (card_x, card_y, card_x + card.width, card_y + card.height)
+    box = (card_x, top, card_x + card.width, top + card.height)
     backdrop = canvas.crop(box)
     backdrop.alpha_composite(card)
-    # .card:hover box-shadow: 3px 3px 0 var(--blue)
-    shadow = px(3)
+    # .card:hover box-shadow, scaled up with the card
     draw.rectangle(
         [box[0] + shadow, box[1] + shadow, box[2] - 1 + shadow, box[3] - 1 + shadow],
         fill=BLUE,
     )
     canvas.paste(backdrop, box)
 
-    site = font(16, bold=True)
-    label = settings.SITE_DOMAIN
+    site_x = (width - site_w) // 2
+    site_y = box[3] + shadow + px(24)
+    canvas.alpha_composite(logo, (site_x, site_y))
     draw.text(
-        (width / 2, height - 260),
-        label,
-        font=site,
+        (site_x + logo.width + gap, site_y + site_h / 2),
+        domain,
+        font=site_font,
         fill=BLUE,
-        anchor="ms",
+        anchor="lm",
     )
 
     out = io.BytesIO()

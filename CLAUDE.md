@@ -58,7 +58,7 @@ events/
   geocoding.py         # Nominatim/OSM geocoder with rate limiting
   translation.py       # Offline per-paragraph EN/DA detection (lingua) + Markdown-preserving da→en translation (CTranslate2)
   sharing.py           # Apple/Google calendar URL builders used by detail page
-  story.py             # Instagram story image: the event's list card redrawn with Pillow (light theme, hover state; colors mirror base.html tokens, keep in sync with the card's CSS) on a 1080×1920 dotted canvas with the logo and SITE_DOMAIN; JPEG
+  story.py             # Instagram story image: the event's card stood upright (photo on top, then title, date, venue, "by" line, badges; light theme, hover state; colors mirror base.html tokens, keep in sync with the card's CSS) on a 1080×1920 dotted canvas, centered with the logo + SITE_DOMAIN line between the areas Instagram covers; JPEG
   signals.py           # Event file cleanup: deletes image + thumbnail files on event delete and when an image is replaced/cleared (unless another event references them)
   context_processors.py  # Template context (site_origin = https://SITE_DOMAIN for canonical/og:url)
   structured_data.py   # SEO: schema.org Event JSON-LD + meta description for event detail pages

@@ -95,8 +95,8 @@ class TestRenderCard:
             "events/photo.webp", ContentFile(buffer.getvalue())
         )
         card = render_card(event)
-        # The thumbnail fills the card's right-hand column.
-        pixel = card.convert("RGB").getpixel((card.width - 40, card.height // 2))
+        # The photo fills the top of the card.
+        pixel = card.convert("RGB").getpixel((card.width // 2, 200))
         assert isinstance(pixel, tuple)
         assert all(
             abs(got - want) < 20 for got, want in zip(pixel, (200, 30, 30), strict=True)
