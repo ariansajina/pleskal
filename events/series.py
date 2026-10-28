@@ -5,13 +5,16 @@ occurrence, so lists, feeds, search and retention need no special cases.
 This module plans changes to a series without writing anything (the form
 preview shows the plan) and then applies them in one transaction:
 
-- `plan_creation` / `create_series`: a new event that repeats.
+- `plan_creation` / `create_series`: a new event that repeats; `plan_dates`
+  for one listed on specific dates (a series without a rule, each date with
+  its own times).
 - `plan_edit` / `SeriesEdit.apply`: an edit to an occurrence applied to
   "this and following" or "all" events of its series (or turning a single
   event into a series). Only the fields the owner changed are copied to the
   other occurrences, so their individual edits survive. Changing the rule or
   the date regenerates the upcoming occurrences; changing only the end date
-  extends or shortens the series.
+  extends or shortens the series. An edit listing specific dates replaces
+  the upcoming occurrences with those dates.
 - `scope_queryset`: the occurrences a delete affects.
 - `link_scraped_series`: groups a scraped show's dates into a series (no
   rule; the importer calls it after each run).
@@ -197,14 +200,14 @@ def _clone(template: Event, span: Span, series: EventSeries | None) -> Event:
 
 @dataclass
 class SeriesCreation:
-    pattern: Pattern
+    pattern: Pattern | None  # None: dates listed one by one
     anchor: datetime.datetime  # naive local DTSTART
     spans: list[Span]
-    expansion: Expansion
+    expansion: Expansion | None = None
 
     @property
     def notice(self) -> str:
-        return cut_notice(self.expansion)
+        return cut_notice(self.expansion) if self.expansion else ""
 
 
 def plan_creation(
@@ -234,12 +237,37 @@ def plan_creation(
     return SeriesCreation(pattern, anchor, spans, expansion)
 
 
+def _check_dates_room(count: int, account_room: int | None) -> None:
+    """Raise ValidationError if *count* listed upcoming dates are over the
+    limits. Unlike a rule's dates, listed dates are never cut off: the owner
+    chose each one."""
+    series_limit = settings.MAX_UPCOMING_OCCURRENCES_PER_SERIES
+    if count > series_limit:
+        raise ValidationError(
+            f"An event can have at most {series_limit} upcoming dates ({count} listed)."
+        )
+    if account_room is not None and count > account_room:
+        raise ValidationError(
+            f"You can have at most {settings.MAX_UPCOMING_EVENTS_PER_USER} "
+            f"upcoming events in total: there is room for {account_room} more "
+            f"dates ({count} listed)."
+        )
+
+
+def plan_dates(spans: list[Span], user) -> SeriesCreation:
+    """The occurrences of a new event listed on the specific dates *spans*."""
+    spans = sorted(spans, key=lambda span: span[0])
+    _check_dates_room(len(spans), _account_room(user))
+    return SeriesCreation(None, local_naive(spans[0][0]), spans)
+
+
 def create_series(event: Event, plan: SeriesCreation) -> list[Event]:
     """Save *event* (unsaved, with its image attached) as the first occurrence
     of a new series and create the others as copies of it."""
     with transaction.atomic():
         series = EventSeries.objects.create(
-            rrule=plan.pattern.to_rrule(), dtstart=timezone.make_aware(plan.anchor)
+            rrule=plan.pattern.to_rrule() if plan.pattern else "",
+            dtstart=timezone.make_aware(plan.anchor),
         )
         _set_span(event, plan.spans[0])
         event.series = series
@@ -402,13 +430,16 @@ def plan_edit(
     ends_changed: bool,
     changed_fields,
     user,
+    dates: list[Span] | None = None,
 ) -> SeriesEdit:
     """Plan an edit of occurrence *event* applied to *scope*.
 
     *event* carries the form's changes (unsaved); *original* is the same row
     as stored. *pattern* is the form's repeat rule (None = does not repeat)
-    and *changed_fields* the form's changed_data. Raises ValidationError when
-    no dates would be left or the result clashes with other events.
+    and *changed_fields* the form's changed_data. *dates*, when given, lists
+    the other dates of an event on specific dates (and *pattern* is ignored).
+    Raises ValidationError when no dates would be left or the result clashes
+    with other events.
     """
     now = timezone.now()
     now_local = local_naive(now)
@@ -425,6 +456,11 @@ def plan_edit(
         copy_draft=event.is_draft != original.is_draft,
         series=series,
     )
+
+    if dates is not None:
+        _plan_dates_edit(edit, original, scope, dates, user, now)
+        edit.check()
+        return edit
 
     if pattern is None:
         # "Does not repeat": the upcoming occurrences in scope go, the edited
@@ -518,6 +554,41 @@ def _plan_regeneration(edit, original, scope, pattern, ends, user, now):
         edit.new_series = True
     else:
         series.rrule, series.dtstart = rrule, dtstart
+        edit.update_series = True
+
+
+def _plan_dates_edit(edit, original, scope, dates, user, now):
+    """Specific dates: the edited occurrence takes the form's date, and the
+    other upcoming occurrences become *dates*, reusing existing rows (and
+    their URLs) where possible. Past occurrences stay as they are."""
+    if scope != Scope.ALL:
+        raise ValidationError(
+            "To list the dates one by one, apply the changes to all events "
+            "in the series."
+        )
+    event, series = edit.event, edit.series
+    pool = [o for o in edit.others if o.start_datetime >= now]
+    event_upcoming = event.start_datetime >= now
+    upcoming = len(dates) + event_upcoming
+    account_room = _account_room(user)
+    if account_room is not None:
+        account_room += len(pool) + (original.start_datetime >= now)
+    _check_dates_room(upcoming, account_room)
+
+    assigned, edit.creates, removed = _assign_spans(pool, dates)
+    edit.deletes = [o for o in edit.others if o.pk in removed]
+    edit.others = [o for o in edit.others if o.pk not in removed]
+    edit.moves = assigned
+
+    first = min(
+        [event.start_datetime, *(start for start, _ in dates)]
+        + [o.start_datetime for o in edit.others if o.start_datetime < now]
+    )
+    if series is None:
+        edit.series = EventSeries(rrule="", dtstart=first)
+        edit.new_series = True
+    else:
+        series.rrule, series.dtstart = "", first
         edit.update_series = True
 
 

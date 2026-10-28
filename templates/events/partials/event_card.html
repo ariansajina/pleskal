@@ -8,11 +8,15 @@
                     {% if card and not card.showtimes %}<span class="series-next">{% if show_past and not date_range_active %}Last{% else %}Next{% endif %}</span>{% endif %}
                     {% if event.start_datetime|date:"H:i" == "00:00" %}
                         <span>{{ event.start_datetime|date:"D j M" }}</span>
+                        {% if event.ends_on_later_day %}
+                            <span>–</span>
+                            <span>{{ event.end_datetime|date:"D j M" }}</span>
+                        {% endif %}
                     {% else %}
                         <span>{{ event.start_datetime|date:"D j M · H:i" }}</span>
                         {% if event.end_datetime %}
                             <span>–</span>
-                            <span>{{ event.end_datetime|date:"H:i" }}</span>
+                            <span>{% if event.ends_on_later_day %}{{ event.end_datetime|date:"D j M · H:i" }}{% else %}{{ event.end_datetime|date:"H:i" }}{% endif %}</span>
                         {% endif %}
                     {% endif %}
                     {% if card.times_on_day > 1 and not card.showtimes %}<span class="series-more-times">+{{ card.times_on_day|add:"-1" }} more time{{ card.times_on_day|add:"-1"|pluralize }}</span>{% endif %}
