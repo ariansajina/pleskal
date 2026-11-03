@@ -31,7 +31,7 @@ def _script_json(data: dict) -> str:
 def event_meta_description(event: Event) -> str:
     """What/where/when first, so search snippets answer the searcher at a glance."""
     start = date_format(timezone.localtime(event.start_datetime), "l j F Y, H:i")
-    summary = f"{event.get_category_display()} at {event.venue_name}, {start}."  # ty: ignore[unresolved-attribute]
+    summary = f"{event.get_category_display()} at {event.venue_name}, {start}."
     excerpt = plain_excerpt(str(event.description_for("en")), 160)
     return f"{summary} {excerpt}" if excerpt else summary
 
