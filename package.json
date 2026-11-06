@@ -5,7 +5,7 @@
     "css:watch": "npx @tailwindcss/cli -i static/css/input.css -o static/css/output.css --watch"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.3.3"
+    "@tailwindcss/cli": "^4.3.4"
   },
   "overrides": {
     "@parcel/watcher": "^2.6.0"
