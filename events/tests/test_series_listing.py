@@ -363,7 +363,7 @@ class TestListOneCardPerSeries:
         (event,) = resp.context["events"]
         assert event.pk == run[1].pk
         assert event.series_card is None
-        assert b'class="badge badge--repeat"' in resp.content
+        assert b"Repeats" not in resp.content
 
     def test_htmx_partial_is_grouped(self, client):
         _series(_at(2), _at(3))
