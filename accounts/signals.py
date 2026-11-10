@@ -19,9 +19,8 @@ User = get_user_model()
 def add_to_resend_contacts(sender, request, email_address, **kwargs):
     """Add verified user to Resend contact list when they confirm their email."""
     api_key = getattr(settings, "RESEND_API_KEY", None)
-
     user = email_address.user
-    if user.is_system_account:
+    if not api_key or user.is_system_account:
         return
 
     try:

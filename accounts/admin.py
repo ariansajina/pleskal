@@ -10,6 +10,35 @@ from django.utils import timezone
 
 from .models import ClaimCode, User, generate_claim_code
 
+# Leading characters that make spreadsheet apps (Excel, LibreOffice, Sheets)
+# evaluate a CSV cell as a formula.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value):
+    """Neutralise *value* for a CSV cell opened in a spreadsheet app.
+
+    User-controlled text such as a display name starting with "=" would
+    otherwise run as a formula when an admin opens the export (CSV injection);
+    a leading apostrophe makes the app show it as plain text.
+    """
+    if value is None:
+        return ""
+    text = str(value)
+    if text.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + text
+    return text
+
+
+def _csv_writer(response):
+    writer = csv.writer(response)
+
+    class _SafeWriter:
+        def writerow(self, row):
+            writer.writerow([_csv_safe(cell) for cell in row])
+
+    return _SafeWriter()
+
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -73,7 +102,7 @@ class UserAdmin(admin.ModelAdmin):
     def export_csv_view(self, request):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="users.csv"'
-        writer = csv.writer(response)
+        writer = _csv_writer(response)
         writer.writerow(
             ["id", "email", "display_name", "is_staff", "is_active", "date_joined"]
         )
@@ -140,7 +169,7 @@ class ClaimCodeAdmin(admin.ModelAdmin):
     def export_csv_view(self, request):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="claim_codes.csv"'
-        writer = csv.writer(response)
+        writer = _csv_writer(response)
         writer.writerow(
             [
                 "code",

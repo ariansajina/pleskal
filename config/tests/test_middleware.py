@@ -30,3 +30,22 @@ def test_service_worker_skips_no_store_responses(client):
     assert "no-store" in body
     # Every cache write goes through the no-store check.
     assert body.count("cache.put(") == body.count("if (isCacheable(response))")
+
+
+@pytest.mark.django_db
+class TestAuthenticatedCSP:
+    def test_anonymous_policy_allows_kofi(self, client):
+        resp = client.get("/about/")
+        assert "storage.ko-fi.com" in resp["Content-Security-Policy"]
+        assert b'js/kofi.js" defer' in resp.content
+
+    def test_logged_in_policy_drops_kofi(self, client):
+        from accounts.tests.factories import UserFactory
+
+        client.force_login(UserFactory.create())
+        resp = client.get("/about/")
+        policy = resp["Content-Security-Policy"]
+        assert "ko-fi.com" not in policy
+        assert "script-src 'self'" in policy
+        assert "frame-src https://www.openstreetmap.org" in policy
+        assert b'js/kofi.js" defer' not in resp.content

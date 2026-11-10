@@ -19,6 +19,7 @@ from pathlib import Path
 
 import sentry_sdk
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
@@ -34,6 +35,7 @@ from events.models import (
 )
 from events.series import link_scraped_series
 from events.translation import DescriptionResult, process_description
+from events.validators import validate_url_scheme
 from scrapers.base import is_cancelled_title
 
 # If a scraper returns fewer than this fraction of a source's existing future
@@ -394,6 +396,17 @@ class BaseEventImportCommand(BaseCommand):
                 if not is_valid:
                     self.stderr.write(
                         f"  SKIP (field length) {event_title}: {validation_error}"
+                    )
+                    skipped += 1
+                    continue
+                # The model's scheme validator only runs on form input; a
+                # scraped javascript:/data: link would otherwise be stored and
+                # rendered as the event's source link.
+                try:
+                    validate_url_scheme(source_url)
+                except ValidationError:
+                    self.stderr.write(
+                        f"  SKIP (source_url scheme) {event_title}: {source_url[:100]}"
                     )
                     skipped += 1
                     continue
