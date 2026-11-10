@@ -6,4 +6,9 @@ class EventsConfig(AppConfig):
     name = "events"
 
     def ready(self):
+        from django.core.checks import register
+
         import events.signals  # noqa: F401
+        from config.checks import check_media_domain
+
+        register(check_media_domain)

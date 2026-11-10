@@ -526,3 +526,58 @@ class TestSubscribeLinks:
     def test_copy_does_not_recommend_import(self, client):
         resp = client.get(reverse("subscribe"))
         assert b"Import function" not in resp.content
+
+
+@pytest.mark.django_db
+class TestICalFeedCaching:
+    def test_second_request_is_served_from_cache(self, client):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        EventFactory.create(title="Cached Event")
+        first = client.get(reverse("event_ical_feed"))
+        with CaptureQueriesContext(connection) as queries:
+            second = client.get(reverse("event_ical_feed"))
+        assert second.content == first.content
+        assert b"Cached Event" in second.content
+        # Only the feed-hit counter is written; no event query.
+        assert not [q for q in queries if "events_event" in q["sql"]]
+        assert FeedHit.objects.get(feed_type=FeedHit.ICAL).count == 2
+
+    def test_cache_is_shared_by_parameter_order_and_ignores_junk(self, client):
+        from django.core.cache import cache
+
+        from events.feeds import _ical_feed_cache_key
+
+        assert _ical_feed_cache_key(
+            ["workshop", "performance"], ["b", "a"]
+        ) == _ical_feed_cache_key(["performance", "workshop", "bogus"], ["a", "b"])
+        assert _ical_feed_cache_key(["workshop"], []) != _ical_feed_cache_key([], [])
+        client.get(reverse("event_ical_feed") + "?category=workshop")
+        assert cache.get(_ical_feed_cache_key(["workshop"], [])) is not None
+
+    def test_sends_validators_and_max_age(self, client):
+        resp = client.get(reverse("event_ical_feed"))
+        assert resp["ETag"].startswith('"')
+        assert resp["Last-Modified"].endswith("GMT")
+        assert "max-age=300" in resp["Cache-Control"]
+
+    def test_if_none_match_gets_304(self, client):
+        EventFactory.create()
+        etag = client.get(reverse("event_ical_feed"))["ETag"]
+        resp = client.get(reverse("event_ical_feed"), HTTP_IF_NONE_MATCH=etag)
+        assert resp.status_code == 304
+        assert resp.content == b""
+        assert resp["ETag"] == etag
+
+    def test_if_modified_since_gets_304(self, client):
+        last_modified = client.get(reverse("event_ical_feed"))["Last-Modified"]
+        resp = client.get(
+            reverse("event_ical_feed"), HTTP_IF_MODIFIED_SINCE=last_modified
+        )
+        assert resp.status_code == 304
+
+    def test_stale_etag_gets_full_feed(self, client):
+        resp = client.get(reverse("event_ical_feed"), HTTP_IF_NONE_MATCH='"stale"')
+        assert resp.status_code == 200
+        assert resp.content.startswith(b"BEGIN:VCALENDAR")

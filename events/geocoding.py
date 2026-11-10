@@ -14,13 +14,16 @@ production), keyed by the normalized query. Copenhagen has a small recurring
 venue set, so after warm-up almost every Event.save() and scraper import hits
 the cache instead of blocking on Nominatim. Definitive "no result" answers
 are cached too (shorter TTL); transient failures are never cached, so they
-are retried on the next save.
+are retried on a later save, after a short back-off (BACKOFF_SECONDS) during
+which no query is sent, so an outage doesn't make every save wait out the
+request timeout.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import threading
 import time
 
 import requests
@@ -44,24 +47,47 @@ _RATE_LOCK_KEY = "geocode:rate-lock"
 _RATE_LOCK_TIMEOUT_SECONDS = 10  # auto-expires if a worker dies mid-call
 _LAST_CALL_AT_KEY = "geocode:last-call-at"
 _LAST_CALL_AT_TTL = 300
-_LOCK_POLL_INTERVAL_SECONDS = 0.05
+# Each poll is a database round trip in production (DatabaseCache), and calls
+# are at least MIN_INTERVAL_SECONDS apart anyway, so poll gently.
+_LOCK_POLL_INTERVAL_SECONDS = 0.25
+# Give up (as a transient failure) rather than block a web thread for longer.
+_LOCK_MAX_WAIT_SECONDS = 15
+# Only one thread per process polls the shared lock; the others queue on this
+# in-process lock instead of each hitting the database every poll interval.
+_process_lock = threading.Lock()
+
+# After a transient failure (timeout, HTTP error), skip Nominatim for a while:
+# while it is down, every save would otherwise wait out the request timeout.
+_BACKOFF_KEY = "geocode:backoff"
+BACKOFF_SECONDS = 60
 
 
-def _wait_for_rate_limit() -> None:
+def _wait_for_rate_limit() -> bool:
     """Block until at least MIN_INTERVAL_SECONDS have elapsed since the last
-    Nominatim call made by any process."""
-    while not cache.add(_RATE_LOCK_KEY, 1, _RATE_LOCK_TIMEOUT_SECONDS):
-        time.sleep(_LOCK_POLL_INTERVAL_SECONDS)
+    Nominatim call made by any process. Returns False if the shared lock could
+    not be taken within _LOCK_MAX_WAIT_SECONDS (the caller then skips the call).
+    """
+    deadline = time.monotonic() + _LOCK_MAX_WAIT_SECONDS
+    if not _process_lock.acquire(timeout=_LOCK_MAX_WAIT_SECONDS):
+        return False
     try:
-        last_call_at = cache.get(_LAST_CALL_AT_KEY)
-        now = time.time()
-        if last_call_at is not None:
-            elapsed = now - last_call_at
-            if elapsed < MIN_INTERVAL_SECONDS:
-                time.sleep(MIN_INTERVAL_SECONDS - elapsed)
-        cache.set(_LAST_CALL_AT_KEY, time.time(), _LAST_CALL_AT_TTL)
+        while not cache.add(_RATE_LOCK_KEY, 1, _RATE_LOCK_TIMEOUT_SECONDS):
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(_LOCK_POLL_INTERVAL_SECONDS)
+        try:
+            last_call_at = cache.get(_LAST_CALL_AT_KEY)
+            now = time.time()
+            if last_call_at is not None:
+                elapsed = now - last_call_at
+                if elapsed < MIN_INTERVAL_SECONDS:
+                    time.sleep(MIN_INTERVAL_SECONDS - elapsed)
+            cache.set(_LAST_CALL_AT_KEY, time.time(), _LAST_CALL_AT_TTL)
+        finally:
+            cache.delete(_RATE_LOCK_KEY)
     finally:
-        cache.delete(_RATE_LOCK_KEY)
+        _process_lock.release()
+    return True
 
 
 def _cache_key(query: str) -> str:
@@ -81,11 +107,18 @@ def geocode(query: str) -> tuple[float, float] | None:
     if cached is not None:
         return tuple(cached)
 
+    if cache.get(_BACKOFF_KEY):
+        # Nominatim failed moments ago; retried on a later save once this
+        # expires (nothing is cached for the query).
+        return None
+
     result, definitive = _geocode_remote(query)
     if result is not None:
         cache.set(key, result, GEOCODE_CACHE_TTL)
     elif definitive:
         cache.set(key, _NEGATIVE, GEOCODE_NEGATIVE_TTL)
+    else:
+        cache.set(_BACKOFF_KEY, 1, BACKOFF_SECONDS)
     return result
 
 
@@ -96,7 +129,9 @@ def _geocode_remote(query: str) -> tuple[tuple[float, float] | None, bool]:
     malformed result) and False on transient failures (timeout, HTTP error,
     bad JSON) that should be retried rather than cached.
     """
-    _wait_for_rate_limit()
+    if not _wait_for_rate_limit():
+        logger.warning("Nominatim rate-limit lock not acquired for %r", query)
+        return None, False
 
     try:
         response = requests.get(

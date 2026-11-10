@@ -2,12 +2,16 @@
 
 import hashlib
 import re
+import zlib
 
 from django.contrib.syndication.views import Feed
+from django.core.cache import cache
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.cache import get_conditional_response, patch_cache_control
+from django.utils.http import http_date
 from django.views import View
 from icalendar import Calendar
 from icalendar import Event as ICalEvent
@@ -166,38 +170,99 @@ class EventRSSFeed(Feed):
 # ---------------------------------------------------------------------------
 
 
+# Calendar apps poll the feed, and building it means rendering every upcoming
+# event, so the rendered file is cached (compressed) per filter combination
+# for this long. Edits reach subscribers that much later, which is nothing
+# next to their own polling interval (the feed asks for a daily refresh).
+ICAL_FEED_CACHE_SECONDS = 5 * 60
+_ICAL_FEED_CACHE_PREFIX = "feed:ical:"
+
+
+def _ical_feed_cache_key(categories: list[str], publisher_slugs: list[str]) -> str:
+    """Cache key for one filter combination, independent of parameter order.
+
+    Unknown categories are dropped, as `_upcoming_qs` ignores them, so junk
+    parameters can't multiply the cache entries.
+    """
+    valid = {c.value for c in EventCategory}
+    basis = "|".join(
+        [
+            ",".join(sorted({c for c in categories if c in valid})),
+            ",".join(sorted(set(publisher_slugs))),
+        ]
+    )
+    digest = hashlib.sha256(basis.encode()).hexdigest()
+    return f"{_ICAL_FEED_CACHE_PREFIX}{digest}"
+
+
+def _render_ical_feed(categories: list[str], publisher_slugs: list[str]) -> bytes:
+    queryset = _upcoming_qs(
+        categories=categories,
+        publisher_slugs=publisher_slugs,
+        past_days=ICAL_PAST_EVENT_DAYS,
+    )
+
+    cal = _new_calendar()
+    cal.add("x-wr-calname", "Copenhagen Dance Calendar")
+    # Polling hint for subscribed calendars (Apple uses X-PUBLISHED-TTL,
+    # RFC 7986 clients REFRESH-INTERVAL); matches the daily refresh the
+    # subscribe page recommends.
+    cal.add(
+        "refresh-interval",
+        timezone.timedelta(days=1),
+        parameters={"VALUE": "DURATION"},
+    )
+    cal.add("x-published-ttl", "P1D")
+
+    for event in queryset:
+        cal.add_component(_build_vevent(event))
+
+    return cal.to_ical()
+
+
 class EventICalFeed(View):
+    """The subscribable feed of upcoming events.
+
+    The rendered file is cached for ICAL_FEED_CACHE_SECONDS and served with an
+    ETag (hash of the content) and Last-Modified (when it was rendered), so a
+    client polling with If-None-Match / If-Modified-Since gets a bodyless 304
+    while nothing has changed.
+    """
+
     def get(self, request):
         FeedHit.record(FeedHit.ICAL)
         categories = request.GET.getlist("category")
         publisher_slugs = request.GET.getlist("publisher")
-        queryset = _upcoming_qs(
-            categories=categories,
-            publisher_slugs=publisher_slugs,
-            past_days=ICAL_PAST_EVENT_DAYS,
+
+        key = _ical_feed_cache_key(categories, publisher_slugs)
+        cached = cache.get(key)
+        if cached is None:
+            content = _render_ical_feed(categories, publisher_slugs)
+            etag = f'"{hashlib.sha256(content).hexdigest()[:32]}"'
+            # Whole seconds: Last-Modified has no finer resolution.
+            last_modified = int(timezone.now().timestamp())
+            # The .ics compresses ~10x, which keeps the database cache row small.
+            cache.set(
+                key,
+                (zlib.compress(content), etag, last_modified),
+                ICAL_FEED_CACHE_SECONDS,
+            )
+        else:
+            compressed, etag, last_modified = cached
+            content = zlib.decompress(compressed)
+
+        conditional = get_conditional_response(
+            request, etag=etag, last_modified=last_modified
         )
-
-        cal = _new_calendar()
-        cal.add("x-wr-calname", "Copenhagen Dance Calendar")
-        # Polling hint for subscribed calendars (Apple uses X-PUBLISHED-TTL,
-        # RFC 7986 clients REFRESH-INTERVAL); matches the daily refresh the
-        # subscribe page recommends.
-        cal.add(
-            "refresh-interval",
-            timezone.timedelta(days=1),
-            parameters={"VALUE": "DURATION"},
-        )
-        cal.add("x-published-ttl", "P1D")
-
-        for event in queryset:
-            cal.add_component(_build_vevent(event))
-
-        content = cal.to_ical()
-        return HttpResponse(
+        response = conditional or HttpResponse(
             content,
             content_type=ICAL_CONTENT_TYPE,
             headers={"Content-Disposition": 'attachment; filename="events.ics"'},
         )
+        response.headers["ETag"] = etag
+        response.headers["Last-Modified"] = http_date(last_modified)
+        patch_cache_control(response, max_age=ICAL_FEED_CACHE_SECONDS)
+        return response
 
 
 # ---------------------------------------------------------------------------

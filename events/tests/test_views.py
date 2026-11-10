@@ -762,6 +762,14 @@ class TestEventListView:
         assert str(match.title).encode() in resp.content
         assert str(no_match.title).encode() not in resp.content
 
+    def test_search_terms_beyond_the_cap_are_ignored(self, client):
+        from events.views import SEARCH_MAX_TERMS
+
+        match = EventFactory(title="Tango Evening Special")
+        terms = ["tango"] * SEARCH_MAX_TERMS + ["nowhere-to-be-found"]
+        resp = client.get(reverse("event_list"), {"q": " ".join(terms)})
+        assert str(match.title).encode() in resp.content
+
     def test_empty_search_returns_all(self, client):
         e1 = EventFactory()
         e2 = EventFactory()

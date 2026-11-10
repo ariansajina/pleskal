@@ -13,11 +13,14 @@ from events import geocoding
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Reset the cache-backed rate-limit state before each test."""
-    cache.delete(geocoding._RATE_LOCK_KEY)
-    cache.delete(geocoding._LAST_CALL_AT_KEY)
+    keys = (
+        geocoding._RATE_LOCK_KEY,
+        geocoding._LAST_CALL_AT_KEY,
+        geocoding._BACKOFF_KEY,
+    )
+    cache.delete_many(keys)
     yield
-    cache.delete(geocoding._RATE_LOCK_KEY)
-    cache.delete(geocoding._LAST_CALL_AT_KEY)
+    cache.delete_many(keys)
 
 
 def _mock_response(status_code=200, json_data=None, raise_http=False):
@@ -127,9 +130,31 @@ class TestGeocodeCache:
         with patch("events.geocoding.requests.get") as m_get:
             m_get.side_effect = requests.Timeout("slow")
             assert geocoding.geocode("Copenhagen") is None
+            # Once the back-off has expired, the query is tried again.
+            cache.delete(geocoding._BACKOFF_KEY)
             assert geocoding.geocode("Copenhagen") is None
 
         assert m_get.call_count == 2
+
+    def test_transient_failure_backs_off_further_calls(self):
+        with patch("events.geocoding.requests.get") as m_get:
+            m_get.side_effect = requests.Timeout("slow")
+            assert geocoding.geocode("Copenhagen") is None
+            assert geocoding.geocode("Dansehallerne") is None
+            assert geocoding.geocode("Warehouse9") is None
+
+        assert m_get.call_count == 1
+
+    def test_back_off_still_serves_cached_results(self):
+        with patch("events.geocoding.requests.get") as m_get:
+            m_get.return_value = _mock_response(
+                json_data=[{"lat": "1.0", "lon": "2.0"}]
+            )
+            geocoding.geocode("Dansehallerne")
+        cache.set(geocoding._BACKOFF_KEY, 1)
+        with patch("events.geocoding.requests.get") as m_get:
+            assert geocoding.geocode("Dansehallerne") == (1.0, 2.0)
+        m_get.assert_not_called()
 
     def test_query_is_normalized_for_caching(self):
         with patch("events.geocoding.requests.get") as m_get:
@@ -212,3 +237,16 @@ def test_rate_limit_does_not_exceed_policy_under_threads():
 
     assert len(call_times) == 2
     assert call_times[1] - call_times[0] >= interval - tolerance
+
+
+class TestRateLock:
+    def test_gives_up_when_the_shared_lock_stays_taken(self, monkeypatch):
+        clock = iter(range(0, 1000, 5))
+        monkeypatch.setattr(geocoding.time, "monotonic", lambda: next(clock))
+        monkeypatch.setattr(geocoding.time, "sleep", lambda _s: None)
+        cache.set(geocoding._RATE_LOCK_KEY, 1, 60)  # held by "another worker"
+        with patch("events.geocoding.requests.get") as m_get:
+            assert geocoding.geocode("Copenhagen") is None
+        m_get.assert_not_called()
+        # Not a definitive answer: nothing cached for the query.
+        assert cache.get(geocoding._cache_key("Copenhagen")) is None

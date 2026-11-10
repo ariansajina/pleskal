@@ -12,6 +12,8 @@ from django.db import models
 from django.db.models import F
 from django.utils import timezone
 
+from config.db import increment_counter
+
 
 class DailyCount(models.Model):
     """A per-day counter for one (kind, key) pair, e.g. ("page", "/about/")."""
@@ -51,14 +53,8 @@ class DailyCount(models.Model):
 
     @classmethod
     def increment(cls, kind: str, key: str = "") -> None:
-        """Atomically add one to today's counter."""
-        cls.objects.update_or_create(
-            date=timezone.localdate(),
-            kind=kind,
-            key=key,
-            create_defaults={"count": 1},
-            defaults={"count": F("count") + 1},
-        )
+        """Atomically add one to today's counter (a single upsert)."""
+        increment_counter(cls, {"date": timezone.localdate(), "kind": kind, "key": key})
 
     @classmethod
     def decrement(cls, kind: str, key: str = "") -> None:

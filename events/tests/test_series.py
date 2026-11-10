@@ -90,6 +90,19 @@ def series(client, owner):
 
 @pytest.mark.django_db
 class TestCreateSeries:
+    def test_geocodes_the_venue_once_not_per_date(self, client, owner, settings):
+        from unittest.mock import patch
+
+        settings.GEOCODING_ENABLED = True
+        with patch(
+            "events.geocoding.geocode", return_value=(55.6, 12.5)
+        ) as mock_geocode:
+            client.post(reverse("event_create"), _create_data(_future_weekday()))
+        events = _occurrences(submitted_by=owner)
+        assert len(events) == 6
+        mock_geocode.assert_called_once()
+        assert all(e.latitude == pytest.approx(55.6) for e in events)
+
     def test_weekly_rule_creates_linked_occurrences(self, client, owner):
         day = _future_weekday()
         resp = client.post(reverse("event_create"), _create_data(day))
