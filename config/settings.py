@@ -302,7 +302,7 @@ SECURE_CSP = {
 # user's session and CSRF token can't be pulled from storage.ko-fi.com.
 # Applied by config.middleware.AuthenticatedCSPMiddleware.
 SECURE_CSP_AUTHENTICATED = {
-    directive: [source for source in sources if "ko-fi.com" not in source]
+    directive: [s for s in sources if s not in (_KOFI_HOST, "https://ko-fi.com")]
     for directive, sources in SECURE_CSP.items()
 }
 
