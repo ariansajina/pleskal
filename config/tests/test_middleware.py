@@ -48,7 +48,8 @@ def _csp_sources(response) -> dict[str, list[str]]:
 class TestAuthenticatedCSP:
     def test_anonymous_policy_allows_kofi(self, client):
         resp = client.get("/about/")
-        assert "https://storage.ko-fi.com" in _csp_sources(resp)["script-src"]
+        directives = _csp_sources(resp)
+        assert directives["script-src"] == ["'self'", "https://storage.ko-fi.com"]
         assert b'js/kofi.js" defer' in resp.content
 
     def test_logged_in_policy_drops_kofi(self, client):
