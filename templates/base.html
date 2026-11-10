@@ -281,7 +281,11 @@
 {% block extra_scripts %}{% endblock %}
 
 {# ── KO-FI DONATION WIDGET (floating chat overlay, lazy-loaded) ────── #}
+{# Not for logged-in users: their pages carry a session + CSRF token, so no  #}
+{# third-party script runs there (their CSP drops Ko-fi too, see settings). #}
+{% if not user.is_authenticated %}
 <script src="{% static 'js/kofi.js' %}" defer></script>
+{% endif %}
 
 </body>
 </html>

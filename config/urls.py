@@ -1,16 +1,17 @@
 import logging
 
+from allauth.account import views as allauth_views
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.decorators import login_required
 from django.contrib.sitemaps.views import sitemap
 from django.db import DatabaseError, connection
 from django.http import HttpResponse
-from django.urls import include, path
+from django.urls import include, path, re_path
 from django.views.decorators.cache import cache_control, never_cache
 from markdownx.views import MarkdownifyView
 
-from accounts.views import ClaimCodeView, ClaimRegisterView
+from accounts.views import ClaimCodeView, ClaimRegisterView, RateLimitedLoginView
 from config.pwa import manifest_view, offline_view, service_worker_view
 from events.sitemaps import sitemaps
 
@@ -84,9 +85,19 @@ urlpatterns = [
     path("claim/register/", ClaimRegisterView.as_view(), name="claim_register"),
     # Custom views take priority (login, logout, password-reset have rate limiting).
     path("accounts/", include("accounts.urls")),
-    # allauth provides email confirmation views (/accounts/confirm-email/<key>/).
-    # Our custom views above shadow allauth's login/logout/signup routes.
-    path("accounts/", include("allauth.urls")),
+    # allauth is used only to verify email addresses, so only its confirmation
+    # view is mounted (same path and name as in allauth.account.urls). Do NOT
+    # include("allauth.urls"): that exposes allauth's open signup, its email
+    # management page (adds a login email with no password check) and an
+    # un-rate-limited password reset.
+    re_path(
+        r"^accounts/confirm-email/(?P<key>[-:\w]+)/$",
+        allauth_views.confirm_email,
+        name="account_confirm_email",
+    ),
+    # allauth's views and templates reverse "account_login"; point the name at
+    # our rate-limited login (never reached by URL: accounts.urls matches first).
+    path("accounts/login/", RateLimitedLoginView.as_view(), name="account_login"),
     # markdownx's default urls.py mounts its views with no auth requirement;
     # wrap the preview view with login_required since only authenticated users
     # can edit markdown content (event descriptions, bios). Its image-upload

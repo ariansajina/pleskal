@@ -167,6 +167,11 @@ class EventSeries(models.Model):
         return Pattern.from_rrule(str(self.rrule))
 
 
+# Fixed paths routed under /events/ (events/urls.py) that an event slug must
+# never take.
+RESERVED_EVENT_SLUGS = frozenset({"submit"})
+
+
 class Event(models.Model):
     objects = models.Manager()
     DoesNotExist: type[ObjectDoesNotExist]
@@ -301,7 +306,9 @@ class Event(models.Model):
         if not base_slug:
             base_slug = "event"
         slug = base_slug
-        while Event.objects.filter(slug=slug).exists():
+        # A slug equal to a fixed path under /events/ ("submit") would be
+        # shadowed by that route, leaving the event's detail page unreachable.
+        while slug in RESERVED_EVENT_SLUGS or Event.objects.filter(slug=slug).exists():
             suffix = secrets.token_hex(2)
             slug = f"{base_slug}-{suffix}"
         return slug

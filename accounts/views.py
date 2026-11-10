@@ -30,7 +30,22 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-class AccountDeleteView(LoginRequiredMixin, View):
+class ReauthRateLimitMixin(RateLimitMixin):
+    """Per-user limit on the forms that re-check the current password.
+
+    Change password, delete account and the profile form (current password
+    required to change the email) share one counter, so a hijacked session
+    can't brute-force the password through them. Listed after
+    LoginRequiredMixin, so anonymous requests are redirected uncounted.
+    """
+
+    rate_limit_key = "reauth"
+    rate_limit_limit = 20
+    rate_limit_window = 3600
+    rate_limit_by_user = True
+
+
+class AccountDeleteView(LoginRequiredMixin, ReauthRateLimitMixin, View):
     template_name = "accounts/account_delete_confirm.html"
 
     def get(self, request):
@@ -64,7 +79,7 @@ class AccountProfileView(LoginRequiredMixin, View):
         return redirect("publisher_profile", slug=request.user.display_name_slug)
 
 
-class EditProfileView(LoginRequiredMixin, View):
+class EditProfileView(LoginRequiredMixin, ReauthRateLimitMixin, View):
     def get(self, request):
         form = ProfileForm(instance=request.user)
         return render(request, "accounts/account_profile.html", {"form": form})
@@ -116,7 +131,7 @@ def _styled_password_change_form(user, data=None):
     return form
 
 
-class ChangePasswordView(LoginRequiredMixin, View):
+class ChangePasswordView(LoginRequiredMixin, ReauthRateLimitMixin, View):
     def get(self, request):
         form = _styled_password_change_form(request.user)
         return render(request, "accounts/change_password.html", {"form": form})

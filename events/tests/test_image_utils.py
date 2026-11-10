@@ -104,9 +104,9 @@ class TestValidateAndProcess:
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_WEBP_QUALITY = 70
         buf = io.BytesIO()
-        Image.new("CMYK", (100, 100)).save(buf, format="TIFF")
+        Image.new("CMYK", (100, 100)).save(buf, format="JPEG")
         upload = SimpleUploadedFile(
-            "cmyk.tiff", buf.getvalue(), content_type="image/tiff"
+            "cmyk.jpg", buf.getvalue(), content_type="image/jpeg"
         )
         result = validate_and_process(upload)
         out = Image.open(io.BytesIO(result.read()))
@@ -124,20 +124,21 @@ class TestValidateAndProcess:
         assert out.format == "WEBP"
 
     def test_palette_transparency_composited_onto_white(self, settings):
-        """A P-mode image with a transparency index (e.g. GIF) must not
+        """A P-mode image with a transparency index (e.g. PNG-8) must not
         render its transparent regions as an arbitrary dark palette color."""
         settings.MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
         settings.MAX_IMAGE_DIMENSION = 1200
         settings.IMAGE_WEBP_QUALITY = 70
         buf = io.BytesIO()
-        rgba = Image.new("RGBA", (10, 10), color=(255, 0, 0, 0))
-        rgba.save(buf, format="GIF")
+        pal = Image.new("P", (10, 10), color=0)
+        pal.putpalette([0, 0, 0] * 256)
+        pal.save(buf, format="PNG", transparency=0)
         buf.seek(0)
         src = Image.open(buf)
         assert src.mode == "P"
         assert "transparency" in src.info
 
-        upload = SimpleUploadedFile("p.gif", buf.getvalue(), content_type="image/gif")
+        upload = SimpleUploadedFile("p.png", buf.getvalue(), content_type="image/png")
         result = validate_and_process(upload)
         out = Image.open(io.BytesIO(result.read())).convert("RGB")
         assert out.getpixel((5, 5)) == (255, 255, 255)

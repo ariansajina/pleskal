@@ -100,6 +100,9 @@ MIDDLEWARE = [
     # Cookieless, aggregate-only page-view counting (see analytics/).
     "analytics.middleware.AnalyticsMiddleware",
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
+    # After (inside) the CSP middleware, so it picks the policy before the CSP
+    # middleware writes the header.
+    "config.middleware.AuthenticatedCSPMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -300,6 +303,15 @@ SECURE_CSP = {
     "form-action": [CSP.SELF],
 }
 
+# Logged-in pages don't load the Ko-fi widget (templates/base.html), so their
+# policy drops every Ko-fi source: a script injected into a page carrying a
+# user's session and CSRF token can't be pulled from storage.ko-fi.com.
+# Applied by config.middleware.AuthenticatedCSPMiddleware.
+SECURE_CSP_AUTHENTICATED = {
+    directive: [s for s in sources if s not in (_KOFI_HOST, "https://ko-fi.com")]
+    for directive, sources in SECURE_CSP.items()
+}
+
 # The custom CSP middleware this replaced also set Referrer-Policy on every
 # response; SecurityMiddleware owns that header, so keep the same value.
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
@@ -340,8 +352,10 @@ ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_PREVENT_ENUMERATION = True
-# Disable allauth's own signup — registration is handled by the claim-code flow.
-ACCOUNT_ALLOW_REGISTRATION = False
+# Registration is invite-only (claim-code flow); the adapter keeps allauth's
+# own signup closed. config/urls.py also mounts only allauth's confirm-email
+# view, so its signup, email-management and password views aren't reachable.
+ACCOUNT_ADAPTER = "accounts.adapter.ClosedSignupAccountAdapter"
 # Auto-confirm email on GET (no extra button click required).
 ACCOUNT_CONFIRM_EMAIL_ON_GET = True
 ACCOUNT_EMAIL_CONFIRMATION_ANONYMOUS_REDIRECT_URL = "/accounts/email-verified/"

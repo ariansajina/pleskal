@@ -11,6 +11,11 @@ register_heif_opener()
 
 INVALID_IMAGE_MESSAGE = "Upload a valid image file."
 
+# The only formats Pillow may parse (uploads, scraped images, thumbnails).
+# Image.open otherwise tries every decoder Pillow ships, which widens the
+# parser attack surface far beyond what the site supports.
+ALLOWED_IMAGE_FORMATS = ("JPEG", "PNG", "WEBP", "HEIF")
+
 
 def validate_and_process(upload) -> ContentFile:
     """
@@ -24,10 +29,10 @@ def validate_and_process(upload) -> ContentFile:
     blank 12000x12000 PNG) otherwise decodes to gigabytes of pixels.
     """
     try:
-        img = Image.open(upload)
+        img = Image.open(upload, formats=ALLOWED_IMAGE_FORMATS)
         img.verify()
         upload.seek(0)
-        img = Image.open(upload)
+        img = Image.open(upload, formats=ALLOWED_IMAGE_FORMATS)
     except Exception as exc:
         raise ValidationError(INVALID_IMAGE_MESSAGE) from exc
 
@@ -101,7 +106,7 @@ def make_thumbnail(fileobj) -> bytes:
     The shorter side is scaled down to THUMBNAIL_MIN_SIDE (smaller images
     keep their size). Raises on unreadable images.
     """
-    with Image.open(fileobj) as img:
+    with Image.open(fileobj, formats=ALLOWED_IMAGE_FORMATS) as img:
         if img.format == "JPEG":
             # Decode at the smallest 1/2^n scale that still covers the target.
             img.draft(img.mode, (THUMBNAIL_MIN_SIDE, THUMBNAIL_MIN_SIDE))
