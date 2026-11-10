@@ -143,6 +143,16 @@ class TestGeocodingOnSave:
         assert event.latitude == pytest.approx(55.6761)
         assert event.longitude == pytest.approx(12.5683)
 
+    def test_insert_with_coordinates_skips_geocode(self, settings):
+        """Cloned series dates arrive with the first date's coordinates."""
+        settings.GEOCODING_ENABLED = True
+        with patch("events.geocoding.geocode") as mock_geocode:
+            event = EventFactory.create(
+                venue_name="Dansehallerne", latitude=55.1, longitude=12.2
+            )
+        mock_geocode.assert_not_called()
+        assert event.latitude == pytest.approx(55.1)
+
     def test_insert_without_address_uses_venue_only_in_query(self, settings):
         settings.GEOCODING_ENABLED = True
         with patch(

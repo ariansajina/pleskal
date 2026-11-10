@@ -12,7 +12,7 @@ pleskal is a Django web application for a Copenhagen dance and performance art c
 - **Database:** PostgreSQL (production; `docker-compose.yml` for local), SQLite (fallback; the whole app incl. search works on it)
 - **Frontend:** Django templates + HTMX (no JS framework)
 - **Styling:** Tailwind CSS 4.0 (built via CLI)
-- **Theming:** light + dark themes; follows `prefers-color-scheme` unless the header toggle (`static/js/theme.js`) picked one. Colors are CSS custom properties in `templates/base.html` `:root`; dark values live in `templates/partials/dark_theme_tokens.css`
+- **Theming:** light + dark themes; follows `prefers-color-scheme` unless the header toggle (`static/js/theme.js`) picked one. Colors are CSS custom properties in `templates/base.html` `:root`; dark values live in `templates/partials/dark_theme_tokens.css`. All other site CSS (fonts, layout, components) is the static file `static/css/site.css` (fingerprinted, cached), not inline
 - **Package manager:** `uv` (Python), `npm` (Tailwind only)
 - **Image storage:** Cloudflare R2 (S3-compatible) in production, local filesystem in dev
 - **Image formats:** JPEG, PNG, WebP, HEIF/HEIC (via pillow-heif)
@@ -53,9 +53,9 @@ events/
   forms.py             # EventForm (markdownx; repeat fields + edit scope for recurring events; ExtraDateForm formset for "On specific dates")
   recurrence.py        # Repeat rules (no DB): Pattern <-> RRULE, describe(), date-dependent presets, expand() within the one-year / per-series limits
   series.py            # Series: plan + apply recurring-event creation and scoped edits (this / following / all), scope_queryset for delete/toggle, scraped-show linking (scraped_series_key, link_scraped_series), listing helpers (first_per_series, attach_series_cards), detail date strip (series_context)
-  feeds.py             # iCal feed, RSS feed, single-event iCal download (+ shared `_plain_text` helper)
+  feeds.py             # iCal feed (rendered file cached zlib-compressed per filter set for 5 min, ETag/Last-Modified + 304s), RSS feed, single-event iCal download (+ shared `_plain_text` helper)
   images.py            # WebP conversion, EXIF stripping, resize; list-card thumbnails (make_thumbnail/store_thumbnail)
-  geocoding.py         # Nominatim/OSM geocoder with rate limiting
+  geocoding.py         # Nominatim/OSM geocoder with rate limiting (one polling thread per process, 15 s max wait) and a 60 s back-off after a transient failure
   translation.py       # Offline per-paragraph EN/DA detection (lingua) + Markdown-preserving da→en translation (CTranslate2)
   sharing.py           # Apple/Google calendar URL builders used by detail page
   signals.py           # Event file cleanup: deletes image + thumbnail files on event delete and when an image is replaced/cleared (unless another event references them)
@@ -99,7 +99,10 @@ config/
   settings.py        # Django settings
   urls.py            # Root URL conf (includes /health/, /health/db/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's markdownify (preview) view with login_required and leaves its image-upload view unmounted (its default urls.py mounts both unauthenticated)
   ratelimit.py       # Cache-based RateLimitMixin
-  middleware.py      # NoStoreForAuthenticatedMiddleware: `Cache-Control: no-store` on logged-in responses (kept out of browser + service-worker caches)
+  cache.py           # DatabaseCache subclass: set() is one INSERT ... ON CONFLICT (no per-write COUNT(*); table size checked every 50 writes per process)
+  db.py              # increment_counter() / insert_if_absent(): single-statement upserts (PostgreSQL + SQLite) for DailyCount, FeedHit, VisitorHash
+  checks.py          # System check pleskal.W001: R2 media without a custom CDN_DOMAIN (or on *.r2.dev)
+  middleware.py      # NoStoreForAuthenticatedMiddleware: `Cache-Control: no-store` on logged-in responses (kept out of browser + service-worker caches); EdgeCacheAnonymousMiddleware: `public, max-age=0, s-maxage=EDGE_CACHE_SECONDS` on anonymous cookieless HTML (off by default)
   pwa.py             # PWA endpoints: manifest, service worker, offline fallback page
   cron_monitoring.py # cron_monitor(): Sentry Crons check-ins for run_scrapers + weekly_digest
 
@@ -256,7 +259,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 
 ### Theming (light/dark)
 
-- Every color is a token in `:root` in `templates/base.html` with a matching dark value in `templates/partials/dark_theme_tokens.css`; never hardcode hex/rgba in rules, inline styles or page `<style>` blocks (`500.html` is the standalone exception and carries its own copy)
+- Every color is a token in `:root` in `templates/base.html` with a matching dark value in `templates/partials/dark_theme_tokens.css`; never hardcode hex/rgba in rules (`static/css/site.css`), inline styles or page `<style>` blocks (`500.html` is the standalone exception and carries its own copy). The inline `<style>` in `base.html` holds only the tokens; add new rules to `site.css` (and list new static files in the service worker's precache if they're part of the shell)
 - `base.html` includes the dark tokens twice: under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }` (system setting) and under `:root[data-theme="dark"]` (toggle). Any other theme-dependent rule needs both selectors too (see the logo/icon swap in the header CSS)
 - Toggle: `static/js/theme.js` is loaded **synchronously** in `<head>` (after the `theme-color` metas) so a saved choice applies before first paint; it sets `data-theme` on `<html>`, pins both `theme-color` metas, and stores the choice in `localStorage["theme"]` (cleared when the user toggles back to the system's own theme). The button is `hidden` until the script wires it up
 - `--blue` is lighter in dark mode, so text on a `--blue` fill uses `--on-blue` (not `--cream`); text on `--c-perf`/`--c-op` fills uses `--on-danger`
@@ -266,16 +269,16 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 
 ### Security
 
-- CSRF protection via Django middleware; HTMX includes token via `hx-headers` on `<body>`
+- CSRF protection via Django middleware; HTMX includes token via `hx-headers` on `<body>`, rendered for logged-in users only (their HTMX POSTs need it), so anonymous pages set no `csrftoken` cookie and can be cached by a CDN; forms keep their own `{% csrf_token %}`
 - XSS: Markdown sanitized via nh3 (allowlist of tags/attributes in `markdown_filters.py`); the markdownx editor preview uses the same renderer (`MARKDOWNX_MARKDOWNIFY_FUNCTION`). The markdownx image-upload endpoint is not mounted (`<img>` is stripped on render anyway)
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
 - Image uploads: Pillow-validated (not Content-Type), capped at `MAX_IMAGE_PIXELS` (50 MP, checked from the header before decoding; JPEGs measured after draft downscaling), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min lockout of the (email, client IP) pair; client IP resolved via `config.ratelimit.get_client_ip`, since `REMOTE_ADDR` is Railway's proxy). `AXES_DISABLE_ACCESS_LOG = True`: successful logins aren't recorded; failed attempts are dropped after the cool-off
 - Caching: `NoStoreForAuthenticatedMiddleware` marks logged-in responses `no-store`; the service worker never writes `no-store` responses to Cache Storage, so per-user pages (drafts, edit forms) don't outlive logout
 - Media is served from a public bucket, so replaced/cleared event images and their thumbnails are deleted (`events/signals.py`) rather than left reachable at their old URL
-- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's TTL behavior; counted with a get-then-set (no `add()`/`incr()`, which cost twice the queries on DatabaseCache) and rejected requests don't write; limits per endpoint listed below
+- Rate limiting: custom cache-based (`config/ratelimit.py`), backed by the shared database cache in production (`CACHES` in settings; table created by `createcachetable` in preDeploy); fixed-window counters whose cache key is bucketed by window index (`f"{key}:{int(time.time() // window)}"`) so each window starts fresh regardless of the backend's TTL behavior; counted with a get-then-set (no `add()`/`incr()`, which cost twice the queries on DatabaseCache; with `config.cache.DatabaseCache` that's two queries per counted request) and rejected requests don't write; limits per endpoint listed below
 - CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
-- Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
+- Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id at OWASP parameters (19 MiB, t=2, p=1; older 100 MiB hashes are re-hashed at next login), at most 2 concurrent hashes per process; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
 - Re-authentication: changing the login email (`ProfileForm.current_password`) and deleting the account (`AccountDeleteForm`) require the current password, so a hijacked session alone can't take over or delete an account
 
@@ -427,7 +430,7 @@ Classmethod: `record(feed_type)` atomically increments the daily counter via `up
 
 Cookieless, server-side analytics: nothing is stored on or read from the visitor's device, so no consent banner is needed. `AnalyticsMiddleware` counts successful GET HTML responses after the view runs; it skips bots (User-Agent regex), prefetches, staff users, infrastructure URLs (`/health/`, PWA, robots, sitemap, `/stats/`), the admin, and non-200s. HTMX partials are not page views, but on `event_list` they feed search and filter counts, diffed against `HX-Current-URL` so each newly applied filter counts once and incremental typing counts only the final search term. Recording failures are logged and never break the response.
 
-- `DailyCount(date, kind, key, count)`: kinds `page` (key = path), `visitors` (key blank), `referrer` (external host), `search` (normalized term), `filter` (e.g. `category:workshop`, `is_free`), `calendar` (single-event or all-dates `.ics` path). Unique `(date, kind, key)`; `increment()`/`decrement()` use `F()` updates.
+- `DailyCount(date, kind, key, count)`: kinds `page` (key = path), `visitors` (key blank), `referrer` (external host), `search` (normalized term), `filter` (e.g. `category:workshop`, `is_free`), `calendar` (single-event or all-dates `.ics` path). Unique `(date, kind, key)`; `increment()` is one `INSERT ... ON CONFLICT` upsert (`config.db.increment_counter`), `decrement()` an `F()` update. Visitor hashes are inserted with `ON CONFLICT DO NOTHING` (`insert_if_absent`), so a page view costs 2–3 writes.
 - `DailySalt` / `VisitorHash`: unique visitors per day = SHA-256 of today's random salt + client IP + User-Agent. The first request of a new day creates a new salt and deletes older salts and hashes, so no IP is stored and days can't be linked. Skipped when the browser sends `Sec-GPC: 1` or `DNT: 1`.
 
 ## Views Summary
@@ -455,7 +458,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `EventICalSeriesView` | `/events/<slug>/all-dates.ics` | Public; every upcoming published date of the event's series (404 for a single event); counted as a calendar download by analytics |
 
 - Feeds support optional `?category=` and `?publisher=` filters and never expose submitter identity
-- Event list filters (`_filtered_event_queryset` + `events/partials/event_filter_panel.html`) support: category (multi-value), publisher (multi-value), date range, is_free, is_wheelchair_accessible, search (`icontains` per word over title/venue/description/English description/submitter, so it works on SQLite too)
+- Event list filters (`_filtered_event_queryset` + `events/partials/event_filter_panel.html`) support: category (multi-value), publisher (multi-value), date range, is_free, is_wheelchair_accessible, search (`icontains` per word over title/venue/description/English description/submitter, so it works on SQLite too; only the first `SEARCH_MAX_TERMS` (6) words count)
 - Quick date filters: this_week, next_week, this_month, next_month
 - Max upcoming events per user enforced on create/duplicate (see `MAX_UPCOMING_EVENTS_PER_USER` setting); a repeating event counts each occurrence and is cut off at the remaining allowance. This cap and the one-year limit apply to private users only: system (scraper) accounts are exempt, and the importer never runs them
 - The event list and publisher profile show a series as one card (see EventSeries → Display)
@@ -485,7 +488,7 @@ Cookieless, server-side analytics: nothing is stored on or read from the visitor
 | `EditProfileView` | `/accounts/profile/edit/` | Login required |
 | `ChangePasswordView` | `/accounts/change-password/` | Login required |
 | `PublisherListView` | `/accounts/publishers/` | Public (directory of `User.objects.publishers()`, linked from the footer) |
-| `PublisherProfileView` | `/accounts/publishers/<slug>/` | Public |
+| `PublisherProfileView` | `/accounts/publishers/<slug>/` | Public (paginated, `PUBLISHER_EVENTS_PER_PAGE` = 30 cards; descriptions deferred) |
 | `AccountProfileView` | `/accounts/profile/` | Login required (redirects to own publisher profile) |
 | `ClaimCodeView` | `/claim/` | Public |
 | `ClaimRegisterView` | `/claim/register/` | Public (requires valid claim code in session) |
@@ -538,7 +541,7 @@ See `.env.example` for the full list. Key variables:
 | `R2_ACCESS_KEY` | R2 access key |
 | `R2_SECRET_KEY` | R2 secret key |
 | `R2_ENDPOINT_URL` | `https://<account_id>.r2.cloudflarestorage.com` |
-| `CDN_DOMAIN` | Public CDN domain for R2 images |
+| `CDN_DOMAIN` | Custom domain connected to the R2 bucket, used for image URLs (not `*.r2.dev`, which Cloudflare rate-limits and doesn't cache; check `pleskal.W001` warns) |
 | `RESEND_API_KEY` | Enables Resend email sending (production) |
 | `RESEND_SEGMENT_ID` | Optional; for contact list syncing |
 | `SENTRY_DSN` | Enables Sentry error tracking |
@@ -563,6 +566,7 @@ See `.env.example` for the full list. Key variables:
 | `CLAIM_CODE_EXPIRY_DAYS` | Expiry for user-minted claim codes (default: 30) |
 | `DB_BACKUP_RETENTION_DAYS` | Retention for `scripts/backup_db.py` uploads to R2 (default: 30) |
 | `SCRAPER_<NAME>_ENABLED` | Per-scraper kill switch consulted by `run_scrapers` |
+| `EDGE_CACHE_SECONDS` | Seconds a CDN may cache anonymous, cookieless HTML (`s-maxage`; default 0 = off). Needs a Cloudflare cache rule, see `deployment-notes.md` "Edge caching" |
 | `SCRAPED_EVENT_RETENTION_DAYS` | Days after a scraped event ends before `purge_expired_events` deletes it (default: 90) |
 | `USER_EVENT_HIDE_AFTER_DAYS` | Days after a user-published event ends before it drops out of the event list; user events are never deleted (default: 730) |
 

@@ -16,6 +16,7 @@ from django.db import transaction
 from django.http import QueryDict
 from django.utils import timezone
 
+from config.db import insert_if_absent
 from config.ratelimit import get_client_ip
 from events.models import EventCategory
 
@@ -150,8 +151,7 @@ def _record_visitor(request) -> None:
         ]
     )
     digest = hashlib.sha256(raw.encode()).hexdigest()
-    _, created = VisitorHash.objects.get_or_create(date=today, digest=digest)
-    if created:
+    if insert_if_absent(VisitorHash, {"date": today, "digest": digest}):
         DailyCount.increment(DailyCount.VISITORS)
 
 

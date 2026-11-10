@@ -39,6 +39,9 @@ EVENTS_PER_PAGE = 30
 EVENT_FORM_TEMPLATE = "events/event_form.html"
 MAX_UPCOMING_EVENTS_PER_USER = settings.MAX_UPCOMING_EVENTS_PER_USER
 SEARCH_QUERY_MAX_LENGTH = 200
+# Each search word adds five ILIKE scans over the listed events (title, venue,
+# both descriptions, publisher); words past this many are ignored.
+SEARCH_MAX_TERMS = 6
 # GET limit for the public event list page. Every filter change, debounced
 # search keystroke and page click is a request, and visitors behind a shared
 # address (mobile carrier NAT, a studio's wifi) share one counter, so this has
@@ -400,7 +403,7 @@ def _filtered_event_queryset(request):
 
     # --- Filter: search ---
     search_query = request.GET.get("q", "").strip()[:SEARCH_QUERY_MAX_LENGTH]
-    for term in search_query.split():
+    for term in search_query.split()[:SEARCH_MAX_TERMS]:
         qs = qs.filter(
             Q(title__icontains=term)
             | Q(venue_name__icontains=term)
@@ -489,7 +492,7 @@ class _KnownCountPaginator(Paginator):
 
 # Columns the list templates never read; deferring them keeps the
 # (up to 4000-char) descriptions and their translations off the wire.
-_UNUSED_LISTING_FIELDS = ("description", "description_da", "description_en")
+UNUSED_LISTING_FIELDS = ("description", "description_da", "description_en")
 
 
 class EventListView(RateLimitMixin, View):
@@ -551,7 +554,7 @@ class EventListView(RateLimitMixin, View):
             qs = qs.order_by("start_datetime", "id")
 
         # --- Pagination ---
-        qs = qs.defer(*_UNUSED_LISTING_FIELDS)
+        qs = qs.defer(*UNUSED_LISTING_FIELDS)
         paginator = _KnownCountPaginator(qs, EVENTS_PER_PAGE, count=total)
         page_number = request.GET.get("page", 1)
         page_obj = paginator.get_page(page_number)

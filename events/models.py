@@ -508,8 +508,8 @@ class Event(models.Model):
     def _maybe_geocode_venue(self) -> None:
         """Populate latitude/longitude from Nominatim when the address changes.
 
-        Runs on insert, or on update when venue_name/venue_address changed since
-        the row was last saved. Failures are swallowed — geocoding must never
+        Runs on insert (unless coordinates are already set), or on update when
+        venue_name/venue_address changed since the row was last saved. Failures are swallowed — geocoding must never
         block saving an event.
         """
         if not getattr(settings, "GEOCODING_ENABLED", True):
@@ -518,6 +518,12 @@ class Event(models.Model):
             return
 
         needs_geocode = self._state.adding
+        if needs_geocode and self.has_map_location:
+            # Coordinates supplied up front (e.g. the cloned dates of a series,
+            # which share the first date's venue): nothing to look up. Without
+            # this, every clone would call Nominatim, and while it is failing
+            # each would wait out the timeout inside the creating transaction.
+            return
         if not needs_geocode:
             try:
                 previous = Event.objects.only("venue_name", "venue_address").get(
@@ -604,13 +610,9 @@ class FeedHit(models.Model):
 
     @classmethod
     def record(cls, feed_type: str) -> None:
-        """Atomically increment the hit counter for today."""
-        from django.db.models import F
+        """Atomically increment the hit counter for today (a single upsert)."""
         from django.utils import timezone
 
-        cls.objects.update_or_create(
-            feed_type=feed_type,
-            date=timezone.localdate(),
-            create_defaults={"count": 1},
-            defaults={"count": F("count") + 1},
-        )
+        from config.db import increment_counter
+
+        increment_counter(cls, {"feed_type": feed_type, "date": timezone.localdate()})

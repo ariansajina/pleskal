@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model, logout, update_session_auth_hash
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -182,10 +183,14 @@ class PublisherListView(View):
         )
 
 
+PUBLISHER_EVENTS_PER_PAGE = 30
+
+
 class PublisherProfileView(View):
     def get(self, request, slug):
         from events.models import Event
         from events.series import attach_series_cards, first_per_series
+        from events.views import UNUSED_LISTING_FIELDS
 
         publisher = get_object_or_404(User, display_name_slug=slug)
         is_own_profile = request.user.is_authenticated and request.user == publisher
@@ -206,7 +211,12 @@ class PublisherProfileView(View):
         else:
             dated = qs.filter(start_datetime__gte=now)
             qs = first_per_series(dated).order_by("start_datetime", "id")
-        events = list(qs)
+        # Paginated, without the (long) description columns the cards never
+        # read: a scraper account can have hundreds of upcoming events.
+        page_obj = Paginator(
+            qs.defer(*UNUSED_LISTING_FIELDS), PUBLISHER_EVENTS_PER_PAGE
+        ).get_page(request.GET.get("page", 1))
+        events = list(page_obj.object_list)
         attach_series_cards(events, dated)
 
         drafts = None
@@ -215,7 +225,9 @@ class PublisherProfileView(View):
                 submitted_by=publisher, is_draft=True
             ).select_related("submitted_by")
             drafts = list(
-                first_per_series(dated_drafts).order_by("start_datetime", "id")
+                first_per_series(dated_drafts)
+                .order_by("start_datetime", "id")
+                .defer(*UNUSED_LISTING_FIELDS)
             )
             attach_series_cards(drafts, dated_drafts)
 
@@ -226,6 +238,7 @@ class PublisherProfileView(View):
                 "publisher": publisher,
                 "publisher_jsonld": publisher_jsonld(publisher),
                 "events": events,
+                "page_obj": page_obj,
                 "show_past": show_past,
                 "is_own_profile": is_own_profile,
                 "drafts": drafts,

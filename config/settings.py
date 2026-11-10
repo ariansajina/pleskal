@@ -78,11 +78,16 @@ MAX_UPCOMING_OCCURRENCES_PER_SERIES = env.int(
     "MAX_UPCOMING_OCCURRENCES_PER_SERIES", default=110
 )
 CLAIM_CODES_PER_BATCH = env.int("CLAIM_CODES_PER_BATCH", default=3)
+# Seconds a CDN may cache anonymous HTML pages (config.middleware.
+# EdgeCacheAnonymousMiddleware); 0 sends no shared-cache headers at all.
+EDGE_CACHE_SECONDS = env.int("EDGE_CACHE_SECONDS", default=0)
 CLAIM_CODE_EXPIRY_DAYS = env.int("CLAIM_CODE_EXPIRY_DAYS", default=30)
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # Above sessions/CSRF/messages so it sees the cookies they set.
+    "config.middleware.EdgeCacheAnonymousMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -272,8 +277,9 @@ if env("R2_BUCKET_NAME", default=None):
 # guards against reintroducing them.
 #
 # style-src keeps 'unsafe-inline' because the templates carry a large number of
-# inline style="..." attributes plus the design system's <style> block in
-# base.html. Dropping it requires moving those into stylesheets first.
+# inline style="..." attributes plus the colour-token <style> block in
+# base.html (the rest of the design system is static/css/site.css). Dropping
+# it requires moving those into stylesheets first.
 
 _KOFI_HOST = "https://storage.ko-fi.com"
 
@@ -378,7 +384,7 @@ if DEBUG or "pytest" in _sys.modules:
 else:
     CACHES = {
         "default": {
-            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "BACKEND": "config.cache.DatabaseCache",
             "LOCATION": "django_cache",
             # Default MAX_ENTRIES (300) is too tight for rl:* + geocode:* keys.
             "OPTIONS": {"MAX_ENTRIES": 5000},

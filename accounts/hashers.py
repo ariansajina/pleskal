@@ -18,6 +18,7 @@ to this hasher; a stored hash using any other algorithm cannot be verified.
 import base64
 import hashlib
 import hmac
+import threading
 
 from django.conf import settings
 from django.contrib.auth.hashers import Argon2PasswordHasher
@@ -25,6 +26,12 @@ from django.core.exceptions import ImproperlyConfigured
 
 # Insecure all-zeros pepper used in development when PASSWORD_PEPPER is unset.
 _DEV_PEPPER_HEX = "00" * 32
+
+# Argon2 allocates its whole memory cost for each hash or verification, so
+# concurrent logins add up (gunicorn runs 2 processes x 4 threads). This caps
+# how many run at once in one process; the others wait their turn.
+MAX_CONCURRENT_HASHES = 2
+_hash_slots = threading.BoundedSemaphore(MAX_CONCURRENT_HASHES)
 
 
 def _get_pepper() -> bytes:
@@ -76,8 +83,19 @@ class HmacPepperedArgon2PasswordHasher(Argon2PasswordHasher):
 
     algorithm = "hmac_argon2"
 
+    # OWASP's recommended Argon2id parameters (19 MiB, 2 passes, 1 lane)
+    # instead of Django's 100 MiB / 8 lanes, which made each login verification
+    # allocate ~100 MB: a handful of concurrent logins could exhaust a small
+    # container. The pepper means a stolen database alone can't be attacked
+    # at all. Hashes made with other parameters still verify (they carry their
+    # own), and ``must_update`` re-hashes them at the user's next login.
+    time_cost = 2
+    memory_cost = 19 * 1024  # KiB
+    parallelism = 1
+
     def encode(self, password: str, salt: str) -> str:
-        return super().encode(_apply_pepper(password), salt)
+        with _hash_slots:
+            return super().encode(_apply_pepper(password), salt)
 
     def _argon2_rest(self, encoded: str) -> str:
         """Return the argon2 hash string without our custom algorithm prefix."""
@@ -87,9 +105,10 @@ class HmacPepperedArgon2PasswordHasher(Argon2PasswordHasher):
     def verify(self, password: str, encoded: str) -> bool:
         argon2 = self._load_library()
         try:
-            return argon2.PasswordHasher().verify(
-                self._argon2_rest(encoded), _apply_pepper(password)
-            )
+            with _hash_slots:
+                return argon2.PasswordHasher().verify(
+                    self._argon2_rest(encoded), _apply_pepper(password)
+                )
         except argon2.exceptions.VerificationError:
             return False
 

@@ -130,6 +130,35 @@ commands from a shell inside the service (see the scraper section below).
 **Rollback:** safe. Older releases ignore the `thumbnail` column, and the files
 under `events/thumbs/` are only orphaned, not referenced by anything else.
 
+### Media domain
+
+Event images live in the R2 bucket. Serve them from a custom domain connected
+to the bucket (R2 → bucket → **Settings** → **Custom Domains**, e.g.
+`media.pleskal.dk`) and set `CDN_DOMAIN` to it on every service. The bucket's
+`*.r2.dev` URL is meant for development: Cloudflare rate-limits it and never
+caches it. `manage.py check` (run by `migrate` in preDeploy) warns
+(`pleskal.W001`) while `CDN_DOMAIN` is unset or an `r2.dev` host. Changing it
+changes image URLs and the CSP's `img-src`, so redeploy the web service after.
+
+### Edge caching (optional)
+
+Anonymous pages set no cookie (the CSRF token is only rendered for logged-in
+users), and static files, including `static/css/site.css`, are fingerprinted
+and cached for a year. Cloudflare still caches no HTML by default. To let it:
+
+1. Set `EDGE_CACHE_SECONDS` (e.g. `60`) on the web service. Anonymous
+   GET 200 HTML responses that set no cookie then carry
+   `Cache-Control: public, max-age=0, s-maxage=60`.
+2. Add a Cloudflare **Cache Rule** for `pleskal.dk`: *Eligible for cache*,
+   edge TTL *Use cache-control header if present*, **bypassing** requests
+   that have a `sessionid` cookie, have an `HX-Request` header (HTMX
+   partials share the page URL), or whose path starts with `/accounts/`,
+   `/admin/`, `/claim/`, `/events/submit/`, `/stats/`, `/feed/` or `/health/`.
+
+Edits then reach anonymous visitors up to `EDGE_CACHE_SECONDS` later, and
+page views served from the edge aren't counted by the analytics middleware
+(nor rate-limited). Leave it at `0` to keep every view counted.
+
 ### gunicorn threads
 
 The web service now runs `--workers 2 --threads 4`. It holds up to 8
@@ -293,6 +322,12 @@ The derivation pipeline is:
 ```
 raw_password → HMAC-SHA256(PASSWORD_PEPPER, raw_password) → Argon2id → stored hash
 ```
+
+Argon2id runs with 19 MiB, 2 passes, 1 lane (OWASP's recommendation; Django's
+default 100 MiB per verification could exhaust the container under a few
+concurrent logins), and at most 2 hashes run at once per process
+(`accounts/hashers.py`). Hashes made with the older 100 MiB parameters still
+verify and are re-hashed with the new ones at each user's next login.
 
 ### What to back up
 

@@ -57,6 +57,17 @@
                 {% include "events/partials/event_card.html" with event=event hide_publisher=True %}
             {% endfor %}
         </div>
+        {% if page_obj.has_other_pages %}
+            <nav style="display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-8);" aria-label="Pagination">
+                {% if page_obj.has_previous %}
+                    <a href="?past={{ show_past|yesno:'1,0' }}&page={{ page_obj.previous_page_number }}" class="btn btn--ghost btn--sm">&larr; Prev</a>
+                {% endif %}
+                <span class="text-sm text-muted">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}
+                    <a href="?past={{ show_past|yesno:'1,0' }}&page={{ page_obj.next_page_number }}" class="btn btn--ghost btn--sm">Next &rarr;</a>
+                {% endif %}
+            </nav>
+        {% endif %}
     {% else %}
         {% if is_own_profile %}
             <div class="text-center text-muted" style="padding:var(--space-16) 0;">

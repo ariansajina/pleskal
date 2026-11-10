@@ -114,6 +114,29 @@ class TestHmacPepperedArgon2PasswordHasher:
             assert self.hasher.verify("password", encoded) is False
 
 
+class TestArgon2Parameters:
+    hasher = HmacPepperedArgon2PasswordHasher()
+
+    def test_new_hashes_use_owasp_parameters(self):
+        with override_settings(PASSWORD_PEPPER=_VALID_PEPPER, DEBUG=False):
+            encoded = self.hasher.encode("password", self.hasher.salt())
+        decoded = self.hasher.decode(encoded)
+        assert decoded["memory_cost"] == 19 * 1024
+        assert decoded["time_cost"] == 2
+        assert decoded["parallelism"] == 1
+        assert self.hasher.must_update(encoded) is False
+
+    def test_hash_with_other_parameters_verifies_and_is_upgraded(self):
+        class OldParams(HmacPepperedArgon2PasswordHasher):
+            memory_cost = 8 * 1024
+            parallelism = 2
+
+        with override_settings(PASSWORD_PEPPER=_VALID_PEPPER, DEBUG=False):
+            encoded = OldParams().encode("password", self.hasher.salt())
+            assert self.hasher.verify("password", encoded) is True
+        assert self.hasher.must_update(encoded) is True
+
+
 class TestHasherIntegration:
     """End-to-end tests via Django's auth layer."""
 

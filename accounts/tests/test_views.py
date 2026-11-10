@@ -178,6 +178,21 @@ class TestPublisherProfileView:
         assert response.status_code == 200
         assert response.context["show_past"] is True
 
+    def test_events_are_paginated_without_descriptions(self):
+        from accounts.views import PUBLISHER_EVENTS_PER_PAGE
+
+        user = UserFactory.create(display_name="Busy Venue")
+        EventFactory.create_batch(PUBLISHER_EVENTS_PER_PAGE + 2, submitted_by=user)
+        client = Client()
+        url = f"/accounts/publishers/{user.display_name_slug}/"
+        first = client.get(url)
+        assert len(first.context["events"]) == PUBLISHER_EVENTS_PER_PAGE
+        assert first.context["page_obj"].paginator.num_pages == 2
+        assert b"page=2" in first.content
+        assert "description" in first.context["events"][0].get_deferred_fields()
+        second = client.get(url + "?past=0&page=2")
+        assert len(second.context["events"]) == 2
+
     def test_404_for_unknown_publisher(self):
         client = Client()
         response = client.get("/accounts/publishers/no-such-user/")
