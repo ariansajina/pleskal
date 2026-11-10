@@ -30,3 +30,34 @@ def test_service_worker_skips_no_store_responses(client):
     assert "no-store" in body
     # Every cache write goes through the no-store check.
     assert body.count("cache.put(") == body.count("if (isCacheable(response))")
+
+
+KOFI_SOURCES = {"https://storage.ko-fi.com", "https://ko-fi.com"}
+
+
+def _csp_sources(response) -> dict[str, list[str]]:
+    """Parse the CSP header into {directive: [sources]}."""
+    directives = {}
+    for part in response["Content-Security-Policy"].split(";"):
+        name, *sources = part.split()
+        directives[name] = sources
+    return directives
+
+
+@pytest.mark.django_db
+class TestAuthenticatedCSP:
+    def test_anonymous_policy_allows_kofi(self, client):
+        resp = client.get("/about/")
+        directives = _csp_sources(resp)
+        assert directives["script-src"] == ["'self'", "https://storage.ko-fi.com"]
+        assert b'js/kofi.js" defer' in resp.content
+
+    def test_logged_in_policy_drops_kofi(self, client):
+        client.force_login(UserFactory.create())
+        resp = client.get("/about/")
+        directives = _csp_sources(resp)
+        for sources in directives.values():
+            assert not KOFI_SOURCES.intersection(sources)
+        assert directives["script-src"] == ["'self'"]
+        assert directives["frame-src"] == ["https://www.openstreetmap.org"]
+        assert b'js/kofi.js" defer' not in resp.content

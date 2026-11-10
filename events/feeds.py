@@ -127,21 +127,22 @@ class EventRSSFeed(Feed):
     description = "Upcoming dance events in Copenhagen."
 
     def get_object(self, request, *args, **kwargs):
-        # Store request so we can access query params
-        self._request = request
+        # The filters travel as the feed "object" rather than on self: Django
+        # shares one Feed instance across all requests (and threads), so
+        # request state stored on it could leak into a concurrent response.
         FeedHit.record(FeedHit.RSS)
-        return None
+        return {
+            "categories": request.GET.getlist("category"),
+            "publisher_slugs": request.GET.getlist("publisher"),
+        }
 
     def link(self):
         return "/"
 
-    def items(self):
-        req = getattr(self, "_request", None)
-        if not req:
-            return _upcoming_qs()[:50]
-        categories = req.GET.getlist("category")
-        publisher_slugs = req.GET.getlist("publisher")
-        return _upcoming_qs(categories=categories, publisher_slugs=publisher_slugs)[:50]
+    def items(self, obj):
+        return _upcoming_qs(
+            categories=obj["categories"], publisher_slugs=obj["publisher_slugs"]
+        )[:50]
 
     def item_title(self, item):
         return str(item.title)

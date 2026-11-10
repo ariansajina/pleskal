@@ -81,6 +81,7 @@ accounts/
   managers.py        # UserManager; `publishers()` = named, active source accounts or users with published events (directory + sitemap)
   views.py           # Login, password reset, profile, account deletion, claim flow, invite management
   forms.py           # CustomAuthenticationForm, ProfileForm (current password required to change email), AccountDeleteForm (password required), ClaimCodeForm, ClaimRegisterForm
+  adapter.py         # ClosedSignupAccountAdapter (ACCOUNT_ADAPTER): allauth's own signup is always closed
   hashers.py         # HmacPepperedArgon2PasswordHasher
   validators.py      # ZxcvbnPasswordValidator
   signals.py         # Admin notification on new signup; Resend CRM sync on email verification (old address removed on email change, all removed on account deletion); preserve claim-code emails on user delete
@@ -97,9 +98,9 @@ analytics/
 
 config/
   settings.py        # Django settings
-  urls.py            # Root URL conf (includes /health/, /health/db/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's markdownify (preview) view with login_required and leaves its image-upload view unmounted (its default urls.py mounts both unauthenticated)
+  urls.py            # Root URL conf (includes /health/, /health/db/, /manifest.webmanifest, /service-worker.js, /offline/); wraps markdownx's markdownify (preview) view with login_required and leaves its image-upload view unmounted (its default urls.py mounts both unauthenticated); mounts only allauth's `confirm-email/<key>/` view (never `include("allauth.urls")`, which exposes allauth's open signup, its add-an-email page and an un-rate-limited password reset) plus an `account_login` name alias for allauth's internal reverses
   ratelimit.py       # Cache-based RateLimitMixin
-  middleware.py      # NoStoreForAuthenticatedMiddleware: `Cache-Control: no-store` on logged-in responses (kept out of browser + service-worker caches)
+  middleware.py      # NoStoreForAuthenticatedMiddleware: `Cache-Control: no-store` on logged-in responses (kept out of browser + service-worker caches); AuthenticatedCSPMiddleware: logged-in responses get `SECURE_CSP_AUTHENTICATED` (no Ko-fi sources)
   pwa.py             # PWA endpoints: manifest, service worker, offline fallback page
   cron_monitoring.py # cron_monitor(): Sentry Crons check-ins for run_scrapers + weekly_digest
 
@@ -269,7 +270,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - CSRF protection via Django middleware; HTMX includes token via `hx-headers` on `<body>`
 - XSS: Markdown sanitized via nh3 (allowlist of tags/attributes in `markdown_filters.py`); the markdownx editor preview uses the same renderer (`MARKDOWNX_MARKDOWNIFY_FUNCTION`). The markdownx image-upload endpoint is not mounted (`<img>` is stripped on render anyway)
 - Never use `|safe` or `{% autoescape off %}` on user-supplied content
-- Image uploads: Pillow-validated (not Content-Type), capped at `MAX_IMAGE_PIXELS` (50 MP, checked from the header before decoding; JPEGs measured after draft downscaling), EXIF stripped, resized to 1200px, converted to WebP
+- Image uploads: Pillow-validated (not Content-Type; `Image.open` restricted to `ALLOWED_IMAGE_FORMATS` = JPEG/PNG/WebP/HEIF in `events/images.py`, for uploads, scraped images and thumbnails), capped at `MAX_IMAGE_PIXELS` (50 MP, checked from the header before decoding; JPEGs measured after draft downscaling), EXIF stripped, resized to 1200px, converted to WebP
 - Brute-force: django-axes (5 failures = 30 min lockout of the (email, client IP) pair; client IP resolved via `config.ratelimit.get_client_ip`, since `REMOTE_ADDR` is Railway's proxy). `AXES_DISABLE_ACCESS_LOG = True`: successful logins aren't recorded; failed attempts are dropped after the cool-off
 - Caching: `NoStoreForAuthenticatedMiddleware` marks logged-in responses `no-store`; the service worker never writes `no-store` responses to Cache Storage, so per-user pages (drafts, edit forms) don't outlive logout
 - Media is served from a public bucket, so replaced/cleared event images and their thumbnails are deleted (`events/signals.py`) rather than left reachable at their old URL
@@ -277,7 +278,10 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 - CSP: Django's built-in `django.middleware.csp.ContentSecurityPolicyMiddleware`, configured via `SECURE_CSP` in `config/settings.py` — `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:` (+ R2 domain if configured), `frame-src https://www.openstreetmap.org` (OSM map embed)
 - Password hashing: HMAC-SHA256 pepper (env `PASSWORD_PEPPER`, 32-byte key) + Argon2id; `PASSWORD_HASHERS` configures only this hasher, no PBKDF2 fallback
 - Password strength: zxcvbn minimum score 2
-- Re-authentication: changing the login email (`ProfileForm.current_password`) and deleting the account (`AccountDeleteForm`) require the current password, so a hijacked session alone can't take over or delete an account
+- Re-authentication: changing the login email (`ProfileForm.current_password`) and deleting the account (`AccountDeleteForm`) require the current password, so a hijacked session alone can't take over or delete an account; those forms and change-password share a per-user rate limit (`ReauthRateLimitMixin`)
+- Registration: allauth is used only for email verification. `ClosedSignupAccountAdapter` keeps its signup closed and `config/urls.py` mounts only its confirm-email view; don't `include("allauth.urls")`
+- Ko-fi: the widget (`static/js/kofi.js`) loads for anonymous visitors only; logged-in pages get a CSP without the Ko-fi sources (`SECURE_CSP_AUTHENTICATED`)
+- Admin CSV exports neutralise formula-leading cells (`accounts/admin.py` `_csv_safe`); the importer skips records whose `source_url` isn't http(s)
 
 ### Rate Limits (current)
 
@@ -292,6 +296,7 @@ uv run python manage.py import_events faar302 --skip-translation  # import witho
 | Event duplicate | POST | 20 req/min | per user |
 | Event toggle draft | POST | 20 req/min | per user |
 | Repeat dates preview | POST | 120 req/min | per user |
+| Change password / delete account / edit profile (shared) | POST | 20 req/hr | per user |
 
 - `EventDeleteView` is **not** rate-limited (owner-only + confirmation step).
 - Event toggle draft shares the `event_update` cache key, so it draws from the same per-user counter as Event update.
@@ -341,7 +346,7 @@ Properties: `is_expired`, `is_claimed`, `is_valid`.
 | Field | Notes |
 |---|---|
 | `id` | UUID PK |
-| `slug` | Auto-generated from the title, immutable; a random 2-byte hex suffix is appended only on collision |
+| `slug` | Auto-generated from the title, immutable; a random 2-byte hex suffix is appended only on collision or when the slug is reserved (`RESERVED_EVENT_SLUGS`, e.g. `submit`, which `/events/submit/` would shadow) |
 | `title` | Max 250 chars, min 3 chars |
 | `description` | Markdown |
 | `image` | Optional; WebP, max 10 MB, 1200px max dimension, EXIF stripped |
