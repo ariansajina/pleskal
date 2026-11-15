@@ -268,7 +268,7 @@ class TestDisplayImageUrl:
         event = EventFactory.build(
             image="events/img_abc.webp", external_source="dansehallerne"
         )
-        assert event.display_image_url == event.image.url  # ty: ignore[unresolved-attribute]
+        assert event.display_image_url == event.image.url  # ty: ignore[missing-attribute]
 
     def test_publisher_default_for_known_source(self):
         event = EventFactory.build(image=None, external_source="dansehallerne")

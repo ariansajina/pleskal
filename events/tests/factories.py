@@ -7,7 +7,7 @@ from ..models import Event, EventCategory
 
 
 class EventFactory(factory.django.DjangoModelFactory[Event]):
-    class Meta:  # ty: ignore[invalid-attribute-override]
+    class Meta:  # ty: ignore[incompatible-attribute-override]
         model = Event
         skip_postgeneration_save = True
 

@@ -85,7 +85,7 @@ def disabled_after() -> dict[str, datetime.date]:
             node.targets[0] if isinstance(node, ast.Assign) else None
         )
         if isinstance(target, ast.Name) and target.id == "SCRAPER_DISABLED_AFTER":
-            value = node.value  # ty: ignore[unresolved-attribute]
+            value = node.value  # ty: ignore[missing-attribute]
             result = {}
             for key, call in zip(value.keys, value.values, strict=True):
                 args = [a.value for a in call.args]

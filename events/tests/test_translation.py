@@ -216,8 +216,8 @@ class TestTranslateSentences:
             translator.assert_called_once_with(
                 str(tmp_path / "model"), device="cpu", compute_type="int8"
             )
-            assert model.normalizer.normalize("”Hej” – dig") == '"Hej" - dig'  # ty: ignore[unresolved-attribute]
-            assert model.bpe.process_line("hej") == "hej"  # ty: ignore[unresolved-attribute]
+            assert model.normalizer.normalize("”Hej” – dig") == '"Hej" - dig'  # ty: ignore[missing-attribute]
+            assert model.bpe.process_line("hej") == "hej"  # ty: ignore[missing-attribute]
         finally:
             translation._model.cache_clear()
 

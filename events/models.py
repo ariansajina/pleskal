@@ -348,7 +348,7 @@ class Event(models.Model):
     def _submitted_by_system(self) -> bool:
         """True for events published by a scraper (system) account."""
         submitter = self.submitted_by
-        return bool(submitter and submitter.is_system_account)  # ty: ignore[unresolved-attribute]
+        return bool(submitter and submitter.is_system_account)  # ty: ignore[missing-attribute]
 
     @property
     def publisher_is_venue(self) -> bool:
@@ -356,9 +356,9 @@ class Event(models.Model):
         ("HAUT" at "HAUT scene", "FÅR302" at "Teater FÅR302"): the list card
         then leaves out its "by" line, which would repeat the venue."""
         submitter = self.submitted_by
-        if not submitter or not submitter.display_name:  # ty: ignore[unresolved-attribute]
+        if not submitter or not submitter.display_name:  # ty: ignore[missing-attribute]
             return False
-        publisher = _name_words(submitter.display_name)  # ty: ignore[unresolved-attribute]
+        publisher = _name_words(submitter.display_name)  # ty: ignore[missing-attribute]
         venue = _name_words(str(self.venue_name))
         short, long = sorted((publisher, venue), key=len)
         return bool(short) and any(
@@ -403,7 +403,7 @@ class Event(models.Model):
         default for its external_source, otherwise the pleskal logo.
         """
         if self.image:
-            return self.image.url  # ty: ignore[unresolved-attribute]
+            return self.image.url  # ty: ignore[missing-attribute]
         return static(self._default_image_path())
 
     @property
@@ -414,9 +414,9 @@ class Event(models.Model):
         generated yet (see the backfill_thumbnails command).
         """
         if self.thumbnail:
-            return self.thumbnail.url  # ty: ignore[unresolved-attribute]
+            return self.thumbnail.url  # ty: ignore[missing-attribute]
         if self.image:
-            return self.image.url  # ty: ignore[unresolved-attribute]
+            return self.image.url  # ty: ignore[missing-attribute]
         return static(default_thumbnail_path(self._default_image_path()))
 
     def _default_image_path(self) -> str:
@@ -467,7 +467,7 @@ class Event(models.Model):
         """Name of the venue/source a scraped event was imported from."""
         submitter = self.submitted_by
         if submitter:
-            return str(submitter.public_name)  # ty: ignore[unresolved-attribute]
+            return str(submitter.public_name)  # ty: ignore[missing-attribute]
         return str(self.external_source)
 
     def get_display_description(self):
@@ -497,12 +497,12 @@ class Event(models.Model):
         True when `thumbnail` was changed.
         """
         image = self.image
-        if image and not image._committed:  # ty: ignore[unresolved-attribute]
+        if image and not image._committed:  # ty: ignore[missing-attribute]
             # An upload assigned directly (e.g. through the admin) is only
             # written to storage by Model.save(); write it now so it can be
             # read back for the thumbnail. This is what FileField.pre_save
             # would do.
-            image.save(image.name, image.file, save=False)  # ty: ignore[unresolved-attribute]
+            image.save(image.name, image.file, save=False)  # ty: ignore[missing-attribute]
         image_name = self.image.name or ""
         changed = self._state.adding or (
             self._saved_image_name is not None and image_name != self._saved_image_name

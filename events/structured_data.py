@@ -95,11 +95,11 @@ def event_jsonld(event: Event, request) -> str:
     if publisher:
         data["organizer"] = {
             _TYPE: "Organization",
-            "name": publisher.public_name,  # ty: ignore[unresolved-attribute]
+            "name": publisher.public_name,  # ty: ignore[missing-attribute]
             "url": origin
             + reverse(
                 "publisher_profile",
-                kwargs={"slug": publisher.display_name_slug},  # ty: ignore[unresolved-attribute]
+                kwargs={"slug": publisher.display_name_slug},  # ty: ignore[missing-attribute]
             ),
         }
 

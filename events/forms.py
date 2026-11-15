@@ -57,7 +57,7 @@ class _OptionalChoicesMixin:
     unavailable: frozenset = frozenset()
 
     def create_option(self, name, value, *args, **kwargs):
-        option = super().create_option(name, value, *args, **kwargs)  # ty: ignore[unresolved-attribute]
+        option = super().create_option(name, value, *args, **kwargs)  # ty: ignore[missing-attribute]
         if str(value) in self.unavailable:
             option["attrs"]["disabled"] = True
             option["attrs"]["hidden"] = True

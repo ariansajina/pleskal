@@ -92,7 +92,7 @@ def _stable_uid(event: Event) -> str:
     remains a fine, unique UID for them.
     """
     if event.external_source and event.source_url:
-        start_iso = event.start_datetime.isoformat()  # ty: ignore[unresolved-attribute]
+        start_iso = event.start_datetime.isoformat()  # ty: ignore[missing-attribute]
         basis = f"{event.external_source}|{event.source_url}|{start_iso}"
         digest = hashlib.sha1(basis.encode(), usedforsecurity=False).hexdigest()
         return f"{digest}@pleskal.dk"
