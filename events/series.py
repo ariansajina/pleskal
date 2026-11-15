@@ -79,7 +79,7 @@ def local_naive(value) -> datetime.datetime:
 
 
 def _event_span(event: Event) -> Span:
-    return event.start_datetime, event.end_datetime  # ty: ignore[invalid-return-type]
+    return event.start_datetime, event.end_datetime  # ty: ignore[invalid-explicit-return]
 
 
 def _set_span(event: Event, span: Span) -> None:
@@ -87,7 +87,7 @@ def _set_span(event: Event, span: Span) -> None:
 
 
 def _series(event: Event) -> EventSeries | None:
-    return event.series  # ty: ignore[invalid-return-type]
+    return event.series  # ty: ignore[invalid-explicit-return]
 
 
 def _span(start: datetime.datetime, duration: datetime.timedelta | None) -> Span:

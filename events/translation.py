@@ -214,18 +214,18 @@ def _translate_sentences(sentences: list[str]) -> list[str]:
         return []
     model = _model()
     tokenized = [
-        model.bpe.process_line(  # ty: ignore[unresolved-attribute]
-            model.tokenizer.tokenize(  # ty: ignore[unresolved-attribute]
-                model.normalizer.normalize(s),  # ty: ignore[unresolved-attribute]
+        model.bpe.process_line(  # ty: ignore[missing-attribute]
+            model.tokenizer.tokenize(  # ty: ignore[missing-attribute]
+                model.normalizer.normalize(s),  # ty: ignore[missing-attribute]
                 return_str=True,
                 escape=True,
             )
         ).split()
         for s in sentences
     ]
-    results = model.translator.translate_batch(tokenized, beam_size=4)  # ty: ignore[unresolved-attribute]
+    results = model.translator.translate_batch(tokenized, beam_size=4)  # ty: ignore[missing-attribute]
     return [
-        model.detokenizer.detokenize(  # ty: ignore[unresolved-attribute]
+        model.detokenizer.detokenize(  # ty: ignore[missing-attribute]
             " ".join(r.hypotheses[0]).replace("@@ ", "").split()
         )
         for r in results
