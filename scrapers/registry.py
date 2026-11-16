@@ -175,8 +175,8 @@ _ALL_SOURCES = [
         scrape=scrape_udviklingsplatformen,
         external_source="udviklingsplatformen",
         default_venue_name="Udviklingsplatformen",
-        # The calendar carries no images.
-        allowed_image_domains=frozenset(),
+        # Photos from the UP page an entry links to (the calendar has none).
+        allowed_image_domains=frozenset({"udviklingsplatformen.dk"}),
     ),
 ]
 

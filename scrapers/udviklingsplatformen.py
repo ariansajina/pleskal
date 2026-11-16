@@ -38,6 +38,16 @@ There is no time, venue, price or image:
   / Time in Space residencies in The Pit and White Lab, Baldersgade 6), else
   the organiser link's label when it reads as a name ("Warehouse9"), else the
   organiser's domain.
+- **Image:** the calendar has none, but UP's own worksharings link to a UP
+  page ("Join the worksharings at UP") that presents each worksharing as a
+  photo followed by a text block opening with its date and time ("Friday,
+  December 11, at 2:00 p.m."). That page is fetched once per run and the
+  photo of the block on the entry's day (and, when the day has several, at
+  its start time) is used; matching on the date rather than the title, since
+  UP's calendar titles don't always match the page's. With no matching
+  block, the page's own image (``og:image``) is used. Entries linking
+  elsewhere get no image. UP's file names contain non-ASCII letters
+  ("Nøgensnegl"), so the URL is percent-encoded for the importer's download.
 - **Source URL:** the entry's anchor on UP's calendar (``#event-<id>``, which
   the page scrolls to and opens); the organiser's page is appended to the
   description.
@@ -58,13 +68,18 @@ import datetime
 import logging
 import re
 import zoneinfo
-from urllib.parse import urlparse
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+from urllib.parse import quote, urljoin, urlparse
 
 import markdownify
 from bs4 import BeautifulSoup, Tag
 
 from events.limits import MAX_TITLE_LENGTH, MAX_VENUE_LENGTH
 from scrapers.base import HEADERS, build_arg_parser, make_session, write_output
+
+if TYPE_CHECKING:
+    import requests
 
 BASE_URL = "https://www.udviklingsplatformen.dk"
 CALENDAR_URL = f"{BASE_URL}/en/calendar"
@@ -113,6 +128,14 @@ _MONTHS = {
     "october": 10,
     "november": 11,
     "december": 12,
+    # Danish, where it differs ("17. december", "28. januar").
+    "januar": 1,
+    "februar": 2,
+    "marts": 3,
+    "maj": 5,
+    "juni": 6,
+    "juli": 7,
+    "oktober": 10,
 }
 # "23. October" or "28. February, 2027"
 _DATE_RE = re.compile(r"(\d{1,2})\.\s*([A-Za-z]+)(?:,?\s*(\d{4}))?")
@@ -160,15 +183,22 @@ _UP_VENUE_RE = re.compile(
 log = logging.getLogger(__name__)
 
 
+# "December 11" (an English page's date line, weekday first); "11. December"
+# is matched by _DATE_RE.
+_MONTH_DAY_RE = re.compile(r"\b([A-Za-z]+)\s+(\d{1,2})\b")
+# The srcset rendition used: the importer scales images to 1200px anyway.
+_IMAGE_WIDTH = "_x1200/"
+
+
 # ── Fetch ─────────────────────────────────────────────────────────────────────
 
 
-def fetch_items() -> list[Tag]:
+def fetch_items(session: requests.Session | None = None) -> list[Tag]:
     """Fetch the entries of the calendar's ``CATEGORIES`` as ``div.item`` tags.
 
     An entry listed under more than one category is returned once.
     """
-    session = make_session()
+    session = session or make_session()
     items: dict[str, Tag] = {}
     for category in CATEGORIES:
         resp = session.get(
@@ -182,6 +212,97 @@ def fetch_items() -> list[Tag]:
         for item in soup.select("div.item[data-id]"):
             items.setdefault(str(item["data-id"]), item)
     return list(items.values())
+
+
+@dataclass
+class PageImages:
+    """The photos of a UP page: per dated block, plus the page's own image."""
+
+    default: str = ""
+    # (month, day, start time or None, image URL), in page order.
+    blocks: list[tuple[int, int, datetime.time | None, str]] = field(
+        default_factory=list
+    )
+
+    def for_day(self, day: datetime.date, start: datetime.time | None) -> str:
+        """The photo of the block on *day* (at *start* when the day has several)."""
+        on_day = [b for b in self.blocks if (b[0], b[1]) == (day.month, day.day)]
+        if len(on_day) > 1:
+            on_day = [b for b in on_day if b[2] == start]
+        return on_day[0][3] if len(on_day) == 1 else self.default
+
+
+def _on_up(url: str) -> bool:
+    return urlparse(url).scheme == "https" and _host(url) == UP_HOST
+
+
+def _image_url(img: Tag, page_url: str) -> str:
+    """An ``<img>``'s 1200px rendition (else its first), absolute and encoded."""
+    srcset = str(img.get("data-srcset") or img.get("srcset") or "")
+    candidates = [c.split()[0] for c in srcset.split(",") if c.strip()]
+    src = next((c for c in candidates if _IMAGE_WIDTH in c), "")
+    src = src or (candidates[0] if candidates else str(img.get("src") or ""))
+    return _absolute_up_url(src, page_url)
+
+
+def _absolute_up_url(src: str, page_url: str) -> str:
+    """*src* resolved against *page_url* and percent-encoded; "" if not on UP."""
+    url = urljoin(page_url, src.strip()) if src.strip() else ""
+    return quote(url, safe=":/?&=%~+") if _on_up(url) else ""
+
+
+def _month_day(text: str, today: datetime.date) -> tuple[int, int] | None:
+    parsed = _parse_date(text, today)
+    if parsed:
+        return parsed.month, parsed.day
+    for m in _MONTH_DAY_RE.finditer(text):
+        month = _MONTHS.get(m.group(1).lower())
+        if month and 1 <= int(m.group(2)) <= 31:
+            return month, int(m.group(2))
+    return None
+
+
+def parse_page_images(html: str, page_url: str, today: datetime.date) -> PageImages:
+    """Collect a UP page's photos, keyed by the date line of the text after each.
+
+    The page is a grid of ``.inner`` blocks, each a ``figure`` with the photo
+    followed by a ``div.text`` opening with the date and time.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    og = soup.select_one('meta[property="og:image"][content]')
+    images = PageImages(
+        default=_absolute_up_url(str(og["content"]), page_url) if og else ""
+    )
+    for block in soup.select(".inner"):
+        img = block.select_one("figure img")
+        text = block.select_one(".text")
+        if img is None or text is None:
+            continue
+        url = _image_url(img, page_url)
+        first = text.find(["p", "h2", "h3", "h4"])
+        heading = " ".join((first or text).get_text(" ").split())
+        day = _month_day(heading, today)
+        if url and day:
+            images.blocks.append((*day, parse_times(heading)[0], url))
+    return images
+
+
+def fetch_page_images(
+    session: requests.Session, url: str, today: datetime.date
+) -> PageImages | None:
+    """Fetch and parse a UP page's photos; None when it can't be read."""
+    try:
+        resp = session.get(url, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+    except Exception as exc:
+        log.warning("Could not fetch %s for images: %s", url, exc)
+        return None
+    return parse_page_images(resp.text, url, today)
+
+
+def _link_url(item: Tag) -> str:
+    link = item.select_one(".links a[href]")
+    return str(link["href"]).strip() if link else ""
 
 
 def is_worksharing(item: Tag) -> bool:
@@ -308,8 +429,13 @@ def determine_venue(label: str, url: str, body: str) -> tuple[str, str]:
     return VENUE_NAME, VENUE_ADDRESS
 
 
-def build_records(item: Tag, today: datetime.date) -> list[dict]:
-    """Build the records of one calendar entry (one per day of a short range)."""
+def build_records(
+    item: Tag, today: datetime.date, images: PageImages | None = None
+) -> list[dict]:
+    """Build the records of one calendar entry (one per day of a short range).
+
+    *images* are the photos of the UP page the entry links to, if any.
+    """
     if not is_worksharing(item):
         return []
     # "Time in Space Worksharing: Out Of Office.arts:" loses its dangling colon.
@@ -367,7 +493,7 @@ def build_records(item: Tag, today: datetime.date) -> list[dict]:
             "is_wheelchair_accessible": False,
             "price_note": "",
             "source_url": f"{CALENDAR_URL}#event-{item['data-id']}",
-            "image_url": "",
+            "image_url": images.for_day(day, start_time) if images else "",
         }
         for day in day_list
         if day >= today
@@ -378,8 +504,13 @@ def scrape() -> list[dict]:
     """Fetch the calendar's worksharings and build upcoming records."""
     today = datetime.datetime.now(CPH_TZ).date()
     records: list[dict] = []
-    for item in fetch_items():
-        records.extend(build_records(item, today))
+    session = make_session()
+    pages: dict[str, PageImages | None] = {}
+    for item in fetch_items(session):
+        url = _link_url(item)
+        if _on_up(url) and is_worksharing(item) and url not in pages:
+            pages[url] = fetch_page_images(session, url, today)
+        records.extend(build_records(item, today, pages.get(url)))
     log.info("Built %d worksharing records", len(records))
     return records
 

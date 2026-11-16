@@ -187,6 +187,7 @@ def test_registry_entry():
     source = SOURCES["udviklingsplatformen"]
     assert source.external_source == up.EXTERNAL_SOURCE
     assert source.default_venue_name == up.VENUE_NAME
+    assert source.allowed_image_domains == frozenset({up.UP_HOST})
 
 
 # ── build_records ─────────────────────────────────────────────────────────────
@@ -342,3 +343,123 @@ def test_scrape_requests_worksharing_and_up_event_filters():
         c.kwargs["headers"]["X-Requested-With"] == "XMLHttpRequest" for c in calls
     )
     assert [r["source_url"].rsplit("-", 1)[1] for r in records] == ["158590", "3"]
+
+
+# ── images from the linked UP page ────────────────────────────────────────────
+
+PAGE_URL = "https://www.udviklingsplatformen.dk/en/kom-til-worksharings-hos-up"
+UPLOADS = "https://www.udviklingsplatformen.dk/assets/uploads"
+
+
+def _block(image: str, heading: str) -> str:
+    srcset = ",".join(f"{UPLOADS}/_x{w}/{image} {w}w" for w in (600, 1200, 1800, 2400))
+    return f"""
+    <div class="grid-item"><div class="inner">
+      <figure class="image lazy"><img class="lazyload" data-srcset="{srcset}"></figure>
+      <div class="text"><p><strong>{heading}</strong></p><p>About the work.</p></div>
+    </div></div>
+    """
+
+
+def _page(*blocks: str) -> str:
+    return f"""
+    <html><head>
+      <meta property="og:image" content="{UPLOADS}/_landscape1200/Worksharing.jpg">
+    </head><body>
+      <div class="featured-image"><img data-srcset="{UPLOADS}/_x600/Worksharing.jpg 600w"></div>
+      <section class="module"><div class="grid-items">{"".join(blocks)}</div></section>
+      <div class="inner"><img src="/assets/static/logo.svg"></div>
+    </body></html>
+    """
+
+
+PAGE = _page(
+    _block("Spiral.jpg", "Friday, December 11, at 2:00 p.m."),
+    _block("Nøgensnegl.jpg", "Friday, January 22, at 1:00 p.m."),
+    _block("161934/Arian-Šajina.jpg", "Friday, January 22, at 2:00 p.m."),
+    _block("Flet.jpg", "Torsdag 28. januar kl. 14"),
+)
+
+
+def test_parse_page_images():
+    images = up.parse_page_images(PAGE, PAGE_URL, TODAY)
+    assert images.default == f"{UPLOADS}/_landscape1200/Worksharing.jpg"
+    assert images.blocks == [
+        (12, 11, datetime.time(14, 0), f"{UPLOADS}/_x1200/Spiral.jpg"),
+        (1, 22, datetime.time(13, 0), f"{UPLOADS}/_x1200/N%C3%B8gensnegl.jpg"),
+        (1, 22, datetime.time(14, 0), f"{UPLOADS}/_x1200/161934/Arian-%C5%A0ajina.jpg"),
+        (1, 28, datetime.time(14, 0), f"{UPLOADS}/_x1200/Flet.jpg"),
+    ]
+
+
+def test_page_images_for_day():
+    images = up.parse_page_images(PAGE, PAGE_URL, TODAY)
+    jan22 = datetime.date(2027, 1, 22)
+    assert images.for_day(datetime.date(2026, 12, 11), None).endswith("/Spiral.jpg")
+    # Two worksharings that day: told apart by the start time.
+    assert "N%C3%B8gensnegl" in images.for_day(jan22, datetime.time(13, 0))
+    assert "Arian" in images.for_day(jan22, datetime.time(14, 0))
+    # Neither time, or a day without a block: the page's own image.
+    assert images.for_day(jan22, datetime.time(16, 0)) == images.default
+    assert images.for_day(datetime.date(2027, 2, 1), None) == images.default
+
+
+def test_parse_page_images_ignores_off_site_images():
+    html = _page(_block("x.jpg", "Friday, December 11")).replace(
+        "https://www.udviklingsplatformen.dk", "https://cdn.example.org"
+    )
+    images = up.parse_page_images(html, PAGE_URL, TODAY)
+    assert images == up.PageImages()
+
+
+def test_build_records_uses_page_image():
+    item = _parse(_item(dates="22. January, 2027", content="<p>Kl. 14</p>"))
+    images = up.parse_page_images(PAGE, PAGE_URL, TODAY)
+    (rec,) = up.build_records(item, TODAY, images)
+    assert rec["image_url"].endswith("/Arian-%C5%A0ajina.jpg")
+
+
+def _up_item(item_id: str, dates: str, content: str) -> str:
+    return _item(
+        item_id=item_id,
+        dates=dates,
+        type_="UP event",
+        title="Time in Space Worksharing: X",
+        link=f'<a href="{PAGE_URL}">Learn more about Tid i Rum worksharings</a>',
+        content=content,
+    )
+
+
+def test_scrape_fetches_linked_up_page_once():
+    calendar = MagicMock(
+        text=_up_item("1", "11. December, 2099", "<p>2:00 p.m.</p>")
+        + _up_item("2", "22. January, 2100", "<p>1:00 p.m.</p>")
+        + _item(item_id="3", dates="23. October, 2099")  # links off UP: no fetch
+    )
+    page = MagicMock(text=PAGE.replace("December 11", "December 11, 2099"))
+    session = MagicMock()
+    session.get.side_effect = [MagicMock(text=""), calendar, page]
+    with patch.object(up, "make_session", return_value=session):
+        records = up.scrape()
+
+    assert [c.args[0] for c in session.get.call_args_list] == [
+        up.EVENTS_URL,
+        up.EVENTS_URL,
+        PAGE_URL,
+    ]
+    assert [r["image_url"].rpartition("/")[2] for r in records] == [
+        "Spiral.jpg",
+        "N%C3%B8gensnegl.jpg",
+        "",
+    ]
+
+
+def test_scrape_without_readable_page_has_no_image():
+    calendar = MagicMock(text=_up_item("1", "11. December, 2099", "<p>2 p.m.</p>"))
+    failing = MagicMock()
+    failing.raise_for_status.side_effect = RuntimeError("503")
+    session = MagicMock()
+    session.get.side_effect = [MagicMock(text=""), calendar, failing]
+    with patch.object(up, "make_session", return_value=session):
+        (rec,) = up.scrape()
+    assert rec["image_url"] == ""
