@@ -255,7 +255,33 @@ def test_build_records_skips_covered_venue():
 
 
 def test_build_records_skips_other_types():
-    assert up.build_records(_parse(_item(type_="Open Call")), TODAY) == []
+    item = _parse(_item(type_="Open Call", title="Open call: Tid i Rum 2027"))
+    assert up.build_records(item, TODAY) == []
+
+
+def test_build_records_up_event_titled_worksharing():
+    item = _parse(
+        _item(
+            type_="UP event",
+            title="Time in Space Worksharing: Out Of Office.arts:",
+            link='<a href="https://www.udviklingsplatformen.dk/en/kom-til-worksharings-hos-up">'
+            "Learn more about Tid i Rum worksharings</a>",
+            content="<p>Worksharing at UP: Friday, October 23, 2:00–2:45 p.m.</p>"
+            '<p><a href="https://billetto.dk/e/x">Book a free ticket</a></p>',
+        )
+    )
+    (rec,) = up.build_records(item, TODAY)
+    assert rec["title"] == "Time in Space Worksharing: Out Of Office.arts"
+    assert rec["category"] == "worksharing"
+    assert rec["venue_name"] == up.VENUE_NAME
+    assert rec["start_datetime"].endswith("T14:00:00+02:00")
+    assert rec["end_datetime"].endswith("T14:45:00+02:00")
+    assert rec["is_free"] is True
+
+
+def test_build_records_skips_other_up_events():
+    item = _parse(_item(type_="UP event", title="UP's Christmas party"))
+    assert up.build_records(item, TODAY) == []
 
 
 def test_build_records_splits_short_range_and_drops_past_days():
@@ -285,18 +311,34 @@ def test_build_records_unparseable_date():
 # ── scrape ────────────────────────────────────────────────────────────────────
 
 
-def test_scrape_requests_worksharing_filter():
+def test_scrape_requests_worksharing_and_up_event_filters():
     future = "23. October, 2099"
-    response = MagicMock(
-        text=_item(dates=future) + _item(item_id="2", dates=future, type_="Deadline")
+    worksharings = MagicMock(
+        text=_item(dates=future)
+        + _item(item_id="2", dates=future, type_="Deadline", title="Deadline")
+    )
+    up_events = MagicMock(
+        text=_item(dates=future)  # also listed under Worksharing: kept once
+        + _item(
+            item_id="3",
+            dates=future,
+            type_="UP event",
+            title="Time in Space Worksharing: RAVEN",
+        )
+        + _item(item_id="4", dates=future, type_="UP event", title="Party")
     )
     session = MagicMock()
-    session.get.return_value = response
+    session.get.side_effect = [worksharings, up_events]
     with patch.object(up, "make_session", return_value=session):
         records = up.scrape()
 
-    args, kwargs = session.get.call_args
-    assert args[0] == up.EVENTS_URL
-    assert kwargs["params"] == {"category": "worksharing"}
-    assert kwargs["headers"]["X-Requested-With"] == "XMLHttpRequest"
-    assert [r["source_url"].rsplit("-", 1)[1] for r in records] == ["158590"]
+    calls = session.get.call_args_list
+    assert [c.args[0] for c in calls] == [up.EVENTS_URL, up.EVENTS_URL]
+    assert [c.kwargs["params"] for c in calls] == [
+        {"category": "worksharing"},
+        {"category": "up-event"},
+    ]
+    assert all(
+        c.kwargs["headers"]["X-Requested-With"] == "XMLHttpRequest" for c in calls
+    )
+    assert [r["source_url"].rsplit("-", 1)[1] for r in records] == ["158590", "3"]
