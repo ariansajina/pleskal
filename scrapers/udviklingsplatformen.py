@@ -13,6 +13,12 @@ prefix for the English texts. It lists upcoming entries only (``from``/``to``
 can't reach back past today), plus entries that started earlier and are still
 running.
 
+UP doesn't always file its own worksharings under "Worksharing": the Tid i
+Rum / Time in Space ones for winter 2026/27 are typed "UP event" (titled
+"Time in Space Worksharing: …"). So the "UP event" category is fetched too
+(``category=up-event``), and an entry counts as a worksharing when its type
+or its title says so. An entry listed under both is kept once.
+
 Each entry is a ``div.item`` with a ``data-id``, a date line, a type, a title
 (``.sender``), "Read more at" links (the organiser's page) and an HTML body.
 There is no time, venue, price or image:
@@ -64,6 +70,9 @@ BASE_URL = "https://www.udviklingsplatformen.dk"
 CALENDAR_URL = f"{BASE_URL}/en/calendar"
 EVENTS_URL = f"{BASE_URL}/en/getCalendarEvents"
 CATEGORY = "worksharing"
+# Calendar filters fetched: worksharings, plus UP's own events, among which
+# UP sometimes lists its worksharings.
+CATEGORIES = (CATEGORY, "up-event")
 EXTERNAL_SOURCE = "udviklingsplatformen"
 VENUE_NAME = "Udviklingsplatformen"
 VENUE_ADDRESS = "Baldersgade 6, 2200 København N"
@@ -136,7 +145,7 @@ _GENERIC_LABEL_RE = re.compile(
 )
 
 _FREE_RE = re.compile(
-    r"\b(?:free (?:admission|entry|entrance|of charge)"
+    r"\b(?:free (?:admission|entry|entrance|of charge|tickets?)"
     r"|(?:admission|entrance|entry)(?: is)?:? free"
     r"|(?:register|sign up|signup|tilmelding)(?: \w+)? for free"
     r"|gratis)\b",
@@ -155,17 +164,31 @@ log = logging.getLogger(__name__)
 
 
 def fetch_items() -> list[Tag]:
-    """Fetch the calendar's worksharing entries as ``div.item`` tags."""
+    """Fetch the entries of the calendar's ``CATEGORIES`` as ``div.item`` tags.
+
+    An entry listed under more than one category is returned once.
+    """
     session = make_session()
-    resp = session.get(
-        EVENTS_URL,
-        params={"category": CATEGORY},
-        headers={**HEADERS, "X-Requested-With": "XMLHttpRequest"},
-        timeout=20,
+    items: dict[str, Tag] = {}
+    for category in CATEGORIES:
+        resp = session.get(
+            EVENTS_URL,
+            params={"category": category},
+            headers={**HEADERS, "X-Requested-With": "XMLHttpRequest"},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
+        for item in soup.select("div.item[data-id]"):
+            items.setdefault(str(item["data-id"]), item)
+    return list(items.values())
+
+
+def is_worksharing(item: Tag) -> bool:
+    """True when the entry's type or title calls it a worksharing."""
+    return any(
+        CATEGORY in _text(item, selector).lower() for selector in (".type", ".sender")
     )
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
-    return soup.select("div.item[data-id]")
 
 
 # ── Field extraction ──────────────────────────────────────────────────────────
@@ -287,9 +310,10 @@ def determine_venue(label: str, url: str, body: str) -> tuple[str, str]:
 
 def build_records(item: Tag, today: datetime.date) -> list[dict]:
     """Build the records of one calendar entry (one per day of a short range)."""
-    if CATEGORY not in _text(item, ".type").lower():
+    if not is_worksharing(item):
         return []
-    title = _text(item, ".sender")[:MAX_TITLE_LENGTH]
+    # "Time in Space Worksharing: Out Of Office.arts:" loses its dangling colon.
+    title = _text(item, ".sender").rstrip(" :")[:MAX_TITLE_LENGTH]
     dates = parse_dates(_text(item, ".dates"), today)
     if not title or dates is None:
         log.warning("Skipping unparseable entry %s", item.get("data-id"))
